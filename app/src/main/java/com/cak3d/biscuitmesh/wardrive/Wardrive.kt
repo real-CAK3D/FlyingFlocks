@@ -1,7 +1,10 @@
 package com.cak3d.biscuitmesh.wardrive
 
 import android.annotation.SuppressLint
+import android.location.Location
 import com.cak3d.biscuitmesh.ble.FleetManager
+import com.cak3d.biscuitmesh.data.DeadZone
+import com.cak3d.biscuitmesh.data.DeadZonesStore
 import com.cak3d.biscuitmesh.location.LocationProvider
 import com.cak3d.biscuitmesh.protocol.BiscuitMessage
 import com.cak3d.biscuitmesh.protocol.command
@@ -38,6 +41,9 @@ data class WardriveState(
     val lastLat: Double? = null,
     val lastLon: Double? = null,
     val accuracy: Float? = null,
+    /** True while the phone sits inside a dead zone; scanning is suppressed. */
+    val inDeadZone: Boolean = false,
+    val deadZoneName: String? = null,
 )
 
 /**
@@ -49,6 +55,7 @@ class WardriveManager(
     private val fleet: FleetManager,
     private val location: LocationProvider,
     private val scope: CoroutineScope,
+    deadZonesStore: DeadZonesStore? = null,
 ) {
     private val _state = MutableStateFlow(WardriveState())
     val state: StateFlow<WardriveState> = _state.asStateFlow()
@@ -66,22 +73,69 @@ class WardriveManager(
     @Volatile private var curLat: Double? = null
     @Volatile private var curLon: Double? = null
 
+    /** Latest dead-zone list, kept current from the store for synchronous checks. */
+    @Volatile private var zones: List<DeadZone> = emptyList()
+    /** True while suppressed, so we only broadcast on dead-zone transitions. */
+    private var suppressed = false
+
+    init {
+        deadZonesStore?.let { store ->
+            scope.launch { store.zones.collect { zones = it } }
+        }
+    }
+
+    /** The dead zone the given point falls inside, or null. */
+    private fun zoneAt(lat: Double, lon: Double): DeadZone? {
+        val out = FloatArray(1)
+        return zones.firstOrNull { z ->
+            Location.distanceBetween(lat, lon, z.lat, z.lon, out)
+            out[0] <= z.radiusM
+        }
+    }
+
     @SuppressLint("MissingPermission")
     fun start(mode: WardriveMode) {
         if (_state.value.active) return
         lastProcessedMs = System.currentTimeMillis()
+        suppressed = false
         _samples.value = emptyMap()
         _track.value = emptyList()
         _state.update {
-            it.copy(active = true, mode = mode, startMs = System.currentTimeMillis(), wifiCount = 0, btCount = 0)
+            it.copy(
+                active = true, mode = mode, startMs = System.currentTimeMillis(),
+                wifiCount = 0, btCount = 0, inDeadZone = false, deadZoneName = null,
+            )
         }
 
         locJob = scope.launch {
             location.locationUpdates().collect { loc ->
-                curLat = loc.latitude
-                curLon = loc.longitude
-                _track.update { (it + LatLon(loc.latitude, loc.longitude)).takeLast(5000) }
-                _state.update { it.copy(lastLat = loc.latitude, lastLon = loc.longitude, accuracy = loc.accuracy) }
+                val zone = zoneAt(loc.latitude, loc.longitude)
+                if (zone != null) {
+                    // Inside a dead zone: stop the boards, record nothing, drop the
+                    // tagging fix so no stray samples land, but keep the puck moving.
+                    if (!suppressed) {
+                        suppressed = true
+                        fleet.broadcast(command("stopscan"))
+                    }
+                    curLat = null
+                    curLon = null
+                    _state.update {
+                        it.copy(lastLat = loc.latitude, lastLon = loc.longitude, accuracy = loc.accuracy,
+                            inDeadZone = true, deadZoneName = zone.name)
+                    }
+                } else {
+                    if (suppressed) {
+                        suppressed = false
+                        fleet.broadcast(scanCommand(_state.value.mode))
+                    }
+                    curLat = loc.latitude
+                    curLon = loc.longitude
+                    _track.update { (it + LatLon(loc.latitude, loc.longitude)).takeLast(5000) }
+                    _state.update {
+                        it.copy(lastLat = loc.latitude, lastLon = loc.longitude, accuracy = loc.accuracy,
+                            inDeadZone = false, deadZoneName = null)
+                    }
+                }
             }
         }
 
@@ -119,7 +173,8 @@ class WardriveManager(
 
     fun setMode(mode: WardriveMode) {
         _state.update { it.copy(mode = mode) }
-        if (_state.value.active) fleet.broadcast(scanCommand(mode))
+        // Don't wake the boards back up while we're parked in a dead zone.
+        if (_state.value.active && !suppressed) fleet.broadcast(scanCommand(mode))
     }
 
     private fun recount() {

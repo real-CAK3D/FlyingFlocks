@@ -4,14 +4,20 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.cak3d.biscuitmesh.ble.FleetManager
+import com.cak3d.biscuitmesh.data.DeadZone
 import com.cak3d.biscuitmesh.protocol.command
+import com.cak3d.biscuitmesh.wardrive.LatLon
 import com.cak3d.biscuitmesh.wardrive.WardriveMode
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
+import java.util.UUID
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -73,6 +79,41 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun acceptAuthorizedUse() {
         viewModelScope.launch { appRef.settingsStore.setAuthorizedUse(true) }
+    }
+
+    fun revokeAuthorizedUse() {
+        viewModelScope.launch { appRef.settingsStore.setAuthorizedUse(false) }
+    }
+
+    // --- Dead zones --------------------------------------------------------
+    /** Persisted scanning dead zones, surfaced for the settings screen. */
+    val deadZones: Flow<List<DeadZone>> = appRef.deadZonesStore.zones
+
+    fun addDeadZone(name: String, lat: Double, lon: Double, radiusM: Double) {
+        viewModelScope.launch {
+            appRef.deadZonesStore.add(
+                DeadZone(
+                    id = UUID.randomUUID().toString(),
+                    name = name.ifBlank { "Dead zone" },
+                    lat = lat,
+                    lon = lon,
+                    radiusM = radiusM.coerceIn(20.0, 5000.0),
+                ),
+            )
+        }
+    }
+
+    fun removeDeadZone(id: String) {
+        viewModelScope.launch { appRef.deadZonesStore.remove(id) }
+    }
+
+    /**
+     * Grabs a single GPS fix for "use my current location" when adding a zone.
+     * Caller must already hold a location permission; null on timeout.
+     */
+    suspend fun oneShotLocation(): LatLon? = withTimeoutOrNull(12_000) {
+        val loc = appRef.locationProvider.locationUpdates(1000L).first()
+        LatLon(loc.latitude, loc.longitude)
     }
 
     /** Frames the part-after-CMD text and fans it out to every READY board. */

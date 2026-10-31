@@ -5,6 +5,7 @@ import android.bluetooth.BluetoothManager
 import android.content.Context
 import com.cak3d.biscuitmesh.ble.BleScanner
 import com.cak3d.biscuitmesh.ble.FleetManager
+import com.cak3d.biscuitmesh.data.DeadZonesStore
 import com.cak3d.biscuitmesh.data.KnownDevicesStore
 import com.cak3d.biscuitmesh.data.SettingsStore
 import com.cak3d.biscuitmesh.location.LocationProvider
@@ -30,6 +31,8 @@ class BiscuitMeshApp : Application() {
 
     val settingsStore: SettingsStore by lazy { SettingsStore(this) }
 
+    val deadZonesStore: DeadZonesStore by lazy { DeadZonesStore(this) }
+
     val fleet: FleetManager? by lazy {
         val adapter = bluetoothManager?.adapter ?: return@lazy null
         FleetManager(this, adapter, appScope, knownStore)
@@ -40,10 +43,10 @@ class BiscuitMeshApp : Application() {
         BleScanner(adapter)
     }
 
-    private val locationProvider: LocationProvider by lazy { LocationProvider(this) }
+    val locationProvider: LocationProvider by lazy { LocationProvider(this) }
 
     val wardrive: WardriveManager? by lazy {
         val f = fleet ?: return@lazy null
-        WardriveManager(f, locationProvider, appScope)
+        WardriveManager(f, locationProvider, appScope, deadZonesStore)
     }
 }

@@ -1,0 +1,298 @@
+package com.cak3d.biscuitmesh.ui
+
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.LocationOff
+import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.cak3d.biscuitmesh.BuildConfig
+import com.cak3d.biscuitmesh.MainViewModel
+import com.cak3d.biscuitmesh.data.DeadZone
+import kotlinx.coroutines.launch
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
+    val zones by vm.deadZones.collectAsStateWithLifecycle(initialValue = emptyList())
+    val authorized by vm.authorizedUse.collectAsStateWithLifecycle()
+    var showAdd by remember { mutableStateOf(false) }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Settings") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+            )
+        },
+    ) { padding ->
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            DeadZonesSection(
+                zones = zones,
+                onAdd = { showAdd = true },
+                onRemove = { vm.removeDeadZone(it) },
+            )
+            AuthorizedUseSection(
+                accepted = authorized,
+                onAccept = { vm.acceptAuthorizedUse() },
+                onRevoke = { vm.revokeAuthorizedUse() },
+            )
+            AboutSection()
+        }
+    }
+
+    if (showAdd) {
+        AddDeadZoneDialog(
+            vm = vm,
+            onDismiss = { showAdd = false },
+            onSave = { name, lat, lon, radius ->
+                vm.addDeadZone(name, lat, lon, radius)
+                showAdd = false
+            },
+        )
+    }
+}
+
+@Composable
+private fun SectionCard(title: String, subtitle: String? = null, content: @Composable () -> Unit) {
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(title, style = MaterialTheme.typography.titleMedium)
+            subtitle?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+            }
+            content()
+        }
+    }
+}
+
+@Composable
+private fun DeadZonesSection(zones: List<DeadZone>, onAdd: () -> Unit, onRemove: (String) -> Unit) {
+    SectionCard(
+        title = "Scanning dead zones",
+        subtitle = "Inside these areas the fleet stops scanning and nothing is " +
+            "logged — use them to keep home, work, or a friend's place out of your captures.",
+    ) {
+        if (zones.isEmpty()) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Icon(Icons.Default.LocationOff, contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                Text("No dead zones yet.", style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+            }
+        } else {
+            zones.forEach { z ->
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(z.name, style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            "±${z.radiusM.toInt()} m · ${"%.5f".format(z.lat)}, ${"%.5f".format(z.lon)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        )
+                    }
+                    IconButton(onClick = { onRemove(z.id) }) {
+                        Icon(Icons.Default.Delete, contentDescription = "Delete ${z.name}",
+                            tint = MaterialTheme.colorScheme.error)
+                    }
+                }
+            }
+        }
+        OutlinedButton(onClick = onAdd, modifier = Modifier.fillMaxWidth()) {
+            Icon(Icons.Default.Add, contentDescription = null)
+            Spacer(Modifier.width(8.dp))
+            Text("Add dead zone")
+        }
+    }
+}
+
+@Composable
+private fun AuthorizedUseSection(accepted: Boolean, onAccept: () -> Unit, onRevoke: () -> Unit) {
+    SectionCard(
+        title = "Authorized use",
+        subtitle = "Offensive tools (deauth, beacon spam, BLE spam, portals) stay locked " +
+            "behind an acknowledgment that you only run them on networks and devices you own " +
+            "or are authorized to test.",
+    ) {
+        Text(
+            if (accepted) "Status: acknowledged" else "Status: not acknowledged",
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (accepted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+        )
+        if (accepted) {
+            OutlinedButton(onClick = onRevoke) { Text("Revoke acknowledgment") }
+        } else {
+            OutlinedButton(onClick = onAccept) { Text("Acknowledge now") }
+        }
+    }
+}
+
+@Composable
+private fun AboutSection() {
+    SectionCard(title = "About") {
+        Text("Biscuit Mesh ${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE})",
+            style = MaterialTheme.typography.bodyMedium)
+        Text(
+            "A fleet-first manager for ESP32 Biscuit boards. WDG Wars feeder integration is coming next.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+        )
+    }
+}
+
+@Composable
+private fun AddDeadZoneDialog(
+    vm: MainViewModel,
+    onDismiss: () -> Unit,
+    onSave: (name: String, lat: Double, lon: Double, radius: Double) -> Unit,
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    var name by remember { mutableStateOf("") }
+    var radius by remember { mutableStateOf("150") }
+    var lat by remember { mutableStateOf("") }
+    var lon by remember { mutableStateOf("") }
+    var locating by remember { mutableStateOf(false) }
+    var status by remember { mutableStateOf<String?>(null) }
+
+    fun fetchLocation() {
+        locating = true
+        status = "Getting a GPS fix…"
+        scope.launch {
+            val fix = vm.oneShotLocation()
+            locating = false
+            if (fix != null) {
+                lat = "%.6f".format(fix.lat)
+                lon = "%.6f".format(fix.lon)
+                status = "Captured current location."
+            } else {
+                status = "Couldn't get a fix — enter coordinates manually."
+            }
+        }
+    }
+
+    val permLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted -> if (granted) fetchLocation() else status = "Location permission denied." }
+
+    fun useCurrentLocation() {
+        val has = context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) ==
+            PackageManager.PERMISSION_GRANTED
+        if (has) fetchLocation() else permLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+    }
+
+    val latD = lat.toDoubleOrNull()
+    val lonD = lon.toDoubleOrNull()
+    val radiusD = radius.toDoubleOrNull()
+    val valid = latD != null && lonD != null && radiusD != null &&
+        latD in -90.0..90.0 && lonD in -180.0..180.0 && radiusD > 0
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add dead zone") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(
+                    value = name, onValueChange = { name = it },
+                    label = { Text("Name (e.g. Home)") }, singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = radius, onValueChange = { radius = it.filter { c -> c.isDigit() } },
+                    label = { Text("Radius (metres)") }, singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedButton(
+                    onClick = { useCurrentLocation() },
+                    enabled = !locating,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(Icons.Default.MyLocation, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(if (locating) "Locating…" else "Use my current location")
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = lat, onValueChange = { lat = it }, label = { Text("Latitude") },
+                        singleLine = true, modifier = Modifier.weight(1f),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    )
+                    OutlinedTextField(
+                        value = lon, onValueChange = { lon = it }, label = { Text("Longitude") },
+                        singleLine = true, modifier = Modifier.weight(1f),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    )
+                }
+                status?.let {
+                    Text(it, style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.secondary)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onSave(name, latD!!, lonD!!, radiusD!!) },
+                enabled = valid,
+            ) { Text("Save") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}

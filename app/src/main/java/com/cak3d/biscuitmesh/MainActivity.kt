@@ -18,14 +18,19 @@ import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -45,6 +50,7 @@ import com.cak3d.biscuitmesh.ui.DeviceDetailScreen
 import com.cak3d.biscuitmesh.ui.FleetScreen
 import com.cak3d.biscuitmesh.ui.MiscScreen
 import com.cak3d.biscuitmesh.ui.RunToolScreen
+import com.cak3d.biscuitmesh.ui.SettingsScreen
 import com.cak3d.biscuitmesh.ui.WardriveScreen
 import com.cak3d.biscuitmesh.ui.WifiScreen
 import com.cak3d.biscuitmesh.ui.theme.BiscuitMeshTheme
@@ -78,15 +84,52 @@ private val TABS = listOf(
     Tab("misc", "Misc", Icons.Default.Apps),
 )
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MainShell(vm: MainViewModel) {
     val nav = rememberNavController()
     val backStack by nav.currentBackStackEntryAsState()
     val currentRoute = backStack?.destination?.route
-    val showBottomBar = TABS.any { it.route == currentRoute }
+    val currentTab = TABS.firstOrNull { it.route == currentRoute }
+    val isTopLevel = currentTab != null
 
-    Column(Modifier.fillMaxSize()) {
-        Box(Modifier.weight(1f)) {
+    Scaffold(
+        topBar = {
+            if (isTopLevel) {
+                TopAppBar(
+                    title = { Text(currentTab!!.label) },
+                    actions = {
+                        IconButton(onClick = { nav.navigate("settings") }) {
+                            Icon(Icons.Default.Settings, contentDescription = "Settings")
+                        }
+                    },
+                )
+            }
+        },
+        bottomBar = {
+            if (isTopLevel) {
+                NavigationBar {
+                    TABS.forEach { tab ->
+                        NavigationBarItem(
+                            selected = currentRoute == tab.route,
+                            onClick = {
+                                if (currentRoute != tab.route) {
+                                    nav.navigate(tab.route) {
+                                        popUpTo("fleet") { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                }
+                            },
+                            icon = { Icon(tab.icon, contentDescription = tab.label) },
+                            label = { Text(tab.label) },
+                        )
+                    }
+                }
+            }
+        },
+    ) { padding ->
+        Box(Modifier.fillMaxSize().padding(padding)) {
             NavHost(navController = nav, startDestination = "fleet") {
                 composable("fleet") {
                     FleetScreen(vm, onOpen = { address ->
@@ -98,6 +141,7 @@ private fun MainShell(vm: MainViewModel) {
                 composable("wifi") { WifiScreen(onOpenTool = { nav.navigate("runtool/$it") }) }
                 composable("bluetooth") { BluetoothScreen(onOpenTool = { nav.navigate("runtool/$it") }) }
                 composable("misc") { MiscScreen(onOpenTool = { nav.navigate("runtool/$it") }) }
+                composable("settings") { SettingsScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("device") {
                     val address by vm.selected.collectAsStateWithLifecycle()
                     DeviceDetailScreen(vm = vm, address = address, onBack = { nav.popBackStack() })
@@ -107,26 +151,6 @@ private fun MainShell(vm: MainViewModel) {
                         vm = vm,
                         toolKey = entry.arguments?.getString("key"),
                         onBack = { nav.popBackStack() },
-                    )
-                }
-            }
-        }
-        if (showBottomBar) {
-            NavigationBar {
-                TABS.forEach { tab ->
-                    NavigationBarItem(
-                        selected = currentRoute == tab.route,
-                        onClick = {
-                            if (currentRoute != tab.route) {
-                                nav.navigate(tab.route) {
-                                    popUpTo("fleet") { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            }
-                        },
-                        icon = { Icon(tab.icon, contentDescription = tab.label) },
-                        label = { Text(tab.label) },
                     )
                 }
             }

@@ -145,6 +145,8 @@ fun WardriveScreen(vm: MainViewModel) {
             wifi = state.wifiCount,
             bt = state.btCount,
             accuracy = state.accuracy,
+            inDeadZone = state.inDeadZone,
+            deadZoneName = state.deadZoneName,
             elapsedMs = if (state.active) nowMs - state.startMs else 0L,
             onMode = { vm.setWardriveMode(it) },
             onStart = {
@@ -165,6 +167,8 @@ private fun ControlPanel(
     wifi: Int,
     bt: Int,
     accuracy: Float?,
+    inDeadZone: Boolean,
+    deadZoneName: String?,
     elapsedMs: Long,
     onMode: (WardriveMode) -> Unit,
     onStart: () -> Unit,
@@ -177,6 +181,13 @@ private fun ControlPanel(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (active && inDeadZone) {
+                Text(
+                    "⦸ Dead zone${deadZoneName?.let { " · $it" } ?: ""} — scanning paused, nothing logged",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 WardriveMode.entries.forEach { m ->
                     FilterChip(
