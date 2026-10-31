@@ -23,7 +23,27 @@ data class BiscuitDevice(
     val firmware: String? = null,     // from 0x2A26
     val status: DeviceStatus? = null, // latest parsed STATUS JSON snapshot
     val lastError: String? = null,
-)
+    val known: Boolean = false,       // saved to the fleet; persists across restarts
+    val inRange: Boolean = false,     // seen in the current scan sweep
+    val lastSeenMs: Long = 0L,        // when it last appeared in a scan
+) {
+    /** Connected, or mid-connection. */
+    val isLive: Boolean
+        get() = state == ConnectionState.READY ||
+            state == ConnectionState.CONNECTING ||
+            state == ConnectionState.PROVISIONING
+
+    /** A short human status line for the card. */
+    fun statusLabel(): String = when {
+        state == ConnectionState.READY -> "Connected"
+        state == ConnectionState.CONNECTING -> "Connecting…"
+        state == ConnectionState.PROVISIONING -> "Setting up…"
+        state == ConnectionState.FAILED -> "Failed"
+        inRange -> "In range"
+        known -> "Out of range"
+        else -> "Seen"
+    }
+}
 
 /**
  * Parsed snapshot from the Status characteristic (JSON). Keys are treated as

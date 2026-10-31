@@ -25,6 +25,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             scanner.stop()
             _scanning.value = false
         } else {
+            fleet.onScanStart()
             scanner.start { found -> fleet.onScanFound(found) }
             _scanning.value = true
         }
@@ -37,6 +38,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun connect(address: String): Boolean = fleet?.connect(address) ?: false
     fun disconnect(address: String) = fleet?.disconnect(address)
+    fun connectAll() = fleet?.connectAll()
+    fun disconnectAll() = fleet?.disconnectAll()
+    fun forget(address: String) = fleet?.forget(address)
+    fun rename(address: String, name: String) = fleet?.rename(address, name)
 
     override fun onCleared() {
         stopScan()
