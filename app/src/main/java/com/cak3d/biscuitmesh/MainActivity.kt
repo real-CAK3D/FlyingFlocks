@@ -24,7 +24,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import com.cak3d.biscuitmesh.ui.DeviceDetailScreen
 import com.cak3d.biscuitmesh.ui.FleetScreen
 import com.cak3d.biscuitmesh.ui.theme.BiscuitMeshTheme
 
@@ -40,9 +45,30 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background,
                 ) {
                     val vm: MainViewModel = viewModel()
-                    PermissionGate { FleetScreen(vm) }
+                    PermissionGate { AppNav(vm) }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun AppNav(vm: MainViewModel) {
+    val nav = rememberNavController()
+    NavHost(navController = nav, startDestination = "fleet") {
+        composable("fleet") {
+            FleetScreen(vm, onOpen = { address ->
+                vm.open(address)
+                nav.navigate("device")
+            })
+        }
+        composable("device") {
+            val address by vm.selected.collectAsStateWithLifecycle()
+            DeviceDetailScreen(
+                vm = vm,
+                address = address,
+                onBack = { nav.popBackStack() },
+            )
         }
     }
 }

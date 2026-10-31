@@ -54,7 +54,7 @@ import com.cak3d.biscuitmesh.model.ConnectionState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FleetScreen(vm: MainViewModel) {
+fun FleetScreen(vm: MainViewModel, onOpen: (String) -> Unit = {}) {
     val devicesFlow = vm.devices
     if (devicesFlow == null) {
         BluetoothUnavailable()
@@ -119,9 +119,9 @@ fun FleetScreen(vm: MainViewModel) {
                     )
                 }
             }
-            section("Connected", connected, vm) { renaming = it }
-            section("In range", inRange, vm) { renaming = it }
-            section("Saved · out of range", saved, vm) { renaming = it }
+            section("Connected", connected, vm, onOpen) { renaming = it }
+            section("In range", inRange, vm, onOpen) { renaming = it }
+            section("Saved · out of range", saved, vm, onOpen) { renaming = it }
         }
     }
 
@@ -132,6 +132,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.section(
     title: String,
     devices: List<BiscuitDevice>,
     vm: MainViewModel,
+    onOpen: (String) -> Unit,
     onRename: (BiscuitDevice) -> Unit,
 ) {
     if (devices.isEmpty()) return
@@ -146,6 +147,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.section(
     items(devices, key = { it.address }) { device ->
         DeviceCard(
             device = device,
+            onOpen = { onOpen(device.address) },
             onConnect = { vm.connect(device.address) },
             onDisconnect = { vm.disconnect(device.address) },
             onForget = { vm.forget(device.address) },
@@ -175,15 +177,18 @@ private fun BroadcastBar(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DeviceCard(
     device: BiscuitDevice,
+    onOpen: () -> Unit,
     onConnect: () -> Unit,
     onDisconnect: () -> Unit,
     onForget: () -> Unit,
     onRename: () -> Unit,
 ) {
     Card(
+        onClick = onOpen,
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
