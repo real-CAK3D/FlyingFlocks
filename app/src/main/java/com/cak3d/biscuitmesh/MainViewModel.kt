@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.cak3d.biscuitmesh.ble.FleetManager
 import com.cak3d.biscuitmesh.protocol.command
+import com.cak3d.biscuitmesh.wardrive.WardriveMode
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -56,6 +57,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun refreshStatus(address: String) = fleet?.refreshStatus(address)
 
     fun nameFor(address: String): String = fleet?.nameFor(address) ?: address
+
+    // --- Wardrive ----------------------------------------------------------
+    val wardriveState get() = appRef.wardrive?.state
+    val wardriveSamples get() = appRef.wardrive?.samples
+    val wardriveTrack get() = appRef.wardrive?.track
+
+    fun startWardrive(mode: WardriveMode) { appRef.wardrive?.start(mode) }
+    fun stopWardrive() { appRef.wardrive?.stop() }
+    fun setWardriveMode(mode: WardriveMode) { appRef.wardrive?.setMode(mode) }
 
     /** Authorized-use acknowledgment, persisted. Gates the offensive tool modules. */
     val authorizedUse: StateFlow<Boolean> =

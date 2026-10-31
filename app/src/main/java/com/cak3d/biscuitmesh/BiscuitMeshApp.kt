@@ -7,6 +7,8 @@ import com.cak3d.biscuitmesh.ble.BleScanner
 import com.cak3d.biscuitmesh.ble.FleetManager
 import com.cak3d.biscuitmesh.data.KnownDevicesStore
 import com.cak3d.biscuitmesh.data.SettingsStore
+import com.cak3d.biscuitmesh.location.LocationProvider
+import com.cak3d.biscuitmesh.wardrive.WardriveManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -36,5 +38,12 @@ class BiscuitMeshApp : Application() {
     val scanner: BleScanner? by lazy {
         val adapter = bluetoothManager?.adapter ?: return@lazy null
         BleScanner(adapter)
+    }
+
+    private val locationProvider: LocationProvider by lazy { LocationProvider(this) }
+
+    val wardrive: WardriveManager? by lazy {
+        val f = fleet ?: return@lazy null
+        WardriveManager(f, locationProvider, appScope)
     }
 }

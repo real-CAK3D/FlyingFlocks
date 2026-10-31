@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
@@ -44,6 +45,7 @@ import com.cak3d.biscuitmesh.ui.DeviceDetailScreen
 import com.cak3d.biscuitmesh.ui.FleetScreen
 import com.cak3d.biscuitmesh.ui.MiscScreen
 import com.cak3d.biscuitmesh.ui.RunToolScreen
+import com.cak3d.biscuitmesh.ui.WardriveScreen
 import com.cak3d.biscuitmesh.ui.WifiScreen
 import com.cak3d.biscuitmesh.ui.theme.BiscuitMeshTheme
 
@@ -70,6 +72,7 @@ private data class Tab(val route: String, val label: String, val icon: androidx.
 
 private val TABS = listOf(
     Tab("fleet", "Fleet", Icons.Default.Dashboard),
+    Tab("wardrive", "Wardrive", Icons.Default.Map),
     Tab("wifi", "WiFi", Icons.Default.Wifi),
     Tab("bluetooth", "Bluetooth", Icons.Default.Bluetooth),
     Tab("misc", "Misc", Icons.Default.Apps),
@@ -91,6 +94,7 @@ private fun MainShell(vm: MainViewModel) {
                         nav.navigate("device")
                     })
                 }
+                composable("wardrive") { WardriveScreen(vm) }
                 composable("wifi") { WifiScreen(onOpenTool = { nav.navigate("runtool/$it") }) }
                 composable("bluetooth") { BluetoothScreen(onOpenTool = { nav.navigate("runtool/$it") }) }
                 composable("misc") { MiscScreen(onOpenTool = { nav.navigate("runtool/$it") }) }
