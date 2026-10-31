@@ -8,6 +8,8 @@ import com.cak3d.biscuitmesh.data.DeadZone
 import com.cak3d.biscuitmesh.protocol.command
 import com.cak3d.biscuitmesh.wardrive.LatLon
 import com.cak3d.biscuitmesh.wardrive.WardriveMode
+import com.cak3d.biscuitmesh.wdg.WdgClient
+import com.cak3d.biscuitmesh.wdg.WigleExport
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -70,7 +72,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val wardriveTrack get() = appRef.wardrive?.track
 
     fun startWardrive(mode: WardriveMode) { appRef.wardrive?.start(mode) }
-    fun stopWardrive() { appRef.wardrive?.stop() }
+
+    fun stopWardrive() {
+        appRef.wardrive?.stop()
+        // Fire-and-forget upload when the operator has opted into auto-upload.
+        if (wdgAutoUpload.value && wdgApiKey.value.isNotBlank()) uploadToWdg()
+    }
+
     fun setWardriveMode(mode: WardriveMode) { appRef.wardrive?.setMode(mode) }
 
     /** Authorized-use acknowledgment, persisted. Gates the offensive tool modules. */
@@ -115,6 +123,81 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val loc = appRef.locationProvider.locationUpdates(1000L).first()
         LatLon(loc.latitude, loc.longitude)
     }
+
+    // --- WDGWars feeder ----------------------------------------------------
+    private val wdg = WdgClient()
+
+    val wdgApiKey: StateFlow<String> =
+        appRef.settingsStore.wdgApiKey.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
+
+    val wdgAutoUpload: StateFlow<Boolean> =
+        appRef.settingsStore.wdgAutoUpload.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    fun setWdgApiKey(key: String) {
+        viewModelScope.launch { appRef.settingsStore.setWdgApiKey(key) }
+    }
+
+    fun setWdgAutoUpload(enabled: Boolean) {
+        viewModelScope.launch { appRef.settingsStore.setWdgAutoUpload(enabled) }
+    }
+
+    sealed interface WdgStatus {
+        data object Idle : WdgStatus
+        data class Working(val message: String) : WdgStatus
+        data class Done(val message: String) : WdgStatus
+        data class Error(val message: String) : WdgStatus
+    }
+
+    private val _wdgStatus = MutableStateFlow<WdgStatus>(WdgStatus.Idle)
+    val wdgStatus: StateFlow<WdgStatus> = _wdgStatus.asStateFlow()
+
+    /** Checks a key against /api/me; [key] lets the settings screen test before saving. */
+    fun validateWdgKey(key: String = wdgApiKey.value) {
+        val k = key.trim()
+        if (k.isEmpty()) { _wdgStatus.value = WdgStatus.Error("Enter an API key first."); return }
+        _wdgStatus.value = WdgStatus.Working("Checking key…")
+        viewModelScope.launch {
+            _wdgStatus.value = when (val r = wdg.validate(k)) {
+                is WdgClient.Result.Ok -> WdgStatus.Done("Key is valid.")
+                is WdgClient.Result.HttpError ->
+                    WdgStatus.Error(if (r.code == 401 || r.code == 403) "Key rejected (${r.code})." else "Server error ${r.code}.")
+                is WdgClient.Result.Failure -> WdgStatus.Error("Network error: ${r.message}")
+            }
+        }
+    }
+
+    /** Builds a WiGLE CSV from the current capture and uploads it to WDGWars. */
+    fun uploadToWdg() {
+        val key = wdgApiKey.value.trim()
+        if (key.isEmpty()) { _wdgStatus.value = WdgStatus.Error("Set your WDG API key in Settings first."); return }
+        val samples = appRef.wardrive?.samples?.value?.values ?: emptyList()
+        val count = WigleExport.uploadableCount(samples)
+        if (count == 0) { _wdgStatus.value = WdgStatus.Error("Nothing to upload yet."); return }
+        _wdgStatus.value = WdgStatus.Working("Uploading $count networks…")
+        viewModelScope.launch {
+            val csv = WigleExport.toCsv(samples)
+            val fileName = "biscuit-mesh-${System.currentTimeMillis()}.csv"
+            _wdgStatus.value = when (val r = wdg.uploadCsv(key, csv, fileName)) {
+                is WdgClient.Result.Ok -> {
+                    val parts = buildList {
+                        r.accepted?.let { add("$it accepted") }
+                        r.merged?.let { add("$it merged") }
+                    }
+                    WdgStatus.Done("Uploaded $count networks" + if (parts.isNotEmpty()) " (${parts.joinToString(", ")})." else ".")
+                }
+                is WdgClient.Result.HttpError ->
+                    WdgStatus.Error(when (r.code) {
+                        401, 403 -> "Key rejected (${r.code})."
+                        413 -> "Capture too large (${r.code})."
+                        429 -> "Rate limited — try again later (429)."
+                        else -> "Upload failed (${r.code})."
+                    })
+                is WdgClient.Result.Failure -> WdgStatus.Error("Network error: ${r.message}")
+            }
+        }
+    }
+
+    fun clearWdgStatus() { _wdgStatus.value = WdgStatus.Idle }
 
     /** Frames the part-after-CMD text and fans it out to every READY board. */
     fun broadcast(text: String) {

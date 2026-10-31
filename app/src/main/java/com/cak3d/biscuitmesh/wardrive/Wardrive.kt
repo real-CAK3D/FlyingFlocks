@@ -30,6 +30,7 @@ data class WardriveSample(
     val lon: Double,
     val rssi: Int,
     val timeMs: Long,
+    val accuracyM: Float = 0f,
 )
 
 data class WardriveState(
@@ -72,6 +73,7 @@ class WardriveManager(
 
     @Volatile private var curLat: Double? = null
     @Volatile private var curLon: Double? = null
+    @Volatile private var curAcc: Float = 0f
 
     /** Latest dead-zone list, kept current from the store for synchronous checks. */
     @Volatile private var zones: List<DeadZone> = emptyList()
@@ -130,6 +132,7 @@ class WardriveManager(
                     }
                     curLat = loc.latitude
                     curLon = loc.longitude
+                    curAcc = loc.accuracy
                     _track.update { (it + LatLon(loc.latitude, loc.longitude)).takeLast(5000) }
                     _state.update {
                         it.copy(lastLat = loc.latitude, lastLon = loc.longitude, accuracy = loc.accuracy,
@@ -148,8 +151,9 @@ class WardriveManager(
                 lastProcessedMs = newEntries.maxOf { it.timeMs }
                 if (lat == null || lon == null) return@collect
                 var added = false
+                val acc = curAcc
                 newEntries.forEach { e ->
-                    val sample = parseSample(e.message, lat, lon, e.timeMs) ?: return@forEach
+                    val sample = parseSample(e.message, lat, lon, acc, e.timeMs) ?: return@forEach
                     if (!matchesMode(sample.kind, _state.value.mode)) return@forEach
                     if (!_samples.value.containsKey(sample.id)) {
                         _samples.update { it + (sample.id to sample) }
@@ -196,13 +200,13 @@ class WardriveManager(
         WardriveMode.BT -> kind == SampleKind.BT
     }
 
-    private fun parseSample(msg: BiscuitMessage, lat: Double, lon: Double, timeMs: Long): WardriveSample? {
+    private fun parseSample(msg: BiscuitMessage, lat: Double, lon: Double, acc: Float, timeMs: Long): WardriveSample? {
         if (msg.type != BiscuitMessage.Type.DATA) return null
         val f = msg.payload.split(",")
         return when (msg.subtype) {
-            "AP" -> if (f.size >= 4) WardriveSample(SampleKind.AP, f[1], f[0], lat, lon, f[3].toIntOrNull() ?: 0, timeMs) else null
-            "STA" -> if (f.size >= 4) WardriveSample(SampleKind.STATION, f[0], f[0], lat, lon, f[3].toIntOrNull() ?: 0, timeMs) else null
-            "BT" -> if (f.size >= 3) WardriveSample(SampleKind.BT, f[1], f[0], lat, lon, f[2].toIntOrNull() ?: 0, timeMs) else null
+            "AP" -> if (f.size >= 4) WardriveSample(SampleKind.AP, f[1], f[0], lat, lon, f[3].toIntOrNull() ?: 0, timeMs, acc) else null
+            "STA" -> if (f.size >= 4) WardriveSample(SampleKind.STATION, f[0], f[0], lat, lon, f[3].toIntOrNull() ?: 0, timeMs, acc) else null
+            "BT" -> if (f.size >= 3) WardriveSample(SampleKind.BT, f[1], f[0], lat, lon, f[2].toIntOrNull() ?: 0, timeMs, acc) else null
             else -> null
         }
     }

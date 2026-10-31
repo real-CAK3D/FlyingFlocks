@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
@@ -62,6 +63,8 @@ fun WardriveScreen(vm: MainViewModel) {
     val state by stateFlow.collectAsStateWithLifecycle()
     val samples by samplesFlow.collectAsStateWithLifecycle()
     val track by trackFlow.collectAsStateWithLifecycle()
+    val wdgKey by vm.wdgApiKey.collectAsStateWithLifecycle()
+    val wdgStatus by vm.wdgStatus.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
     fun hasLocation() = context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) ==
@@ -155,6 +158,11 @@ fun WardriveScreen(vm: MainViewModel) {
             },
             onStop = { vm.stopWardrive() },
             locationReady = locGranted,
+            wdgConfigured = wdgKey.isNotBlank(),
+            canUpload = samples.values.any { it.kind == SampleKind.AP || it.kind == SampleKind.BT },
+            wdgStatus = wdgStatusText(wdgStatus),
+            wdgWorking = wdgStatus is MainViewModel.WdgStatus.Working,
+            onUpload = { vm.uploadToWdg() },
         )
     }
 }
@@ -174,6 +182,11 @@ private fun ControlPanel(
     onStart: () -> Unit,
     onStop: () -> Unit,
     locationReady: Boolean,
+    wdgConfigured: Boolean,
+    canUpload: Boolean,
+    wdgStatus: String?,
+    wdgWorking: Boolean,
+    onUpload: () -> Unit,
 ) {
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -219,8 +232,27 @@ private fun ControlPanel(
             } else {
                 Button(onClick = onStart, modifier = Modifier.fillMaxWidth()) { Text("Start") }
             }
+            if (wdgConfigured && canUpload) {
+                OutlinedButton(
+                    onClick = onUpload,
+                    enabled = !wdgWorking,
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text(if (wdgWorking) "Uploading…" else "Upload to WDG Wars") }
+            }
+            wdgStatus?.let {
+                Text(it, style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.secondary)
+            }
         }
     }
+}
+
+/** Collapses the WDG upload status into a short line for the control panel. */
+private fun wdgStatusText(status: MainViewModel.WdgStatus): String? = when (status) {
+    is MainViewModel.WdgStatus.Idle -> null
+    is MainViewModel.WdgStatus.Working -> status.message
+    is MainViewModel.WdgStatus.Done -> status.message
+    is MainViewModel.WdgStatus.Error -> status.message
 }
 
 @Composable

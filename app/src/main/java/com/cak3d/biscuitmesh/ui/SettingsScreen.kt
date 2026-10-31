@@ -31,6 +31,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -83,6 +84,7 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
                 onAdd = { showAdd = true },
                 onRemove = { vm.removeDeadZone(it) },
             )
+            WdgSection(vm)
             AuthorizedUseSection(
                 accepted = authorized,
                 onAccept = { vm.acceptAuthorizedUse() },
@@ -158,6 +160,70 @@ private fun DeadZonesSection(zones: List<DeadZone>, onAdd: () -> Unit, onRemove:
             Icon(Icons.Default.Add, contentDescription = null)
             Spacer(Modifier.width(8.dp))
             Text("Add dead zone")
+        }
+    }
+}
+
+@Composable
+private fun WdgSection(vm: MainViewModel) {
+    val savedKey by vm.wdgApiKey.collectAsStateWithLifecycle()
+    val autoUpload by vm.wdgAutoUpload.collectAsStateWithLifecycle()
+    val status by vm.wdgStatus.collectAsStateWithLifecycle()
+
+    var keyField by remember(savedKey) { mutableStateOf(savedKey) }
+    val working = status is MainViewModel.WdgStatus.Working
+
+    SectionCard(
+        title = "WDG Wars feeder",
+        subtitle = "Upload your Wi-Fi/BLE captures to the WDGWars leaderboard. Create an " +
+            "API key in your profile at wdgwars.pl and paste it here. Access points and " +
+            "Bluetooth devices are sent; dead zones and client stations are never uploaded.",
+    ) {
+        OutlinedTextField(
+            value = keyField,
+            onValueChange = { keyField = it.trim() },
+            label = { Text("API key (64-char hex)") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(
+                onClick = { vm.setWdgApiKey(keyField) },
+                enabled = keyField != savedKey && keyField.isNotBlank(),
+            ) { Text("Save key") }
+            OutlinedButton(
+                onClick = { vm.validateWdgKey(keyField) },
+                enabled = keyField.isNotBlank() && !working,
+            ) { Text("Test key") }
+        }
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("Auto-upload on stop", style = MaterialTheme.typography.bodyLarge)
+                Text("Send the capture to WDGWars each time a wardrive ends.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+            }
+            Switch(
+                checked = autoUpload,
+                onCheckedChange = { vm.setWdgAutoUpload(it) },
+                enabled = savedKey.isNotBlank(),
+            )
+        }
+        when (val s = status) {
+            is MainViewModel.WdgStatus.Idle -> {}
+            is MainViewModel.WdgStatus.Working ->
+                Text(s.message, style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.secondary)
+            is MainViewModel.WdgStatus.Done ->
+                Text(s.message, style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary)
+            is MainViewModel.WdgStatus.Error ->
+                Text(s.message, style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error)
         }
     }
 }
