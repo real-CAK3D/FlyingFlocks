@@ -72,7 +72,7 @@ fun DeviceDetailScreen(vm: MainViewModel, address: String?, onBack: () -> Unit) 
         return
     }
 
-    val lines = remember(log, address) { log.filter { it.first == address }.map { it.second } }
+    val lines = remember(log, address) { log.filter { it.address == address }.map { it.message } }
     val listState = rememberLazyListState()
     LaunchedEffect(lines.size) {
         if (lines.isNotEmpty()) listState.scrollToItem(lines.lastIndex)

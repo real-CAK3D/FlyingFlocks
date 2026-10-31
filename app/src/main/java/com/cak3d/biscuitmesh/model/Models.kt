@@ -1,5 +1,14 @@
 package com.cak3d.biscuitmesh.model
 
+import com.cak3d.biscuitmesh.protocol.BiscuitMessage
+
+/** One protocol line in the fleet-wide log, tagged with its board and arrival time. */
+data class LogEntry(
+    val address: String,
+    val message: BiscuitMessage,
+    val timeMs: Long,
+)
+
 /** Where a device sits in its connection lifecycle. */
 enum class ConnectionState {
     DISCOVERED,   // seen in a scan, not connected

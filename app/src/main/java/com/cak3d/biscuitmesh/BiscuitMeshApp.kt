@@ -6,6 +6,7 @@ import android.content.Context
 import com.cak3d.biscuitmesh.ble.BleScanner
 import com.cak3d.biscuitmesh.ble.FleetManager
 import com.cak3d.biscuitmesh.data.KnownDevicesStore
+import com.cak3d.biscuitmesh.data.SettingsStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -24,6 +25,8 @@ class BiscuitMeshApp : Application() {
     }
 
     private val knownStore: KnownDevicesStore by lazy { KnownDevicesStore(this) }
+
+    val settingsStore: SettingsStore by lazy { SettingsStore(this) }
 
     val fleet: FleetManager? by lazy {
         val adapter = bluetoothManager?.adapter ?: return@lazy null

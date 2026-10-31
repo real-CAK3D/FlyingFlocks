@@ -9,11 +9,20 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Apps
+import androidx.compose.material.icons.filled.Bluetooth
+import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -28,9 +37,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.cak3d.biscuitmesh.ui.BluetoothScreen
 import com.cak3d.biscuitmesh.ui.DeviceDetailScreen
 import com.cak3d.biscuitmesh.ui.FleetScreen
+import com.cak3d.biscuitmesh.ui.MiscScreen
+import com.cak3d.biscuitmesh.ui.RunToolScreen
+import com.cak3d.biscuitmesh.ui.WifiScreen
 import com.cak3d.biscuitmesh.ui.theme.BiscuitMeshTheme
 
 class MainActivity : ComponentActivity() {
@@ -45,30 +59,73 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background,
                 ) {
                     val vm: MainViewModel = viewModel()
-                    PermissionGate { AppNav(vm) }
+                    PermissionGate { MainShell(vm) }
                 }
             }
         }
     }
 }
 
+private data class Tab(val route: String, val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector)
+
+private val TABS = listOf(
+    Tab("fleet", "Fleet", Icons.Default.Dashboard),
+    Tab("wifi", "WiFi", Icons.Default.Wifi),
+    Tab("bluetooth", "Bluetooth", Icons.Default.Bluetooth),
+    Tab("misc", "Misc", Icons.Default.Apps),
+)
+
 @Composable
-private fun AppNav(vm: MainViewModel) {
+private fun MainShell(vm: MainViewModel) {
     val nav = rememberNavController()
-    NavHost(navController = nav, startDestination = "fleet") {
-        composable("fleet") {
-            FleetScreen(vm, onOpen = { address ->
-                vm.open(address)
-                nav.navigate("device")
-            })
+    val backStack by nav.currentBackStackEntryAsState()
+    val currentRoute = backStack?.destination?.route
+    val showBottomBar = TABS.any { it.route == currentRoute }
+
+    Column(Modifier.fillMaxSize()) {
+        Box(Modifier.weight(1f)) {
+            NavHost(navController = nav, startDestination = "fleet") {
+                composable("fleet") {
+                    FleetScreen(vm, onOpen = { address ->
+                        vm.open(address)
+                        nav.navigate("device")
+                    })
+                }
+                composable("wifi") { WifiScreen(onOpenTool = { nav.navigate("runtool/$it") }) }
+                composable("bluetooth") { BluetoothScreen(onOpenTool = { nav.navigate("runtool/$it") }) }
+                composable("misc") { MiscScreen(onOpenTool = { nav.navigate("runtool/$it") }) }
+                composable("device") {
+                    val address by vm.selected.collectAsStateWithLifecycle()
+                    DeviceDetailScreen(vm = vm, address = address, onBack = { nav.popBackStack() })
+                }
+                composable("runtool/{key}") { entry ->
+                    RunToolScreen(
+                        vm = vm,
+                        toolKey = entry.arguments?.getString("key"),
+                        onBack = { nav.popBackStack() },
+                    )
+                }
+            }
         }
-        composable("device") {
-            val address by vm.selected.collectAsStateWithLifecycle()
-            DeviceDetailScreen(
-                vm = vm,
-                address = address,
-                onBack = { nav.popBackStack() },
-            )
+        if (showBottomBar) {
+            NavigationBar {
+                TABS.forEach { tab ->
+                    NavigationBarItem(
+                        selected = currentRoute == tab.route,
+                        onClick = {
+                            if (currentRoute != tab.route) {
+                                nav.navigate(tab.route) {
+                                    popUpTo("fleet") { saveState = true }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            }
+                        },
+                        icon = { Icon(tab.icon, contentDescription = tab.label) },
+                        label = { Text(tab.label) },
+                    )
+                }
+            }
         }
     }
 }

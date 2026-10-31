@@ -8,6 +8,7 @@ import com.cak3d.biscuitmesh.data.KnownDevicesStore
 import com.cak3d.biscuitmesh.model.BiscuitDevice
 import com.cak3d.biscuitmesh.model.ConnectionState
 import com.cak3d.biscuitmesh.model.DeviceStatus
+import com.cak3d.biscuitmesh.model.LogEntry
 import com.cak3d.biscuitmesh.protocol.BiscuitMessage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -38,9 +39,9 @@ class FleetManager(
     private val _devices = MutableStateFlow<Map<String, BiscuitDevice>>(emptyMap())
     val devices: StateFlow<Map<String, BiscuitDevice>> = _devices.asStateFlow()
 
-    /** Rolling log of protocol lines across the whole fleet (address -> message). */
-    private val _log = MutableStateFlow<List<Pair<String, BiscuitMessage>>>(emptyList())
-    val log: StateFlow<List<Pair<String, BiscuitMessage>>> = _log.asStateFlow()
+    /** Rolling, timestamped log of protocol lines across the whole fleet. */
+    private val _log = MutableStateFlow<List<LogEntry>>(emptyList())
+    val log: StateFlow<List<LogEntry>> = _log.asStateFlow()
 
     val connectedCount: Int
         get() = _devices.value.values.count { it.state == ConnectionState.READY }
@@ -177,8 +178,12 @@ class FleetManager(
     }
 
     override fun onMessage(address: String, message: BiscuitMessage) {
-        _log.update { (it + (address to message)).takeLast(500) }
+        _log.update { (it + LogEntry(address, message, System.currentTimeMillis())).takeLast(500) }
     }
+
+    /** Short display name for a board address (used when tagging fleet-wide results). */
+    fun nameFor(address: String): String =
+        _devices.value[address]?.displayName ?: shortName(address)
 
     override fun onStatus(address: String, status: DeviceStatus) {
         _devices.update { it.mutate(address) { d -> d.copy(status = status) } }
