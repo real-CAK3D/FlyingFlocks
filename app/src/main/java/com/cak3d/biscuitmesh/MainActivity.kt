@@ -44,7 +44,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -55,7 +58,7 @@ import androidx.navigation.compose.rememberNavController
 import com.cak3d.biscuitmesh.ui.BluetoothScreen
 import com.cak3d.biscuitmesh.ui.DeviceDetailScreen
 import com.cak3d.biscuitmesh.ui.FleetScreen
-import com.cak3d.biscuitmesh.ui.CyberBackground
+import com.cak3d.biscuitmesh.ui.ConstellationBackground
 import com.cak3d.biscuitmesh.ui.MiscScreen
 import com.cak3d.biscuitmesh.ui.RareBirdsScreen
 import com.cak3d.biscuitmesh.ui.RunToolScreen
@@ -159,9 +162,28 @@ private fun MainShell(vm: MainViewModel) {
             }
         },
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
-            // House cyber backdrop behind everything except the live map.
-            if (!onMap) CyberBackground(Modifier.fillMaxSize())
+        var touch by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<Offset?>(null) }
+        Box(
+            Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .then(
+                    if (!onMap) {
+                        Modifier.pointerInput(Unit) {
+                            awaitPointerEventScope {
+                                while (true) {
+                                    val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull()
+                                    touch = if (change != null && change.pressed) change.position else null
+                                }
+                            }
+                        }
+                    } else {
+                        Modifier
+                    },
+                ),
+        ) {
+            // Living constellation backdrop behind everything except the live map.
+            if (!onMap) ConstellationBackground(Modifier.fillMaxSize(), touch)
             NavHost(navController = nav, startDestination = "fleet") {
                 composable("fleet") {
                     FleetScreen(vm, onOpen = { address ->

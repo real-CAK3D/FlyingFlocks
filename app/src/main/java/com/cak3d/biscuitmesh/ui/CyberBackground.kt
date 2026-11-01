@@ -1,109 +1,137 @@
 package com.cak3d.biscuitmesh.ui
 
-import android.graphics.Paint
-import android.graphics.Typeface
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
-import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.graphics.toArgb
-import kotlin.math.abs
+import kotlin.math.sqrt
 import kotlin.random.Random
 
 /**
- * The Flying Flocks house backdrop: a subtle "data rain" of glyphs drifting down
- * a faint grid, drawn behind the text screens (never the map). Kept low-alpha so
- * content stays readable, and driven off frame time so it animates smoothly.
+ * The Flying Flocks backdrop: a living constellation. Star-nodes drift and link
+ * up when they drift close, and when a finger touches or drags the screen the
+ * nearby stars reach toward it with glowing lines — so the background reacts to
+ * touch. Positions are kept normalized (0..1) and scaled to the canvas at draw.
+ *
+ * [touch] is the current pointer position in this canvas's pixel space (null when
+ * nothing is pressed); it is observed one level up so the effect reacts to
+ * touches even over scrolling content.
  */
 @Composable
-fun CyberBackground(
+fun ConstellationBackground(
     modifier: Modifier = Modifier,
-    glyphColor: Color = Color(0xFFE8A838),
-    headColor: Color = Color(0xFFFCE8C0),
-    gridColor: Color = Color(0xFF5CB4E8),
+    touch: Offset? = null,
+    nodeColor: Color = Color(0xFFE8A838),
+    lineColor: Color = Color(0xFF5CB4E8),
+    touchColor: Color = Color(0xFFFCE8C0),
 ) {
-    // A fixed pool of columns; mapped across the real width at draw time.
-    val columns = remember {
-        List(72) { Column(speed = Random.nextFloat() * 50f + 28f, phase = Random.nextFloat() * 1000f, len = Random.nextInt(8, 20)) }
-    }
-    val glyphSeed = remember { Random(1337) }
+    val n = 56
+    val px = remember { FloatArray(n) { Random.nextFloat() } }
+    val py = remember { FloatArray(n) { Random.nextFloat() } }
+    val vx = remember { FloatArray(n) { (Random.nextFloat() - 0.5f) * 0.04f } }
+    val vy = remember { FloatArray(n) { (Random.nextFloat() - 0.5f) * 0.04f } }
 
-    var timeMs by remember { mutableLongStateOf(0L) }
-    androidx.compose.runtime.LaunchedEffect(Unit) {
-        var start = 0L
-        while (true) {
-            androidx.compose.runtime.withFrameNanos { now ->
-                if (start == 0L) start = now
-                timeMs = (now - start) / 1_000_000
-            }
-        }
-    }
+    var lastNs by remember { mutableLongStateOf(0L) }
+    var tick by remember { mutableLongStateOf(0L) }
 
-    val paint = remember {
-        Paint().apply {
-            typeface = Typeface.MONOSPACE
-            isAntiAlias = true
-            textAlign = Paint.Align.CENTER
+    LaunchedEffectFrames { now ->
+        val dt = if (lastNs == 0L) 0f else ((now - lastNs) / 1_000_000_000f).coerceAtMost(0.05f)
+        lastNs = now
+        for (i in 0 until n) {
+            px[i] += vx[i] * dt
+            py[i] += vy[i] * dt
+            if (px[i] < 0f) { px[i] = 0f; vx[i] = -vx[i] }
+            if (px[i] > 1f) { px[i] = 1f; vx[i] = -vx[i] }
+            if (py[i] < 0f) { py[i] = 0f; vy[i] = -vy[i] }
+            if (py[i] > 1f) { py[i] = 1f; vy[i] = -vy[i] }
+            // Gentle drag so touch-nudges don't accumulate forever.
+            vx[i] *= 0.995f
+            vy[i] *= 0.995f
+            // Keep a minimum drift so the field never freezes.
+            val sp = sqrt(vx[i] * vx[i] + vy[i] * vy[i])
+            if (sp < 0.012f) { vx[i] += (Random.nextFloat() - 0.5f) * 0.01f; vy[i] += (Random.nextFloat() - 0.5f) * 0.01f }
         }
+        tick = now
     }
 
     Canvas(modifier) {
-        val t = timeMs / 1000f
+        @Suppress("UNUSED_EXPRESSION") tick // read so the draw re-runs each frame
         val w = size.width
         val h = size.height
-        val cellW = 26f
-        val cols = (w / cellW).toInt().coerceIn(1, columns.size)
-        val cellH = 30f
-        paint.textSize = 24f
+        val link = 150f
+        val touchR = 240f
 
-        // Faint drifting grid.
-        val gridStep = 48f
-        val drift = (t * 10f) % gridStep
-        var gx = -drift
-        while (gx < w) {
-            drawLine(gridColor.copy(alpha = 0.05f), Offset(gx, 0f), Offset(gx, h), strokeWidth = 1f)
-            gx += gridStep
-        }
-        var gy = -drift
-        while (gy < h) {
-            drawLine(gridColor.copy(alpha = 0.05f), Offset(0f, gy), Offset(w, gy), strokeWidth = 1f)
-            gy += gridStep
-        }
-
-        // Data rain.
-        drawIntoCanvas { canvas ->
-            val native = canvas.nativeCanvas
-            for (c in 0 until cols) {
-                val col = columns[c]
-                val x = c * cellW + cellW / 2f
-                val total = h + col.len * cellH
-                val head = ((t * col.speed + col.phase) % total) - col.len * cellH
-                for (i in 0 until col.len) {
-                    val y = head + i * cellH
-                    if (y < 0f || y > h) continue
-                    val fromHead = col.len - 1 - i
-                    val glyph = GLYPHS[(glyphSeed.nextInt(GLYPHS.length) + c * 7 + (t * col.speed / cellH).toInt() - i) .let { abs(it) % GLYPHS.length }]
-                    if (fromHead == 0) {
-                        paint.color = headColor.toArgb()
-                        paint.alpha = 235
-                    } else {
-                        paint.color = glyphColor.toArgb()
-                        paint.alpha = (150f * (1f - fromHead.toFloat() / col.len)).toInt().coerceIn(10, 150)
-                    }
-                    native.drawText(glyph.toString(), x, y, paint)
+        // Pull nearby stars toward the finger (velocity nudge, then clamp).
+        val tp = touch
+        if (tp != null) {
+            for (i in 0 until n) {
+                val xi = px[i] * w
+                val yi = py[i] * h
+                val dx = tp.x - xi
+                val dy = tp.y - yi
+                val d2 = dx * dx + dy * dy
+                if (d2 in 1f..(touchR * touchR)) {
+                    val d = sqrt(d2)
+                    val f = 0.06f * (1f - d / touchR)
+                    vx[i] = (vx[i] + (dx / d) * f / w).coerceIn(-0.09f, 0.09f)
+                    vy[i] = (vy[i] + (dy / d) * f / h).coerceIn(-0.09f, 0.09f)
                 }
             }
+        }
+
+        // Links between nearby stars.
+        for (i in 0 until n) {
+            val xi = px[i] * w
+            val yi = py[i] * h
+            for (j in i + 1 until n) {
+                val xj = px[j] * w
+                val yj = py[j] * h
+                val dx = xi - xj
+                val dy = yi - yj
+                val d2 = dx * dx + dy * dy
+                if (d2 < link * link) {
+                    val a = (1f - sqrt(d2) / link) * 0.45f
+                    drawLine(lineColor.copy(alpha = a), Offset(xi, yi), Offset(xj, yj), strokeWidth = 1f)
+                }
+            }
+        }
+
+        // Finger links + glow.
+        if (tp != null) {
+            for (i in 0 until n) {
+                val xi = px[i] * w
+                val yi = py[i] * h
+                val dx = tp.x - xi
+                val dy = tp.y - yi
+                val d2 = dx * dx + dy * dy
+                if (d2 < touchR * touchR) {
+                    val a = (1f - sqrt(d2) / touchR) * 0.8f
+                    drawLine(touchColor.copy(alpha = a), tp, Offset(xi, yi), strokeWidth = 1.3f)
+                }
+            }
+            drawCircle(touchColor.copy(alpha = 0.22f), radius = 14f, center = tp)
+            drawCircle(touchColor.copy(alpha = 0.5f), radius = 4f, center = tp)
+        }
+
+        // Stars.
+        for (i in 0 until n) {
+            drawCircle(nodeColor.copy(alpha = 0.9f), radius = 2.3f, center = Offset(px[i] * w, py[i] * h))
         }
     }
 }
 
-private class Column(val speed: Float, val phase: Float, val len: Int)
-
-private const val GLYPHS = "01ｱｲｳｴｵｶｷｸ日ﾊﾋﾌ0123456789ABCDEF<>/\\#*+=アサソヲ"
+/** Runs [onFrame] every frame for the life of the composition. */
+@Composable
+private fun LaunchedEffectFrames(onFrame: (Long) -> Unit) {
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        while (true) {
+            withFrameNanos { onFrame(it) }
+        }
+    }
+}
