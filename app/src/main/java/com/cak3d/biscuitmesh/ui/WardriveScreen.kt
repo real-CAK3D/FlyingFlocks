@@ -100,6 +100,18 @@ fun WardriveScreen(vm: MainViewModel) {
     }
     val centered = remember { booleanArrayOf(false) }
 
+    // Center on the operator's location as soon as the screen opens, so the map
+    // doesn't sit on Null Island (0,0) until the first wardrive starts.
+    LaunchedEffect(locGranted) {
+        if (locGranted && !centered[0]) {
+            val fix = vm.oneShotLocation()
+            if (fix != null && !centered[0]) {
+                mapView.controller.setCenter(GeoPoint(fix.lat, fix.lon))
+                centered[0] = true
+            }
+        }
+    }
+
     Box(Modifier.fillMaxSize()) {
         AndroidView(
             modifier = Modifier.fillMaxSize(),

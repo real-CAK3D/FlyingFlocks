@@ -59,6 +59,23 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
     val authorized by vm.authorizedUse.collectAsStateWithLifecycle()
     var showAdd by remember { mutableStateOf(false) }
 
+    // Request location at the screen level, not inside the dialog: a permission
+    // prompt that pops over the dialog dismisses it, so we settle permission
+    // first and then open the dialog (manual entry is always possible either way).
+    val context = LocalContext.current
+    fun hasLocation() = context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) ==
+        PackageManager.PERMISSION_GRANTED
+    var locGranted by remember { mutableStateOf(hasLocation()) }
+    val permLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        locGranted = granted || hasLocation()
+        showAdd = true
+    }
+    fun openAddZone() {
+        if (locGranted) showAdd = true else permLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -81,7 +98,7 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
         ) {
             DeadZonesSection(
                 zones = zones,
-                onAdd = { showAdd = true },
+                onAdd = { openAddZone() },
                 onRemove = { vm.removeDeadZone(it) },
             )
             WdgSection(vm)
@@ -97,6 +114,7 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
     if (showAdd) {
         AddDeadZoneDialog(
             vm = vm,
+            locationGranted = locGranted,
             onDismiss = { showAdd = false },
             onSave = { name, lat, lon, radius ->
                 vm.addDeadZone(name, lat, lon, radius)
@@ -265,10 +283,10 @@ private fun AboutSection() {
 @Composable
 private fun AddDeadZoneDialog(
     vm: MainViewModel,
+    locationGranted: Boolean,
     onDismiss: () -> Unit,
     onSave: (name: String, lat: Double, lon: Double, radius: Double) -> Unit,
 ) {
-    val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
     var name by remember { mutableStateOf("") }
@@ -294,16 +312,6 @@ private fun AddDeadZoneDialog(
         }
     }
 
-    val permLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) { granted -> if (granted) fetchLocation() else status = "Location permission denied." }
-
-    fun useCurrentLocation() {
-        val has = context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) ==
-            PackageManager.PERMISSION_GRANTED
-        if (has) fetchLocation() else permLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
-    }
-
     val latD = lat.toDoubleOrNull()
     val lonD = lon.toDoubleOrNull()
     val radiusD = radius.toDoubleOrNull()
@@ -327,13 +335,20 @@ private fun AddDeadZoneDialog(
                     modifier = Modifier.fillMaxWidth(),
                 )
                 OutlinedButton(
-                    onClick = { useCurrentLocation() },
-                    enabled = !locating,
+                    onClick = { fetchLocation() },
+                    enabled = !locating && locationGranted,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Icon(Icons.Default.MyLocation, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
                     Text(if (locating) "Locating…" else "Use my current location")
+                }
+                if (!locationGranted) {
+                    Text(
+                        "Location permission denied — enter coordinates manually.",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.secondary,
+                    )
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
