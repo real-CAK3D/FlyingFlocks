@@ -8,6 +8,7 @@ import com.cak3d.biscuitmesh.data.DeadZonesStore
 import com.cak3d.biscuitmesh.location.LocationProvider
 import com.cak3d.biscuitmesh.protocol.BiscuitMessage
 import com.cak3d.biscuitmesh.protocol.command
+import com.cak3d.biscuitmesh.sensors.PhoneSensors
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -57,6 +58,7 @@ class WardriveManager(
     private val location: LocationProvider,
     private val scope: CoroutineScope,
     deadZonesStore: DeadZonesStore? = null,
+    private val phoneSensors: PhoneSensors? = null,
 ) {
     private val _state = MutableStateFlow(WardriveState())
     val state: StateFlow<WardriveState> = _state.asStateFlow()
@@ -79,6 +81,8 @@ class WardriveManager(
     @Volatile private var zones: List<DeadZone> = emptyList()
     /** True while suppressed, so we only broadcast on dead-zone transitions. */
     private var suppressed = false
+    /** Whether the phone's own radios are feeding this session. */
+    private var phoneOn = false
 
     init {
         deadZonesStore?.let { store ->
@@ -96,7 +100,7 @@ class WardriveManager(
     }
 
     @SuppressLint("MissingPermission")
-    fun start(mode: WardriveMode) {
+    fun start(mode: WardriveMode, usePhone: Boolean = false) {
         if (_state.value.active) return
         lastProcessedMs = System.currentTimeMillis()
         suppressed = false
@@ -165,11 +169,15 @@ class WardriveManager(
         }
 
         fleet.broadcast(scanCommand(mode))
+
+        phoneOn = usePhone && phoneSensors != null
+        if (phoneOn) startPhone(mode)
     }
 
     fun stop() {
         if (!_state.value.active) return
         fleet.broadcast(command("stopscan"))
+        if (phoneOn) { phoneSensors?.stop(); phoneOn = false }
         locJob?.cancel(); locJob = null
         logJob?.cancel(); logJob = null
         _state.update { it.copy(active = false) }
@@ -179,6 +187,26 @@ class WardriveManager(
         _state.update { it.copy(mode = mode) }
         // Don't wake the boards back up while we're parked in a dead zone.
         if (_state.value.active && !suppressed) fleet.broadcast(scanCommand(mode))
+        // Retarget the phone's radios to match the new mode.
+        if (phoneOn) { phoneSensors?.stop(); startPhone(mode) }
+    }
+
+    private fun startPhone(mode: WardriveMode) {
+        val wifiOn = mode != WardriveMode.BT
+        val bleOn = mode != WardriveMode.WIFI
+        phoneSensors?.start(wifiOn, bleOn) { hit -> addPhoneHit(hit) }
+    }
+
+    /** Geo-tags and dedups a phone-radio observation, honoring dead zones. */
+    private fun addPhoneHit(hit: PhoneSensors.Hit) {
+        if (!_state.value.active) return
+        val lat = curLat ?: return   // null while suppressed in a dead zone
+        val lon = curLon ?: return
+        if (!matchesMode(hit.kind, _state.value.mode)) return
+        if (_samples.value.containsKey(hit.id)) return
+        val sample = WardriveSample(hit.kind, hit.id, hit.label, lat, lon, hit.rssi, System.currentTimeMillis(), curAcc)
+        _samples.update { it + (hit.id to sample) }
+        recount()
     }
 
     private fun recount() {

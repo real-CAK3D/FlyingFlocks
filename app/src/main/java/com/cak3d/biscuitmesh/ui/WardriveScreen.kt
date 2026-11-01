@@ -1,31 +1,47 @@
 package com.cak3d.biscuitmesh.ui
 
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Color as AndroidColor
 import android.graphics.drawable.GradientDrawable
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilledIconToggleButton
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,6 +64,8 @@ import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polygon
 import org.osmdroid.views.overlay.Polyline
 import org.osmdroid.views.overlay.TilesOverlay
+import org.osmdroid.views.overlay.gestures.RotationGestureOverlay
+import kotlin.math.roundToInt
 
 @Composable
 fun WardriveScreen(vm: MainViewModel) {
@@ -112,12 +130,49 @@ fun WardriveScreen(vm: MainViewModel) {
         }
     }
 
+    val phoneOn by vm.phoneSensors.collectAsStateWithLifecycle()
+
+    // Free two-finger rotation (re-added on each map update, which clears overlays).
+    val rotationOverlay = remember { RotationGestureOverlay(mapView).apply { isEnabled = true } }
+
+    // Heading-up: rotate the map to the device's compass bearing, WDG-style.
+    var headingUp by remember { mutableStateOf(false) }
+    val sensorManager = remember { context.getSystemService(Context.SENSOR_SERVICE) as? SensorManager }
+    DisposableEffect(headingUp) {
+        if (!headingUp) {
+            mapView.mapOrientation = 0f
+            mapView.invalidate()
+            onDispose { }
+        } else {
+            val rot = sensorManager?.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
+            val listener = object : SensorEventListener {
+                private val rotM = FloatArray(9)
+                private val orient = FloatArray(3)
+                private var last = Float.NaN
+                override fun onSensorChanged(e: SensorEvent) {
+                    if (e.sensor.type != Sensor.TYPE_ROTATION_VECTOR) return
+                    SensorManager.getRotationMatrixFromVector(rotM, e.values)
+                    SensorManager.getOrientation(rotM, orient)
+                    val az = Math.toDegrees(orient[0].toDouble()).toFloat()
+                    if (!last.isNaN() && kotlin.math.abs(az - last) < 1.5f) return
+                    last = az
+                    mapView.mapOrientation = -az
+                    mapView.invalidate()
+                }
+                override fun onAccuracyChanged(s: Sensor?, a: Int) {}
+            }
+            if (rot != null) sensorManager.registerListener(listener, rot, SensorManager.SENSOR_DELAY_UI)
+            onDispose { sensorManager?.unregisterListener(listener) }
+        }
+    }
+
     Box(Modifier.fillMaxSize()) {
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { mapView },
             update = { map ->
                 map.overlays.clear()
+                map.overlays.add(rotationOverlay)
 
                 // WDG owned-territory cells first, so samples/track draw on top.
                 cells.forEach { c ->
@@ -188,9 +243,27 @@ fun WardriveScreen(vm: MainViewModel) {
             wdgStatus = wdgStatusText(wdgStatus),
             wdgWorking = wdgStatus is MainViewModel.WdgStatus.Working,
             territoryCount = cells.size,
+            phoneOn = phoneOn,
+            onTogglePhone = { vm.setPhoneSensors(it) },
             onUpload = { vm.uploadToWdg() },
             onLoadTerritory = { vm.fetchOwnedCells() },
         )
+
+        // Heading-up / north-up compass toggle, top-right under the app bar.
+        FilledIconToggleButton(
+            checked = headingUp,
+            onCheckedChange = { headingUp = it },
+            modifier = Modifier.align(Alignment.TopEnd).padding(12.dp).size(44.dp),
+            colors = IconButtonDefaults.filledIconToggleButtonColors(
+                containerColor = MaterialTheme.colorScheme.surface,
+                checkedContainerColor = MaterialTheme.colorScheme.primary,
+            ),
+        ) {
+            Icon(
+                Icons.Default.Explore,
+                contentDescription = if (headingUp) "Heading up" else "North up",
+            )
+        }
     }
 }
 
@@ -214,6 +287,8 @@ private fun ControlPanel(
     wdgStatus: String?,
     wdgWorking: Boolean,
     territoryCount: Int,
+    phoneOn: Boolean,
+    onTogglePhone: (Boolean) -> Unit,
     onUpload: () -> Unit,
     onLoadTerritory: () -> Unit,
 ) {
@@ -238,6 +313,21 @@ private fun ControlPanel(
                         label = { Text(m.name) },
                     )
                 }
+            }
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Phone sensors", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        if (phoneOn) "Scanning with this phone's Wi-Fi + BLE" else "Boards only",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    )
+                }
+                Switch(checked = phoneOn, onCheckedChange = onTogglePhone)
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Stat("WiFi", wifi.toString())

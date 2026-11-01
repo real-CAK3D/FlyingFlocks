@@ -7,15 +7,21 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-private val BiscuitGold = Color(0xFFE8A838)
-private val BiscuitGoldDim = Color(0xFFC98A1E)
+// Flying Flocks palette: a sunrise gold primary with a sky-blue secondary — its
+// own identity, distinct from Biscuit Manager's plain gold and WDG's neon cyan.
+private val FlockGold = Color(0xFFE8A838)
+private val FlockGoldDim = Color(0xFFC98A1E)
+private val SkyBlue = Color(0xFF5CB4E8)
+private val SkyBlueDim = Color(0xFF3A93C9)
 private val Ink = Color(0xFF0E1116)
 private val InkRaised = Color(0xFF171B22)
 
 private val DarkColors = darkColorScheme(
-    primary = BiscuitGold,
+    primary = FlockGold,
     onPrimary = Ink,
-    secondary = BiscuitGoldDim,
+    secondary = SkyBlue,
+    onSecondary = Ink,
+    tertiary = SkyBlueDim,
     background = Ink,
     surface = InkRaised,
     onBackground = Color(0xFFE6E8EB),
@@ -23,8 +29,9 @@ private val DarkColors = darkColorScheme(
 )
 
 private val LightColors = lightColorScheme(
-    primary = BiscuitGoldDim,
-    secondary = BiscuitGold,
+    primary = FlockGoldDim,
+    secondary = SkyBlueDim,
+    tertiary = FlockGold,
 )
 
 @Composable

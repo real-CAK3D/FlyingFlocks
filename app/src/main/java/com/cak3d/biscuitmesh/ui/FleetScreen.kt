@@ -1,14 +1,18 @@
 package com.cak3d.biscuitmesh.ui
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -18,6 +22,7 @@ import androidx.compose.material.icons.filled.BluetoothSearching
 import androidx.compose.material.icons.filled.DeveloperBoard
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Usb
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -44,13 +49,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.cak3d.biscuitmesh.MainViewModel
+import com.cak3d.biscuitmesh.R
 import com.cak3d.biscuitmesh.model.BiscuitDevice
 import com.cak3d.biscuitmesh.model.ConnectionState
+import com.cak3d.biscuitmesh.usb.UsbDeviceInfo
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -62,6 +70,7 @@ fun FleetScreen(vm: MainViewModel, onOpen: (String) -> Unit = {}) {
     }
     val devices by devicesFlow.collectAsStateWithLifecycle()
     val scanning by vm.scanning.collectAsStateWithLifecycle()
+    val usb by vm.usbDevices.collectAsStateWithLifecycle(initialValue = emptyList())
 
     val all = devices.values
     val connected = all.filter { it.isLive }.sortedByDescending { it.rssi }
@@ -99,7 +108,7 @@ fun FleetScreen(vm: MainViewModel, onOpen: (String) -> Unit = {}) {
         },
     ) { padding ->
         if (all.isEmpty()) {
-            EmptyState(Modifier.padding(padding), scanning)
+            EmptyState(Modifier.padding(padding), scanning, usb)
             renaming?.let { RenameDialog(it, vm) { renaming = null } }
             return@Scaffold
         }
@@ -109,6 +118,7 @@ fun FleetScreen(vm: MainViewModel, onOpen: (String) -> Unit = {}) {
             contentPadding = PaddingValues(12.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            if (usb.isNotEmpty()) item("usb") { UsbBanner(usb) }
             if (connectableInRange > 0 || connected.isNotEmpty()) {
                 item {
                     BroadcastBar(
@@ -328,21 +338,61 @@ private fun RenameDialog(device: BiscuitDevice, vm: MainViewModel, onDismiss: ()
 }
 
 @Composable
-private fun EmptyState(modifier: Modifier, scanning: Boolean) {
+private fun EmptyState(modifier: Modifier, scanning: Boolean, usb: List<UsbDeviceInfo>) {
     Column(
         modifier = modifier.fillMaxSize().padding(32.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        Image(
+            painter = painterResource(R.drawable.ic_launcher_foreground),
+            contentDescription = null,
+            modifier = Modifier.size(140.dp),
+        )
         Text(
             if (scanning) "Scanning for Biscuit boards…" else "No boards yet",
             style = MaterialTheme.typography.titleMedium,
         )
         Text(
             if (scanning) "Make sure a board is powered and advertising."
-            else "Tap Scan to find nearby boards and build your fleet.",
+            else "Tap Scan to add boards — or just head to Wardrive and scan with the phone's own Wi-Fi + BLE.",
             style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.padding(top = 4.dp),
         )
+        if (usb.isNotEmpty()) {
+            Spacer(Modifier.height(16.dp))
+            UsbBanner(usb)
+        }
+    }
+}
+
+@Composable
+private fun UsbBanner(usb: List<UsbDeviceInfo>) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Row(
+            Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Icon(Icons.Default.Usb, contentDescription = null, tint = MaterialTheme.colorScheme.secondary)
+            val first = usb.first()
+            Column(Modifier.weight(1f)) {
+                Text(
+                    if (usb.size == 1) first.name else "${usb.size} USB devices",
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+                Text(
+                    if (first.serialCapable) "${first.kind} — board-over-USB transport coming soon"
+                    else "${first.kind} detected",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                )
+            }
+        }
     }
 }
 

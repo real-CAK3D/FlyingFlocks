@@ -9,6 +9,8 @@ import com.cak3d.biscuitmesh.data.DeadZonesStore
 import com.cak3d.biscuitmesh.data.KnownDevicesStore
 import com.cak3d.biscuitmesh.data.SettingsStore
 import com.cak3d.biscuitmesh.location.LocationProvider
+import com.cak3d.biscuitmesh.sensors.PhoneSensors
+import com.cak3d.biscuitmesh.usb.UsbDetector
 import com.cak3d.biscuitmesh.wardrive.WardriveManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -45,8 +47,20 @@ class BiscuitMeshApp : Application() {
 
     val locationProvider: LocationProvider by lazy { LocationProvider(this) }
 
+    private val phoneSensors: PhoneSensors by lazy {
+        PhoneSensors(this, bluetoothManager?.adapter)
+    }
+
     val wardrive: WardriveManager? by lazy {
         val f = fleet ?: return@lazy null
-        WardriveManager(f, locationProvider, appScope, deadZonesStore)
+        WardriveManager(f, locationProvider, appScope, deadZonesStore, phoneSensors)
+    }
+
+    /** Watches for USB-OTG devices (serial boards, dongles) being plugged in. */
+    val usbDetector: UsbDetector by lazy { UsbDetector(this) }
+
+    override fun onCreate() {
+        super.onCreate()
+        usbDetector.start()
     }
 }

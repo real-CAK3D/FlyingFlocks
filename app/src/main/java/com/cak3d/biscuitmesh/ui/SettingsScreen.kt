@@ -270,10 +270,11 @@ private fun AuthorizedUseSection(accepted: Boolean, onAccept: () -> Unit, onRevo
 @Composable
 private fun AboutSection() {
     SectionCard(title = "About") {
-        Text("Biscuit Mesh ${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE})",
+        Text("Flying Flocks ${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE})",
             style = MaterialTheme.typography.bodyMedium)
         Text(
-            "A fleet-first manager for ESP32 Biscuit boards. WDG Wars feeder integration is coming next.",
+            "A fleet-first wardriver for ESP32 Biscuit boards — or the phone alone. " +
+                "Scans Wi-Fi + Bluetooth, maps and feeds WDG Wars.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
         )

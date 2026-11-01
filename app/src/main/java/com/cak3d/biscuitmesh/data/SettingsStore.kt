@@ -16,6 +16,7 @@ class SettingsStore(private val context: Context) {
     private val authorizedUseKey = booleanPreferencesKey("authorized_use_accepted")
     private val wdgApiKeyKey = stringPreferencesKey("wdg_api_key")
     private val wdgAutoUploadKey = booleanPreferencesKey("wdg_auto_upload")
+    private val phoneSensorsKey = booleanPreferencesKey("phone_sensors_enabled")
 
     /** True once the operator has acknowledged the authorized-use-only terms. */
     val authorizedUse: Flow<Boolean> =
@@ -39,5 +40,13 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setWdgAutoUpload(enabled: Boolean) {
         context.settingsDataStore.edit { it[wdgAutoUploadKey] = enabled }
+    }
+
+    /** Use the phone's own Wi-Fi/BLE radios as wardrive sensors. On by default. */
+    val phoneSensors: Flow<Boolean> =
+        context.settingsDataStore.data.map { it[phoneSensorsKey] ?: true }
+
+    suspend fun setPhoneSensors(enabled: Boolean) {
+        context.settingsDataStore.edit { it[phoneSensorsKey] = enabled }
     }
 }

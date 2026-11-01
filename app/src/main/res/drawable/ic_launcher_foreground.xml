@@ -3,17 +3,31 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- A biscuit with mesh "nodes" baked in. -->
-    <path
-        android:fillColor="#E8A838"
-        android:pathData="M54,30m-18,0a18,18 0,1 1,36 0a18,18 0,1 1,-36 0" />
-    <path android:fillColor="#0E1116" android:pathData="M47,25m-2.5,0a2.5,2.5 0,1 1,5 0a2.5,2.5 0,1 1,-5 0" />
-    <path android:fillColor="#0E1116" android:pathData="M60,28m-2.5,0a2.5,2.5 0,1 1,5 0a2.5,2.5 0,1 1,-5 0" />
-    <path android:fillColor="#0E1116" android:pathData="M52,36m-2.5,0a2.5,2.5 0,1 1,5 0a2.5,2.5 0,1 1,-5 0" />
-    <path
-        android:strokeColor="#C98A1E"
-        android:strokeWidth="3"
-        android:pathData="M54,48 L54,66 M54,66 L40,78 M54,66 L68,78" />
-    <path android:fillColor="#E8A838" android:pathData="M40,78m-6,0a6,6 0,1 1,12 0a6,6 0,1 1,-12 0" />
-    <path android:fillColor="#E8A838" android:pathData="M68,78m-6,0a6,6 0,1 1,12 0a6,6 0,1 1,-12 0" />
+    <!-- Flying Flocks: a XIAO chip with wings, a little flock soaring above. -->
+
+    <!-- Wings sweeping up and out from the chip. -->
+    <path android:fillColor="#E8A838"
+        android:pathData="M54,60 C44,46 28,36 15,40 C26,44 34,52 40,63 C45,59 50,58 54,60 Z" />
+    <path android:fillColor="#E8A838"
+        android:pathData="M54,60 C64,46 80,36 93,40 C82,44 74,52 68,63 C63,59 58,58 54,60 Z" />
+    <!-- Lighter feather accents. -->
+    <path android:fillColor="#F5C877"
+        android:pathData="M50,60 C42,50 30,43 21,45 C30,49 36,55 41,63 C44,61 47,60 50,60 Z" />
+    <path android:fillColor="#F5C877"
+        android:pathData="M58,60 C66,50 78,43 87,45 C78,49 72,55 67,63 C64,61 61,60 58,60 Z" />
+
+    <!-- The XIAO chip body. -->
+    <path android:fillColor="#0E1116" android:strokeColor="#E8A838" android:strokeWidth="3"
+        android:pathData="M44,56 h20 a5,5 0 0 1 5,5 v18 a5,5 0 0 1 -5,5 h-20 a5,5 0 0 1 -5,-5 v-18 a5,5 0 0 1 5,-5 z" />
+    <!-- Chip core. -->
+    <path android:fillColor="#E8A838"
+        android:pathData="M50,64 h8 a2,2 0 0 1 2,2 v8 a2,2 0 0 1 -2,2 h-8 a2,2 0 0 1 -2,-2 v-8 a2,2 0 0 1 2,-2 z" />
+    <!-- Pins. -->
+    <path android:fillColor="#C98A1E"
+        android:pathData="M39,62 h4 v3 h-4 z M39,69 h4 v3 h-4 z M39,76 h4 v3 h-4 z M65,62 h4 v3 h-4 z M65,69 h4 v3 h-4 z M65,76 h4 v3 h-4 z" />
+
+    <!-- A small flock of three soaring above. -->
+    <path android:strokeColor="#F5C877" android:strokeWidth="2.5" android:fillColor="#00000000"
+        android:strokeLineCap="round"
+        android:pathData="M40,30 l5,-4 l5,4 M58,30 l5,-4 l5,4 M49,24 l5,-4 l5,4" />
 </vector>

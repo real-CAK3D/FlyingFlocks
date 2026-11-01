@@ -15,7 +15,7 @@ import java.util.TimeZone
  */
 object WigleExport {
 
-    private const val HEADER_META = "WigleWifi-1.6,appRelease=0.6.0,model=BiscuitMesh,release=0.6.0,device=biscuit,display=biscuit,board=esp32,brand=cak3d"
+    private const val HEADER_META = "WigleWifi-1.6,appRelease=0.7.0,model=FlyingFlocks,release=0.7.0,device=flyingflocks,display=flyingflocks,board=esp32,brand=cak3d"
     private const val HEADER_COLS =
         "MAC,SSID,AuthMode,FirstSeen,Channel,Frequency,RSSI,CurrentLatitude,CurrentLongitude,AltitudeMeters,AccuracyMeters,RCOIs,MfgrId,Type"
 

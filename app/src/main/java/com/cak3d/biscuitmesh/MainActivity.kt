@@ -188,8 +188,8 @@ private fun PermissionGate(content: @Composable () -> Unit) {
         ) {
             Text("Bluetooth permission needed", style = MaterialTheme.typography.titleLarge)
             Text(
-                "Biscuit Mesh uses Bluetooth to find and manage your boards. " +
-                    "It never uses Bluetooth scans for location.",
+                "Flying Flocks uses Bluetooth to find your boards and to sense nearby " +
+                    "devices with the phone itself. It never uses Bluetooth scans for location.",
                 style = MaterialTheme.typography.bodyMedium,
             )
             Button(

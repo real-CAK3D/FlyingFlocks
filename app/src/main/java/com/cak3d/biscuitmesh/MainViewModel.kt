@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.cak3d.biscuitmesh.ble.FleetManager
 import com.cak3d.biscuitmesh.data.DeadZone
 import com.cak3d.biscuitmesh.protocol.command
+import com.cak3d.biscuitmesh.usb.UsbDeviceInfo
 import com.cak3d.biscuitmesh.wardrive.LatLon
 import com.cak3d.biscuitmesh.wardrive.WardriveMode
 import com.cak3d.biscuitmesh.wdg.WdgCell
@@ -29,6 +30,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     val devices get() = fleet?.devices
     val log get() = fleet?.log
+
+    /** USB-OTG devices currently attached (serial boards, dongles). */
+    val usbDevices: kotlinx.coroutines.flow.Flow<List<UsbDeviceInfo>> get() = appRef.usbDetector.devices
 
     private val _scanning = MutableStateFlow(false)
     val scanning: StateFlow<Boolean> = _scanning.asStateFlow()
@@ -72,7 +76,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val wardriveSamples get() = appRef.wardrive?.samples
     val wardriveTrack get() = appRef.wardrive?.track
 
-    fun startWardrive(mode: WardriveMode) { appRef.wardrive?.start(mode) }
+    /** Use the phone's own radios as sensors. On by default (board-free use). */
+    val phoneSensors: StateFlow<Boolean> =
+        appRef.settingsStore.phoneSensors.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    fun setPhoneSensors(enabled: Boolean) {
+        viewModelScope.launch { appRef.settingsStore.setPhoneSensors(enabled) }
+    }
+
+    fun startWardrive(mode: WardriveMode) { appRef.wardrive?.start(mode, phoneSensors.value) }
 
     fun stopWardrive() {
         appRef.wardrive?.stop()
