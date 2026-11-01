@@ -27,9 +27,9 @@ import kotlin.random.Random
 fun ConstellationBackground(
     modifier: Modifier = Modifier,
     touch: Offset? = null,
-    nodeColor: Color = Color(0xFFE8A838),
-    lineColor: Color = Color(0xFF5CB4E8),
-    touchColor: Color = Color(0xFFFCE8C0),
+    nodeColor: Color = Color(0xFF34D399),   // emerald stars
+    lineColor: Color = Color(0xFFA855F7),   // purple links
+    touchColor: Color = Color(0xFFB9F6CA),  // bright green glow under the finger
 ) {
     val n = 56
     val px = remember { FloatArray(n) { Random.nextFloat() } }
