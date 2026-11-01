@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.cak3d.biscuitmesh.ble.FleetManager
 import com.cak3d.biscuitmesh.data.DeadZone
+import com.cak3d.biscuitmesh.hunts.RareBird
 import com.cak3d.biscuitmesh.protocol.command
 import com.cak3d.biscuitmesh.usb.UsbDeviceInfo
 import com.cak3d.biscuitmesh.wardrive.LatLon
@@ -33,6 +34,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** USB-OTG devices currently attached (serial boards, dongles). */
     val usbDevices: kotlinx.coroutines.flow.Flow<List<UsbDeviceInfo>> get() = appRef.usbDetector.devices
+
+    // --- Rare Birds hunt ---------------------------------------------------
+    val rareBirds: StateFlow<List<RareBird>> get() = appRef.rareBirds.birds
+    val rareBirdHere: StateFlow<com.cak3d.biscuitmesh.wardrive.LatLon?> get() = appRef.rareBirds.here
+    fun rareBirdOnLocation(lat: Double, lon: Double) = appRef.rareBirds.onLocation(lat, lon)
 
     private val _scanning = MutableStateFlow(false)
     val scanning: StateFlow<Boolean> = _scanning.asStateFlow()

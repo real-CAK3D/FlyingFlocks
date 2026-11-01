@@ -16,21 +16,27 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Bluetooth
+import androidx.compose.material.icons.filled.BluetoothSearching
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.Radar
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarDefaults
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -38,6 +44,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -48,7 +55,9 @@ import androidx.navigation.compose.rememberNavController
 import com.cak3d.biscuitmesh.ui.BluetoothScreen
 import com.cak3d.biscuitmesh.ui.DeviceDetailScreen
 import com.cak3d.biscuitmesh.ui.FleetScreen
+import com.cak3d.biscuitmesh.ui.CyberBackground
 import com.cak3d.biscuitmesh.ui.MiscScreen
+import com.cak3d.biscuitmesh.ui.RareBirdsScreen
 import com.cak3d.biscuitmesh.ui.RunToolScreen
 import com.cak3d.biscuitmesh.ui.SettingsScreen
 import com.cak3d.biscuitmesh.ui.WardriveScreen
@@ -92,13 +101,20 @@ private fun MainShell(vm: MainViewModel) {
     val currentRoute = backStack?.destination?.route
     val currentTab = TABS.firstOrNull { it.route == currentRoute }
     val isTopLevel = currentTab != null
+    val onMap = currentRoute == "wardrive"
+    val scanning by vm.scanning.collectAsStateWithLifecycle()
 
     Scaffold(
+        containerColor = Color.Transparent,
         topBar = {
             if (isTopLevel) {
                 TopAppBar(
-                    title = { Text(currentTab!!.label) },
+                    title = { Text(currentTab!!.label.uppercase()) },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                     actions = {
+                        IconButton(onClick = { nav.navigate("rarebirds") }) {
+                            Icon(Icons.Default.Radar, contentDescription = "Rare Birds")
+                        }
                         IconButton(onClick = { nav.navigate("settings") }) {
                             Icon(Icons.Default.Settings, contentDescription = "Settings")
                         }
@@ -106,9 +122,23 @@ private fun MainShell(vm: MainViewModel) {
                 )
             }
         },
+        floatingActionButton = {
+            if (currentRoute == "fleet") {
+                ExtendedFloatingActionButton(
+                    onClick = { vm.toggleScan() },
+                    icon = {
+                        Icon(
+                            if (scanning) Icons.Default.Stop else Icons.Default.BluetoothSearching,
+                            contentDescription = null,
+                        )
+                    },
+                    text = { Text(if (scanning) "Stop" else "Scan") },
+                )
+            }
+        },
         bottomBar = {
             if (isTopLevel) {
-                NavigationBar {
+                NavigationBar(containerColor = NavigationBarDefaults.containerColor.copy(alpha = 0.92f)) {
                     TABS.forEach { tab ->
                         NavigationBarItem(
                             selected = currentRoute == tab.route,
@@ -130,6 +160,8 @@ private fun MainShell(vm: MainViewModel) {
         },
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
+            // House cyber backdrop behind everything except the live map.
+            if (!onMap) CyberBackground(Modifier.fillMaxSize())
             NavHost(navController = nav, startDestination = "fleet") {
                 composable("fleet") {
                     FleetScreen(vm, onOpen = { address ->
@@ -141,6 +173,7 @@ private fun MainShell(vm: MainViewModel) {
                 composable("wifi") { WifiScreen(onOpenTool = { nav.navigate("runtool/$it") }) }
                 composable("bluetooth") { BluetoothScreen(onOpenTool = { nav.navigate("runtool/$it") }) }
                 composable("misc") { MiscScreen(onOpenTool = { nav.navigate("runtool/$it") }) }
+                composable("rarebirds") { RareBirdsScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("settings") { SettingsScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("device") {
                     val address by vm.selected.collectAsStateWithLifecycle()

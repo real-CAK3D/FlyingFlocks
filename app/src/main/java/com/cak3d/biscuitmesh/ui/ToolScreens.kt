@@ -34,6 +34,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -89,28 +90,26 @@ private fun TabbedToolScreen(
     onOpenTool: (String) -> Unit,
 ) {
     var selected by remember { mutableIntStateOf(0) }
-    Scaffold(topBar = { TopAppBar(title = { Text(title) }) }) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding)) {
-            if (tabs.size > 1) {
-                TabRow(selectedTabIndex = selected) {
-                    tabs.forEachIndexed { i, (label, _) ->
-                        Tab(
-                            selected = selected == i,
-                            onClick = { selected = i },
-                            text = { Text(label) },
-                        )
-                    }
+    Column(Modifier.fillMaxSize()) {
+        if (tabs.size > 1) {
+            TabRow(selectedTabIndex = selected, containerColor = Color.Transparent) {
+                tabs.forEachIndexed { i, (label, _) ->
+                    Tab(
+                        selected = selected == i,
+                        onClick = { selected = i },
+                        text = { Text(label) },
+                    )
                 }
             }
-            val tools = tabs[selected.coerceIn(0, tabs.lastIndex)].second
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(12.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                items(tools, key = { it.key }) { tool ->
-                    ToolRow(tool, leadingIcon) { onOpenTool(tool.key) }
-                }
+        }
+        val tools = tabs[selected.coerceIn(0, tabs.lastIndex)].second
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            items(tools, key = { it.key }) { tool ->
+                ToolRow(tool, leadingIcon) { onOpenTool(tool.key) }
             }
         }
     }

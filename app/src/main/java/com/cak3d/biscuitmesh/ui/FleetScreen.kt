@@ -82,56 +82,38 @@ fun FleetScreen(vm: MainViewModel, onOpen: (String) -> Unit = {}) {
 
     var renaming by remember { mutableStateOf<BiscuitDevice?>(null) }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(title = {
-                Column {
-                    Text("Fleet")
-                    Text(
-                        "$liveCount connected · ${all.size} saved/seen",
-                        style = MaterialTheme.typography.labelMedium,
-                    )
-                }
-            })
-        },
-        floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = { vm.toggleScan() },
-                icon = {
-                    Icon(
-                        if (scanning) Icons.Default.Stop else Icons.Default.BluetoothSearching,
-                        contentDescription = null,
-                    )
-                },
-                text = { Text(if (scanning) "Stop" else "Scan") },
-            )
-        },
-    ) { padding ->
+    Box(Modifier.fillMaxSize()) {
         if (all.isEmpty()) {
-            EmptyState(Modifier.padding(padding), scanning, usb)
-            renaming?.let { RenameDialog(it, vm) { renaming = null } }
-            return@Scaffold
-        }
-
-        LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            if (usb.isNotEmpty()) item("usb") { UsbBanner(usb) }
-            if (connectableInRange > 0 || connected.isNotEmpty()) {
-                item {
-                    BroadcastBar(
-                        connectableInRange = connectableInRange,
-                        liveCount = connected.size,
-                        onConnectAll = { vm.connectAll() },
-                        onDisconnectAll = { vm.disconnectAll() },
+            EmptyState(Modifier.fillMaxSize(), scanning, usb)
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                item("header") {
+                    Text(
+                        "$liveCount LIVE · ${all.size} KNOWN".let { "> $it" },
+                        style = MaterialTheme.typography.labelMedium,
+                        fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.primary,
                     )
                 }
+                if (usb.isNotEmpty()) item("usb") { UsbBanner(usb) }
+                if (connectableInRange > 0 || connected.isNotEmpty()) {
+                    item {
+                        BroadcastBar(
+                            connectableInRange = connectableInRange,
+                            liveCount = connected.size,
+                            onConnectAll = { vm.connectAll() },
+                            onDisconnectAll = { vm.disconnectAll() },
+                        )
+                    }
+                }
+                section("Connected", connected, vm, onOpen) { renaming = it }
+                section("In range", inRange, vm, onOpen) { renaming = it }
+                section("Saved · out of range", saved, vm, onOpen) { renaming = it }
             }
-            section("Connected", connected, vm, onOpen) { renaming = it }
-            section("In range", inRange, vm, onOpen) { renaming = it }
-            section("Saved · out of range", saved, vm, onOpen) { renaming = it }
         }
     }
 

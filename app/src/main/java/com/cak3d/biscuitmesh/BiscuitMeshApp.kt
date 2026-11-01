@@ -8,6 +8,8 @@ import com.cak3d.biscuitmesh.ble.FleetManager
 import com.cak3d.biscuitmesh.data.DeadZonesStore
 import com.cak3d.biscuitmesh.data.KnownDevicesStore
 import com.cak3d.biscuitmesh.data.SettingsStore
+import com.cak3d.biscuitmesh.hunts.RareBirdManager
+import com.cak3d.biscuitmesh.hunts.RareBirdStore
 import com.cak3d.biscuitmesh.location.LocationProvider
 import com.cak3d.biscuitmesh.sensors.PhoneSensors
 import com.cak3d.biscuitmesh.usb.UsbDetector
@@ -58,6 +60,10 @@ class BiscuitMeshApp : Application() {
 
     /** Watches for USB-OTG devices (serial boards, dongles) being plugged in. */
     val usbDetector: UsbDetector by lazy { UsbDetector(this) }
+
+    private val rareBirdStore: RareBirdStore by lazy { RareBirdStore(this) }
+
+    val rareBirds: RareBirdManager by lazy { RareBirdManager(appScope, rareBirdStore, wardrive) }
 
     override fun onCreate() {
         super.onCreate()
