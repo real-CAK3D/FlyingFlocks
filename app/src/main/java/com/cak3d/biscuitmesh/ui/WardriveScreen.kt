@@ -45,6 +45,7 @@ import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
+import org.osmdroid.views.overlay.Polygon
 import org.osmdroid.views.overlay.Polyline
 import org.osmdroid.views.overlay.TilesOverlay
 
@@ -65,6 +66,7 @@ fun WardriveScreen(vm: MainViewModel) {
     val track by trackFlow.collectAsStateWithLifecycle()
     val wdgKey by vm.wdgApiKey.collectAsStateWithLifecycle()
     val wdgStatus by vm.wdgStatus.collectAsStateWithLifecycle()
+    val cells by vm.wdgCells.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
     fun hasLocation() = context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) ==
@@ -104,6 +106,17 @@ fun WardriveScreen(vm: MainViewModel) {
             factory = { mapView },
             update = { map ->
                 map.overlays.clear()
+
+                // WDG owned-territory cells first, so samples/track draw on top.
+                cells.forEach { c ->
+                    val poly = Polygon(map)
+                    poly.points = Polygon.pointsAsCircle(GeoPoint(c.lat, c.lon), 900.0)
+                    poly.fillPaint.color = AndroidColor.parseColor("#44F59E0B")
+                    poly.outlinePaint.color = AndroidColor.parseColor("#F59E0B")
+                    poly.outlinePaint.strokeWidth = 3f
+                    poly.setOnClickListener { _, _, _ -> false }
+                    map.overlays.add(poly)
+                }
 
                 if (track.size >= 2) {
                     val line = Polyline(map)
@@ -162,7 +175,9 @@ fun WardriveScreen(vm: MainViewModel) {
             canUpload = samples.values.any { it.kind == SampleKind.AP || it.kind == SampleKind.BT },
             wdgStatus = wdgStatusText(wdgStatus),
             wdgWorking = wdgStatus is MainViewModel.WdgStatus.Working,
+            territoryCount = cells.size,
             onUpload = { vm.uploadToWdg() },
+            onLoadTerritory = { vm.fetchOwnedCells() },
         )
     }
 }
@@ -186,7 +201,9 @@ private fun ControlPanel(
     canUpload: Boolean,
     wdgStatus: String?,
     wdgWorking: Boolean,
+    territoryCount: Int,
     onUpload: () -> Unit,
+    onLoadTerritory: () -> Unit,
 ) {
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -232,12 +249,19 @@ private fun ControlPanel(
             } else {
                 Button(onClick = onStart, modifier = Modifier.fillMaxWidth()) { Text("Start") }
             }
-            if (wdgConfigured && canUpload) {
-                OutlinedButton(
-                    onClick = onUpload,
-                    enabled = !wdgWorking,
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text(if (wdgWorking) "Uploading…" else "Upload to WDG Wars") }
+            if (wdgConfigured) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = onUpload,
+                        enabled = !wdgWorking && canUpload,
+                        modifier = Modifier.weight(1f),
+                    ) { Text(if (wdgWorking) "Working…" else "Upload") }
+                    OutlinedButton(
+                        onClick = onLoadTerritory,
+                        enabled = !wdgWorking,
+                        modifier = Modifier.weight(1f),
+                    ) { Text(if (territoryCount > 0) "Territory ($territoryCount)" else "Load territory") }
+                }
             }
             wdgStatus?.let {
                 Text(it, style = MaterialTheme.typography.labelMedium,

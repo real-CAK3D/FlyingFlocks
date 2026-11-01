@@ -8,6 +8,7 @@ import com.cak3d.biscuitmesh.data.DeadZone
 import com.cak3d.biscuitmesh.protocol.command
 import com.cak3d.biscuitmesh.wardrive.LatLon
 import com.cak3d.biscuitmesh.wardrive.WardriveMode
+import com.cak3d.biscuitmesh.wdg.WdgCell
 import com.cak3d.biscuitmesh.wdg.WdgClient
 import com.cak3d.biscuitmesh.wdg.WigleExport
 import kotlinx.coroutines.flow.Flow
@@ -198,6 +199,30 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun clearWdgStatus() { _wdgStatus.value = WdgStatus.Idle }
+
+    // Owned-territory overlay (pull side). Schema is undocumented, so this is
+    // experimental: the tolerant parser skips cells it can't geolocate.
+    private val _wdgCells = MutableStateFlow<List<WdgCell>>(emptyList())
+    val wdgCells: StateFlow<List<WdgCell>> = _wdgCells.asStateFlow()
+
+    fun fetchOwnedCells() {
+        val key = wdgApiKey.value.trim()
+        if (key.isEmpty()) { _wdgStatus.value = WdgStatus.Error("Set your WDG API key in Settings first."); return }
+        _wdgStatus.value = WdgStatus.Working("Loading territory…")
+        viewModelScope.launch {
+            _wdgStatus.value = when (val r = wdg.fetchMyCells(key)) {
+                is WdgClient.CellsResult.Ok -> {
+                    _wdgCells.value = r.cells
+                    if (r.cells.isEmpty())
+                        WdgStatus.Done("No mappable territory returned (${r.raw.length} bytes).")
+                    else WdgStatus.Done("Loaded ${r.cells.size} territory cells.")
+                }
+                is WdgClient.CellsResult.HttpError ->
+                    WdgStatus.Error(if (r.code == 401 || r.code == 403) "Key rejected (${r.code})." else "Territory load failed (${r.code}).")
+                is WdgClient.CellsResult.Failure -> WdgStatus.Error("Network error: ${r.message}")
+            }
+        }
+    }
 
     /** Frames the part-after-CMD text and fans it out to every READY board. */
     fun broadcast(text: String) {

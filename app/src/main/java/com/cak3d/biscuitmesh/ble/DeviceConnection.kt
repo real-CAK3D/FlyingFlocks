@@ -14,6 +14,8 @@ import com.cak3d.biscuitmesh.model.DeviceStatus
 import com.cak3d.biscuitmesh.protocol.BiscuitGatt
 import com.cak3d.biscuitmesh.protocol.BiscuitMessage
 import org.json.JSONObject
+import java.time.OffsetDateTime
+import java.time.format.DateTimeFormatter
 import java.util.ArrayDeque
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -74,6 +76,12 @@ class DeviceConnection(
                 g.writeCharacteristic(c)
             }
         }
+    }
+
+    /** Replies to the device's TIME:REQUEST with the phone's local time + offset. */
+    private fun respondTimeSync() {
+        val iso = OffsetDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX"))
+        writeCommand("TIME:SYNC:$iso:\n".toByteArray(Charsets.UTF_8))
     }
 
     fun requestStatus() {
@@ -239,7 +247,13 @@ class DeviceConnection(
             val line = lineBuffer.substring(0, newline)
             lineBuffer.delete(0, newline + 1)
             if (line.isNotBlank()) {
-                listener.onMessage(address, BiscuitMessage.parse(line))
+                val msg = BiscuitMessage.parse(line)
+                // The device asks the phone for the time; answer so its DATA records
+                // and logs are timestamped correctly. Documented integration surface.
+                if (msg.type == BiscuitMessage.Type.TIME && msg.subtype == "REQUEST") {
+                    respondTimeSync()
+                }
+                listener.onMessage(address, msg)
             }
             newline = lineBuffer.indexOf("\n")
         }
