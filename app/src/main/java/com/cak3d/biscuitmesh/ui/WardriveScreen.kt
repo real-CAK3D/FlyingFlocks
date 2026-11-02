@@ -11,6 +11,7 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -48,13 +49,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.cak3d.biscuitmesh.MainViewModel
+import com.cak3d.biscuitmesh.model.BiscuitDevice
+import com.cak3d.biscuitmesh.wardrive.PHONE_SOURCE
 import com.cak3d.biscuitmesh.wardrive.SampleKind
 import com.cak3d.biscuitmesh.wardrive.WardriveMode
+import com.cak3d.biscuitmesh.wardrive.WardriveSample
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.delay
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
@@ -85,6 +91,8 @@ fun WardriveScreen(vm: MainViewModel) {
     val wdgKey by vm.wdgApiKey.collectAsStateWithLifecycle()
     val wdgStatus by vm.wdgStatus.collectAsStateWithLifecycle()
     val cells by vm.wdgCells.collectAsStateWithLifecycle()
+    val devFlow = remember { vm.devices ?: MutableStateFlow(emptyMap<String, BiscuitDevice>()) }
+    val deviceMap by devFlow.collectAsStateWithLifecycle(initialValue = emptyMap())
 
     val context = LocalContext.current
     fun hasLocation() = context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) ==
@@ -193,12 +201,14 @@ fun WardriveScreen(vm: MainViewModel) {
                     map.overlays.add(line)
                 }
 
-                samples.values.sortedByDescending { it.timeMs }.take(700).forEach { s ->
+                samples.values.sortedByDescending { it.timeMs }.take(900).forEach { s ->
+                    val shared = s.sources.size > 1
                     val m = Marker(map)
                     m.position = GeoPoint(s.lat, s.lon)
-                    m.icon = dot(colorFor(s.kind), 11)
+                    m.icon = dot(colorForSample(s), if (shared) 13 else sizeForKind(s.kind))
                     m.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
-                    m.title = "${s.label.ifBlank { s.id }}  ${s.rssi} dBm"
+                    val seenBy = if (shared) "  ·  seen by ${s.sources.size}" else ""
+                    m.title = "${s.label.ifBlank { s.id }}  ${s.rssi} dBm$seenBy"
                     m.infoWindow = null
                     map.overlays.add(m)
                 }
@@ -221,8 +231,13 @@ fun WardriveScreen(vm: MainViewModel) {
             },
         )
 
+        Column(
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+        BoardsLegend(deviceMap, state.sourceCounts, phoneOn)
         ControlPanel(
-            modifier = Modifier.align(Alignment.BottomCenter).padding(12.dp),
+            modifier = Modifier,
             active = state.active,
             mode = state.mode,
             wifi = state.wifiCount,
@@ -248,6 +263,7 @@ fun WardriveScreen(vm: MainViewModel) {
             onUpload = { vm.uploadToWdg() },
             onLoadTerritory = { vm.fetchOwnedCells() },
         )
+        }
 
         // Heading-up / north-up compass toggle, top-right under the app bar.
         FilledIconToggleButton(
@@ -389,6 +405,45 @@ private fun Stat(label: String, value: String) {
     }
 }
 
+@Composable
+private fun BoardsLegend(devices: Map<String, BiscuitDevice>, counts: Map<String, Int>, phoneOn: Boolean) {
+    val live = devices.values.filter { it.isLive }
+    if (live.isEmpty() && !phoneOn) return
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("BOARDS", style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.secondary)
+            live.forEach { d ->
+                val meta = buildList {
+                    add("${d.rssi} dBm")
+                    d.status?.battery?.let { add("$it%") }
+                    add("${counts[d.address] ?: 0} pings")
+                }.joinToString("  ·  ")
+                LegendRow(Color(sourceColor(d.address)), d.displayName, meta)
+            }
+            if (phoneOn) {
+                LegendRow(Color(sourceColor(PHONE_SOURCE)), "This phone", "${counts[PHONE_SOURCE] ?: 0} pings")
+            }
+        }
+    }
+}
+
+@Composable
+private fun LegendRow(color: Color, name: String, meta: String) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Box(Modifier.size(12.dp).background(color, androidx.compose.foundation.shape.CircleShape))
+        Column(Modifier.weight(1f)) {
+            Text(name, style = MaterialTheme.typography.bodyMedium)
+            Text(meta, style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f))
+        }
+    }
+}
+
 private fun formatElapsed(ms: Long): String {
     if (ms <= 0) return "0:00"
     val total = ms / 1000
@@ -397,10 +452,31 @@ private fun formatElapsed(ms: Long): String {
     return "%d:%02d".format(m, s)
 }
 
-private fun colorFor(kind: SampleKind): Int = when (kind) {
-    SampleKind.AP -> AndroidColor.parseColor("#22D3EE")
-    SampleKind.STATION -> AndroidColor.parseColor("#34D399")
-    SampleKind.BT -> AndroidColor.parseColor("#C084FC")
+// Each board (and the phone) gets its own colour so the map shows what saw what;
+// a point seen by more than one source is drawn white.
+private val SOURCE_PALETTE = intArrayOf(
+    0xFF34D399.toInt(), // green
+    0xFFC084FC.toInt(), // purple
+    0xFFFB923C.toInt(), // orange
+    0xFFF472B6.toInt(), // pink
+    0xFFFACC15.toInt(), // yellow
+    0xFF60A5FA.toInt(), // blue
+    0xFFF87171.toInt(), // red
+    0xFF2DD4BF.toInt(), // teal
+)
+
+fun sourceColor(src: String): Int =
+    if (src == PHONE_SOURCE) 0xFF22D3EE.toInt()
+    else SOURCE_PALETTE[kotlin.math.abs(src.hashCode()) % SOURCE_PALETTE.size]
+
+private fun colorForSample(s: WardriveSample): Int =
+    if (s.sources.size > 1) 0xFFFFFFFF.toInt()
+    else sourceColor(s.sources.firstOrNull() ?: PHONE_SOURCE)
+
+private fun sizeForKind(kind: SampleKind): Int = when (kind) {
+    SampleKind.AP -> 11
+    SampleKind.STATION -> 8
+    SampleKind.BT -> 10
 }
 
 /** A small filled circle Drawable used as a map marker icon. */

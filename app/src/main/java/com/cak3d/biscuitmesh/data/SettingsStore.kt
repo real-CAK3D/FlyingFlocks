@@ -16,6 +16,7 @@ class SettingsStore(private val context: Context) {
     private val authorizedUseKey = booleanPreferencesKey("authorized_use_accepted")
     private val wdgApiKeyKey = stringPreferencesKey("wdg_api_key")
     private val wdgAutoUploadKey = booleanPreferencesKey("wdg_auto_upload")
+    private val wdgLastUploadKey = stringPreferencesKey("wdg_last_upload")
     private val phoneSensorsKey = booleanPreferencesKey("phone_sensors_enabled")
 
     /** True once the operator has acknowledged the authorized-use-only terms. */
@@ -40,6 +41,14 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setWdgAutoUpload(enabled: Boolean) {
         context.settingsDataStore.edit { it[wdgAutoUploadKey] = enabled }
+    }
+
+    /** Human summary of the last successful WDG upload, for at-a-glance confirmation. */
+    val wdgLastUpload: Flow<String> =
+        context.settingsDataStore.data.map { it[wdgLastUploadKey] ?: "" }
+
+    suspend fun setWdgLastUpload(summary: String) {
+        context.settingsDataStore.edit { it[wdgLastUploadKey] = summary }
     }
 
     /** Use the phone's own Wi-Fi/BLE radios as wardrive sensors. On by default. */

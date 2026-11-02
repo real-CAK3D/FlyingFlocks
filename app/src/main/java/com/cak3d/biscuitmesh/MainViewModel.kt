@@ -152,6 +152,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val wdgAutoUpload: StateFlow<Boolean> =
         appRef.settingsStore.wdgAutoUpload.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
+    /** Summary of the last successful WDG upload — the "did my capture go up?" confirmation. */
+    val wdgLastUpload: StateFlow<String> =
+        appRef.settingsStore.wdgLastUpload.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
+
     fun setWdgApiKey(key: String) {
         viewModelScope.launch { appRef.settingsStore.setWdgApiKey(key) }
     }
@@ -202,7 +206,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         r.accepted?.let { add("$it accepted") }
                         r.merged?.let { add("$it merged") }
                     }
-                    WdgStatus.Done("Uploaded $count networks" + if (parts.isNotEmpty()) " (${parts.joinToString(", ")})." else ".")
+                    val detail = buildString {
+                        append("$count networks")
+                        if (parts.isNotEmpty()) append(" (${parts.joinToString(", ")})")
+                    }
+                    val stamp = java.text.SimpleDateFormat("MMM d, HH:mm", java.util.Locale.US).format(java.util.Date())
+                    appRef.settingsStore.setWdgLastUpload("$detail · $stamp")
+                    WdgStatus.Done("Uploaded $detail.")
                 }
                 is WdgClient.Result.HttpError ->
                     WdgStatus.Error(when (r.code) {

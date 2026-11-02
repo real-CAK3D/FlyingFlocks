@@ -191,6 +191,7 @@ private fun WdgSection(vm: MainViewModel) {
     val savedKey by vm.wdgApiKey.collectAsStateWithLifecycle()
     val autoUpload by vm.wdgAutoUpload.collectAsStateWithLifecycle()
     val status by vm.wdgStatus.collectAsStateWithLifecycle()
+    val lastUpload by vm.wdgLastUpload.collectAsStateWithLifecycle()
 
     var keyField by remember(savedKey) { mutableStateOf(savedKey) }
     val working = status is MainViewModel.WdgStatus.Working
@@ -235,6 +236,11 @@ private fun WdgSection(vm: MainViewModel) {
                 enabled = savedKey.isNotBlank(),
             )
         }
+        Text(
+            if (lastUpload.isBlank()) "Last upload: never" else "Last upload: $lastUpload",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+        )
         when (val s = status) {
             is MainViewModel.WdgStatus.Idle -> {}
             is MainViewModel.WdgStatus.Working ->

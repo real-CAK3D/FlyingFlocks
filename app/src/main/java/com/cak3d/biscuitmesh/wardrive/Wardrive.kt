@@ -11,11 +11,15 @@ import com.cak3d.biscuitmesh.protocol.command
 import com.cak3d.biscuitmesh.sensors.PhoneSensors
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+
+/** Source id used for the phone's own radios in a sample's [WardriveSample.sources]. */
+const val PHONE_SOURCE = "phone"
 
 enum class WardriveMode { ALL, WIFI, BT }
 
@@ -32,6 +36,8 @@ data class WardriveSample(
     val rssi: Int,
     val timeMs: Long,
     val accuracyM: Float = 0f,
+    /** Which board(s) — or the phone — saw this point. >1 means a shared sighting. */
+    val sources: Set<String> = emptySet(),
 )
 
 data class WardriveState(
@@ -46,6 +52,8 @@ data class WardriveState(
     /** True while the phone sits inside a dead zone; scanning is suppressed. */
     val inDeadZone: Boolean = false,
     val deadZoneName: String? = null,
+    /** Live tally of how many points each source (board address / phone) has seen. */
+    val sourceCounts: Map<String, Int> = emptyMap(),
 )
 
 /**
@@ -71,6 +79,7 @@ class WardriveManager(
 
     private var locJob: Job? = null
     private var logJob: Job? = null
+    private var rescanJob: Job? = null
     private var lastProcessedMs = 0L
 
     @Volatile private var curLat: Double? = null
@@ -154,21 +163,27 @@ class WardriveManager(
                 if (newEntries.isEmpty()) return@collect
                 lastProcessedMs = newEntries.maxOf { it.timeMs }
                 if (lat == null || lon == null) return@collect
-                var added = false
+                var changed = false
                 val acc = curAcc
                 newEntries.forEach { e ->
-                    val sample = parseSample(e.message, lat, lon, acc, e.timeMs) ?: return@forEach
-                    if (!matchesMode(sample.kind, _state.value.mode)) return@forEach
-                    if (!_samples.value.containsKey(sample.id)) {
-                        _samples.update { it + (sample.id to sample) }
-                        added = true
-                    }
+                    val parsed = parseSample(e.message, lat, lon, acc, e.timeMs) ?: return@forEach
+                    if (!matchesMode(parsed.kind, _state.value.mode)) return@forEach
+                    if (mergeSample(parsed.copy(sources = setOf(e.address)))) changed = true
                 }
-                if (added) recount()
+                if (changed) recount()
             }
         }
 
         fleet.broadcast(scanCommand(mode))
+
+        // Some firmware scans once per command; re-arm periodically so a long drive
+        // keeps producing pings instead of going quiet after the first sweep.
+        rescanJob = scope.launch {
+            while (true) {
+                delay(10_000)
+                if (_state.value.active && !suppressed) fleet.broadcast(scanCommand(_state.value.mode))
+            }
+        }
 
         phoneOn = usePhone && phoneSensors != null
         if (phoneOn) startPhone(mode)
@@ -180,7 +195,22 @@ class WardriveManager(
         if (phoneOn) { phoneSensors?.stop(); phoneOn = false }
         locJob?.cancel(); locJob = null
         logJob?.cancel(); logJob = null
+        rescanJob?.cancel(); rescanJob = null
         _state.update { it.copy(active = false) }
+    }
+
+    /** Adds a sample, or merges a new source into an existing one. Returns true if anything changed. */
+    private fun mergeSample(s: WardriveSample): Boolean {
+        val existing = _samples.value[s.id]
+        if (existing == null) {
+            _samples.update { it + (s.id to s) }
+            return true
+        }
+        if (!existing.sources.containsAll(s.sources)) {
+            _samples.update { it + (s.id to existing.copy(sources = existing.sources + s.sources)) }
+            return true
+        }
+        return false
     }
 
     fun setMode(mode: WardriveMode) {
@@ -203,17 +233,20 @@ class WardriveManager(
         val lat = curLat ?: return   // null while suppressed in a dead zone
         val lon = curLon ?: return
         if (!matchesMode(hit.kind, _state.value.mode)) return
-        if (_samples.value.containsKey(hit.id)) return
-        val sample = WardriveSample(hit.kind, hit.id, hit.label, lat, lon, hit.rssi, System.currentTimeMillis(), curAcc)
-        _samples.update { it + (hit.id to sample) }
-        recount()
+        val sample = WardriveSample(
+            hit.kind, hit.id, hit.label, lat, lon, hit.rssi, System.currentTimeMillis(), curAcc,
+            sources = setOf(PHONE_SOURCE),
+        )
+        if (mergeSample(sample)) recount()
     }
 
     private fun recount() {
         val vals = _samples.value.values
         val wifi = vals.count { it.kind == SampleKind.AP || it.kind == SampleKind.STATION }
         val bt = vals.count { it.kind == SampleKind.BT }
-        _state.update { it.copy(wifiCount = wifi, btCount = bt) }
+        val counts = HashMap<String, Int>()
+        vals.forEach { s -> s.sources.forEach { counts[it] = (counts[it] ?: 0) + 1 } }
+        _state.update { it.copy(wifiCount = wifi, btCount = bt, sourceCounts = counts) }
     }
 
     private fun scanCommand(mode: WardriveMode): ByteArray = when (mode) {
