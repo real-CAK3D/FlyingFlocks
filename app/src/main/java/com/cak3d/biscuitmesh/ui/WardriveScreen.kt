@@ -36,6 +36,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedButton
@@ -200,6 +201,7 @@ fun WardriveScreen(vm: MainViewModel) {
     var menuOpen by remember { mutableStateOf(false) }
     var showCameras by remember { mutableStateOf(true) }
     var showPlaces by remember { mutableStateOf(true) }
+    var showBoards by remember { mutableStateOf(true) }
     var mapStyle by remember { mutableStateOf(MapStyle.DARK) }
     val places by vm.places.collectAsStateWithLifecycle(initialValue = emptyList())
 
@@ -339,7 +341,7 @@ fun WardriveScreen(vm: MainViewModel) {
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
         route?.let { r -> NavCard(r, useMph, onClear = { vm.clearRoute() }) }
-        BoardsLegend(deviceMap, state.sourceCounts, phoneOn)
+        if (showBoards) BoardsLegend(deviceMap, state.sourceCounts, phoneOn)
         ControlPanel(
             modifier = Modifier,
             active = state.active,
@@ -387,6 +389,10 @@ fun WardriveScreen(vm: MainViewModel) {
                 checked = followMode, onCheckedChange = { followMode = it },
                 modifier = Modifier.size(44.dp), colors = mapBtnColors,
             ) { Icon(Icons.Default.MyLocation, contentDescription = if (followMode) "Following" else "Follow vehicle") }
+            FilledIconToggleButton(
+                checked = hudOn, onCheckedChange = { vm.setHudEnabled(it) },
+                modifier = Modifier.size(44.dp), colors = mapBtnColors,
+            ) { Icon(Icons.Default.Speed, contentDescription = if (hudOn) "Hide HUD" else "Show HUD") }
         }
 
         // Top-left: hamburger menu + telemetry HUD.
@@ -401,6 +407,8 @@ fun WardriveScreen(vm: MainViewModel) {
             ) { Icon(Icons.Default.Menu, contentDescription = "Menu") }
             if (menuOpen) {
                 MapMenu(
+                    hud = hudOn, onHud = { vm.setHudEnabled(it) },
+                    showBoards = showBoards, onBoards = { showBoards = it },
                     showCameras = showCameras, onCameras = { showCameras = it },
                     showPlaces = showPlaces, onPlaces = { showPlaces = it },
                     style = mapStyle, onStyle = { mapStyle = it },
@@ -438,6 +446,8 @@ private val TOPO_SOURCE = org.osmdroid.tileprovider.tilesource.XYTileSource(
 
 @Composable
 private fun MapMenu(
+    hud: Boolean, onHud: (Boolean) -> Unit,
+    showBoards: Boolean, onBoards: (Boolean) -> Unit,
     showCameras: Boolean, onCameras: (Boolean) -> Unit,
     showPlaces: Boolean, onPlaces: (Boolean) -> Unit,
     style: MapStyle, onStyle: (MapStyle) -> Unit,
@@ -445,7 +455,11 @@ private fun MapMenu(
 ) {
     Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Column(Modifier.padding(14.dp).widthIn(min = 220.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("LAYERS", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.secondary)
+            Text("DISPLAYS", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.secondary)
+            MenuToggle("Telemetry HUD", hud, onHud)
+            MenuToggle("Boards panel", showBoards, onBoards)
+            Text("LAYERS", style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.secondary, modifier = Modifier.padding(top = 4.dp))
             MenuToggle("Cameras ($camCount)", showCameras, onCameras)
             MenuToggle("Saved places", showPlaces, onPlaces)
             Text("MAP STYLE", style = MaterialTheme.typography.labelMedium,
