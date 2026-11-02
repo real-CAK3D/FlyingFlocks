@@ -25,18 +25,23 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Explore
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledIconToggleButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -190,6 +195,47 @@ fun WardriveScreen(vm: MainViewModel) {
         }
     }
 
+    // What-the-Flock-style controls: follow the vehicle, layer toggles, telemetry.
+    var followMode by remember { mutableStateOf(true) }
+    var menuOpen by remember { mutableStateOf(false) }
+    var showCameras by remember { mutableStateOf(true) }
+    var showPlaces by remember { mutableStateOf(true) }
+    var mapStyle by remember { mutableStateOf(MapStyle.DARK) }
+    val places by vm.places.collectAsStateWithLifecycle(initialValue = emptyList())
+
+    LaunchedEffect(mapStyle) {
+        when (mapStyle) {
+            MapStyle.DARK -> { mapView.setTileSource(TileSourceFactory.MAPNIK); mapView.overlayManager.tilesOverlay.setColorFilter(TilesOverlay.INVERT_COLORS) }
+            MapStyle.LIGHT -> { mapView.setTileSource(TileSourceFactory.MAPNIK); mapView.overlayManager.tilesOverlay.setColorFilter(null) }
+            MapStyle.TOPO -> { mapView.setTileSource(TOPO_SOURCE); mapView.overlayManager.tilesOverlay.setColorFilter(null) }
+        }
+        mapView.invalidate()
+    }
+
+    // G-force from the accelerometer (running max), and a max-speed tracker.
+    var gForce by remember { mutableFloatStateOf(0f) }
+    var maxG by remember { mutableFloatStateOf(0f) }
+    DisposableEffect(Unit) {
+        val accel = sensorManager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+        val listener = object : SensorEventListener {
+            override fun onSensorChanged(e: SensorEvent) {
+                if (e.sensor.type != Sensor.TYPE_ACCELEROMETER) return
+                val mag = kotlin.math.sqrt(e.values[0] * e.values[0] + e.values[1] * e.values[1] + e.values[2] * e.values[2])
+                val g = kotlin.math.abs(mag / 9.80665f - 1f)
+                gForce = gForce * 0.8f + g * 0.2f
+                if (gForce > maxG) maxG = gForce
+            }
+            override fun onAccuracyChanged(s: Sensor?, a: Int) {}
+        }
+        if (accel != null) sensorManager.registerListener(listener, accel, SensorManager.SENSOR_DELAY_UI)
+        onDispose { sensorManager?.unregisterListener(listener) }
+    }
+    var maxSpeedMps by remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(state.speedMps) {
+        val s = state.speedMps ?: 0f
+        if (s > maxSpeedMps) maxSpeedMps = s
+    }
+
     Box(Modifier.fillMaxSize()) {
         AndroidView(
             modifier = Modifier.fillMaxSize(),
@@ -225,7 +271,6 @@ fun WardriveScreen(vm: MainViewModel) {
                     m.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
                     val seenBy = if (shared) "  ·  seen by ${s.sources.size}" else ""
                     m.title = "${s.label.ifBlank { s.id }}  ${s.rssi} dBm$seenBy"
-                    m.infoWindow = null
                     map.overlays.add(m)
                 }
 
@@ -243,19 +288,31 @@ fun WardriveScreen(vm: MainViewModel) {
                     dest.icon = ring(AndroidColor.parseColor("#38BDF8"), 18)
                     dest.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
                     dest.title = r.name
-                    dest.infoWindow = null
                     map.overlays.add(dest)
                 }
 
+                // Saved places (tappable labels).
+                if (showPlaces) {
+                    places.forEach { p ->
+                        val m = Marker(map)
+                        m.position = GeoPoint(p.lat, p.lon)
+                        m.icon = ring(AndroidColor.parseColor("#A3E635"), 14)
+                        m.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                        m.title = p.name
+                        map.overlays.add(m)
+                    }
+                }
+
                 // Cameras from OpenStreetMap (speed / Flock / red-light).
-                hazards.forEach { hz ->
-                    val m = Marker(map)
-                    m.position = GeoPoint(hz.lat, hz.lon)
-                    m.icon = ring(hazardColor(hz.kind), 15)
-                    m.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
-                    m.title = hazardLabel(hz.kind) + if (hz.name.isNotBlank()) " · ${hz.name}" else ""
-                    m.infoWindow = null
-                    map.overlays.add(m)
+                if (showCameras) {
+                    hazards.forEach { hz ->
+                        val m = Marker(map)
+                        m.position = GeoPoint(hz.lat, hz.lon)
+                        m.icon = ring(hazardColor(hz.kind), 15)
+                        m.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                        m.title = hazardLabel(hz.kind) + if (hz.name.isNotBlank()) " · ${hz.name}" else ""
+                        map.overlays.add(m)
+                    }
                 }
 
                 val lat = state.lastLat
@@ -267,7 +324,8 @@ fun WardriveScreen(vm: MainViewModel) {
                     me.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
                     me.infoWindow = null
                     map.overlays.add(me)
-                    if (!centered[0]) {
+                    // Follow the vehicle: keep the map centred on the puck while on.
+                    if (followMode) {
                         map.controller.setCenter(GeoPoint(lat, lon))
                         centered[0] = true
                     }
@@ -311,30 +369,51 @@ fun WardriveScreen(vm: MainViewModel) {
         )
         }
 
-        // Heading-up / north-up compass toggle, top-right under the app bar.
-        FilledIconToggleButton(
-            checked = headingUp,
-            onCheckedChange = { headingUp = it },
-            modifier = Modifier.align(Alignment.TopEnd).padding(12.dp).size(44.dp),
-            colors = IconButtonDefaults.filledIconToggleButtonColors(
+        // Top-right stack: heading-up compass + follow-the-vehicle toggle.
+        Column(
+            Modifier.align(Alignment.TopEnd).padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalAlignment = Alignment.End,
+        ) {
+            val mapBtnColors = IconButtonDefaults.filledIconToggleButtonColors(
                 containerColor = MaterialTheme.colorScheme.surface,
                 checkedContainerColor = MaterialTheme.colorScheme.primary,
-            ),
-        ) {
-            Icon(
-                Icons.Default.Explore,
-                contentDescription = if (headingUp) "Heading up" else "North up",
             )
+            FilledIconToggleButton(
+                checked = headingUp, onCheckedChange = { headingUp = it },
+                modifier = Modifier.size(44.dp), colors = mapBtnColors,
+            ) { Icon(Icons.Default.Explore, contentDescription = if (headingUp) "Heading up" else "North up") }
+            FilledIconToggleButton(
+                checked = followMode, onCheckedChange = { followMode = it },
+                modifier = Modifier.size(44.dp), colors = mapBtnColors,
+            ) { Icon(Icons.Default.MyLocation, contentDescription = if (followMode) "Following" else "Follow vehicle") }
         }
 
-        // Speed + speed-limit HUD, top-left.
-        if (hudOn) {
-            SpeedHud(
-                modifier = Modifier.align(Alignment.TopStart).padding(12.dp),
-                speedMps = state.speedMps,
-                limit = speedLimit,
-                useMph = useMph,
-            )
+        // Top-left: hamburger menu + telemetry HUD.
+        Column(
+            Modifier.align(Alignment.TopStart).padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            FilledIconButton(
+                onClick = { menuOpen = !menuOpen },
+                modifier = Modifier.size(44.dp),
+                colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.surface),
+            ) { Icon(Icons.Default.Menu, contentDescription = "Menu") }
+            if (menuOpen) {
+                MapMenu(
+                    showCameras = showCameras, onCameras = { showCameras = it },
+                    showPlaces = showPlaces, onPlaces = { showPlaces = it },
+                    style = mapStyle, onStyle = { mapStyle = it },
+                    camCount = hazards.size,
+                )
+            }
+            if (hudOn) {
+                TelemetryHud(
+                    speedMps = state.speedMps, altitudeM = state.altitudeM, gForce = gForce,
+                    maxG = maxG, maxSpeedMps = maxSpeedMps, recording = state.active,
+                    limit = speedLimit, useMph = useMph,
+                )
+            }
         }
 
         // Over-speed camera alert banner + a buzz when it first trips.
@@ -349,17 +428,69 @@ fun WardriveScreen(vm: MainViewModel) {
     }
 }
 
+enum class MapStyle(val label: String) { DARK("Dark"), LIGHT("Light"), TOPO("Topo") }
+
+private val TOPO_SOURCE = org.osmdroid.tileprovider.tilesource.XYTileSource(
+    "OpenTopoMap", 0, 17, 256, ".png",
+    arrayOf("https://a.tile.opentopomap.org/", "https://b.tile.opentopomap.org/", "https://c.tile.opentopomap.org/"),
+    "© OpenTopoMap (CC-BY-SA), © OpenStreetMap contributors",
+)
+
 @Composable
-private fun SpeedHud(modifier: Modifier, speedMps: Float?, limit: com.cak3d.biscuitmesh.geo.SpeedLimit?, useMph: Boolean) {
-    Row(modifier, verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        val speed = speedMps?.let { if (useMph) it * 2.236936f else it * 3.6f }?.toInt()
+private fun MapMenu(
+    showCameras: Boolean, onCameras: (Boolean) -> Unit,
+    showPlaces: Boolean, onPlaces: (Boolean) -> Unit,
+    style: MapStyle, onStyle: (MapStyle) -> Unit,
+    camCount: Int,
+) {
+    Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+        Column(Modifier.padding(14.dp).widthIn(min = 220.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("LAYERS", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.secondary)
+            MenuToggle("Cameras ($camCount)", showCameras, onCameras)
+            MenuToggle("Saved places", showPlaces, onPlaces)
+            Text("MAP STYLE", style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.secondary, modifier = Modifier.padding(top = 4.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                MapStyle.entries.forEach { st ->
+                    FilterChip(selected = style == st, onClick = { onStyle(st) }, label = { Text(st.label) })
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MenuToggle(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(label, style = MaterialTheme.typography.bodyMedium)
+        Switch(checked = checked, onCheckedChange = onChange)
+    }
+}
+
+@Composable
+private fun TelemetryHud(
+    speedMps: Float?, altitudeM: Double?, gForce: Float, maxG: Float, maxSpeedMps: Float,
+    recording: Boolean, limit: com.cak3d.biscuitmesh.geo.SpeedLimit?, useMph: Boolean,
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
         Card(
             shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)),
         ) {
-            Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(speed?.toString() ?: "—", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                Text(if (useMph) "mph" else "km/h", style = MaterialTheme.typography.labelSmall)
+            Column(Modifier.padding(14.dp).widthIn(min = 160.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                HudRow("Speed", speedText(speedMps, useMph))
+                HudRow("Altitude", altText(altitudeM, useMph))
+                HudRow("G-force", "%.2f g".format(gForce))
+                Box(Modifier.fillMaxWidth().height(4.dp).background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f), RoundedCornerShape(2.dp))) {
+                    Box(Modifier.fillMaxWidth((gForce / 0.6f).coerceIn(0f, 1f)).height(4.dp)
+                        .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(2.dp)))
+                }
+                HudRow("Max", "${speedText(maxSpeedMps, useMph)} · ${"%.2f".format(maxG)} g")
+                Text(
+                    if (recording) "● Recording" else "Not recording",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (recording) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                )
             }
         }
         val postedLimit = limit?.let { if (useMph) it.mph else it.kmh }
@@ -375,6 +506,24 @@ private fun SpeedHud(modifier: Modifier, speedMps: Float?, limit: com.cak3d.bisc
             }
         }
     }
+}
+
+@Composable
+private fun HudRow(label: String, value: String) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+        Text(value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+    }
+}
+
+private fun speedText(speedMps: Float?, useMph: Boolean): String {
+    val v = (speedMps ?: 0f) * if (useMph) 2.236936f else 3.6f
+    return "${v.toInt()} ${if (useMph) "mph" else "km/h"}"
+}
+
+private fun altText(altM: Double?, useMph: Boolean): String {
+    if (altM == null) return "—"
+    return if (useMph) "${(altM * 3.28084).toInt()} ft" else "${altM.toInt()} m"
 }
 
 @Composable
