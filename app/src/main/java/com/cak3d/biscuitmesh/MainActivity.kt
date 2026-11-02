@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.BluetoothSearching
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Radar
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
@@ -60,6 +61,7 @@ import com.cak3d.biscuitmesh.ui.DeviceDetailScreen
 import com.cak3d.biscuitmesh.ui.FleetScreen
 import com.cak3d.biscuitmesh.ui.ConstellationBackground
 import com.cak3d.biscuitmesh.ui.MiscScreen
+import com.cak3d.biscuitmesh.ui.PlacesScreen
 import com.cak3d.biscuitmesh.ui.RareBirdsScreen
 import com.cak3d.biscuitmesh.ui.RunToolScreen
 import com.cak3d.biscuitmesh.ui.SettingsScreen
@@ -115,6 +117,9 @@ private fun MainShell(vm: MainViewModel) {
                     title = { Text(currentTab!!.label.uppercase()) },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                     actions = {
+                        IconButton(onClick = { nav.navigate("places") }) {
+                            Icon(Icons.Default.Place, contentDescription = "Places")
+                        }
                         IconButton(onClick = { nav.navigate("rarebirds") }) {
                             Icon(Icons.Default.Radar, contentDescription = "Rare Birds")
                         }
@@ -196,6 +201,19 @@ private fun MainShell(vm: MainViewModel) {
                 composable("bluetooth") { BluetoothScreen(onOpenTool = { nav.navigate("runtool/$it") }) }
                 composable("misc") { MiscScreen(onOpenTool = { nav.navigate("runtool/$it") }) }
                 composable("rarebirds") { RareBirdsScreen(vm = vm, onBack = { nav.popBackStack() }) }
+                composable("places") {
+                    PlacesScreen(
+                        vm = vm,
+                        onBack = { nav.popBackStack() },
+                        onRouteStarted = {
+                            nav.navigate("wardrive") {
+                                popUpTo("fleet") { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        },
+                    )
+                }
                 composable("settings") { SettingsScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("device") {
                     val address by vm.selected.collectAsStateWithLifecycle()

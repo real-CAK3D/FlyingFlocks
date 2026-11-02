@@ -13,6 +13,7 @@ import com.cak3d.biscuitmesh.geo.HazardStore
 import com.cak3d.biscuitmesh.geo.OverpassClient
 import com.cak3d.biscuitmesh.hunts.RareBirdManager
 import com.cak3d.biscuitmesh.hunts.RareBirdStore
+import com.cak3d.biscuitmesh.nav.PlacesStore
 import com.cak3d.biscuitmesh.location.LocationProvider
 import com.cak3d.biscuitmesh.sensors.PhoneSensors
 import com.cak3d.biscuitmesh.usb.UsbDetector
@@ -67,6 +68,8 @@ class BiscuitMeshApp : Application() {
     private val rareBirdStore: RareBirdStore by lazy { RareBirdStore(this) }
 
     val rareBirds: RareBirdManager by lazy { RareBirdManager(appScope, rareBirdStore, wardrive) }
+
+    val placesStore: PlacesStore by lazy { PlacesStore(this) }
 
     private val overpass: OverpassClient by lazy { OverpassClient() }
     private val hazardStore: HazardStore by lazy { HazardStore(this) }

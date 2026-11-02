@@ -2,7 +2,9 @@ package com.cak3d.biscuitmesh.ui
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.graphics.Color as AndroidColor
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
@@ -63,6 +65,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.cak3d.biscuitmesh.MainViewModel
 import com.cak3d.biscuitmesh.geo.HazardKind
 import com.cak3d.biscuitmesh.model.BiscuitDevice
+import com.cak3d.biscuitmesh.nav.ActiveRoute
 import com.cak3d.biscuitmesh.wardrive.PHONE_SOURCE
 import com.cak3d.biscuitmesh.wardrive.SampleKind
 import com.cak3d.biscuitmesh.wardrive.WardriveMode
@@ -105,6 +108,7 @@ fun WardriveScreen(vm: MainViewModel) {
     val alert by vm.hazardAlert.collectAsStateWithLifecycle()
     val hudOn by vm.hudEnabled.collectAsStateWithLifecycle()
     val useMph by vm.useMph.collectAsStateWithLifecycle()
+    val route by vm.activeRoute.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
     fun hasLocation() = context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) ==
@@ -225,6 +229,24 @@ fun WardriveScreen(vm: MainViewModel) {
                     map.overlays.add(m)
                 }
 
+                // Active navigation route + destination.
+                route?.let { r ->
+                    if (r.points.size >= 2) {
+                        val line = Polyline(map)
+                        line.setPoints(r.points.map { GeoPoint(it.lat, it.lon) })
+                        line.outlinePaint.color = AndroidColor.parseColor("#38BDF8")
+                        line.outlinePaint.strokeWidth = 14f
+                        map.overlays.add(line)
+                    }
+                    val dest = Marker(map)
+                    dest.position = GeoPoint(r.destLat, r.destLon)
+                    dest.icon = ring(AndroidColor.parseColor("#38BDF8"), 18)
+                    dest.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                    dest.title = r.name
+                    dest.infoWindow = null
+                    map.overlays.add(dest)
+                }
+
                 // Cameras from OpenStreetMap (speed / Flock / red-light).
                 hazards.forEach { hz ->
                     val m = Marker(map)
@@ -258,6 +280,7 @@ fun WardriveScreen(vm: MainViewModel) {
             Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+        route?.let { r -> NavCard(r, useMph, onClear = { vm.clearRoute() }) }
         BoardsLegend(deviceMap, state.sourceCounts, phoneOn)
         ControlPanel(
             modifier = Modifier,
@@ -524,6 +547,44 @@ private fun BoardsLegend(devices: Map<String, BiscuitDevice>, counts: Map<String
             }
         }
     }
+}
+
+@Composable
+private fun NavCard(route: ActiveRoute, useMph: Boolean, onClear: () -> Unit) {
+    val context = LocalContext.current
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("ROUTE · ${route.name}", style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.secondary)
+            Text(routeSummary(route, useMph), style = MaterialTheme.typography.titleMedium)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = { startInMaps(context, route.destLat, route.destLon, route.name) },
+                    modifier = Modifier.weight(1f),
+                ) { Text("Start in Maps") }
+                OutlinedButton(onClick = onClear, modifier = Modifier.weight(1f)) { Text("Clear") }
+            }
+        }
+    }
+}
+
+private fun routeSummary(route: ActiveRoute, useMph: Boolean): String {
+    val dist = if (useMph) "%.1f mi".format(route.distanceM / 1609.34) else "%.1f km".format(route.distanceM / 1000)
+    val mins = (route.durationS / 60).toInt()
+    val eta = if (mins >= 60) "${mins / 60} h ${mins % 60} min" else "$mins min"
+    return "$dist  ·  $eta"
+}
+
+private fun startInMaps(context: Context, lat: Double, lon: Double, name: String) {
+    val nav = Intent(Intent.ACTION_VIEW, Uri.parse("google.navigation:q=$lat,$lon"))
+        .apply { setPackage("com.google.android.apps.maps") }
+    val geo = Intent(Intent.ACTION_VIEW, Uri.parse("geo:$lat,$lon?q=$lat,$lon(${Uri.encode(name)})"))
+    runCatching { context.startActivity(nav) }
+        .recoverCatching { context.startActivity(Intent.createChooser(geo, "Navigate")) }
 }
 
 @Composable

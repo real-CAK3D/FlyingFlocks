@@ -9,6 +9,10 @@ import com.cak3d.biscuitmesh.geo.Hazard
 import com.cak3d.biscuitmesh.geo.HazardAlert
 import com.cak3d.biscuitmesh.geo.SpeedLimit
 import com.cak3d.biscuitmesh.hunts.RareBird
+import com.cak3d.biscuitmesh.nav.ActiveRoute
+import com.cak3d.biscuitmesh.nav.OsrmClient
+import com.cak3d.biscuitmesh.nav.Place
+import com.cak3d.biscuitmesh.nav.PlaceKind
 import com.cak3d.biscuitmesh.protocol.command
 import com.cak3d.biscuitmesh.usb.UsbDeviceInfo
 import com.cak3d.biscuitmesh.wardrive.LatLon
@@ -51,6 +55,44 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setHudEnabled(enabled: Boolean) { viewModelScope.launch { appRef.settingsStore.setHudEnabled(enabled) } }
     fun setUseMph(useMph: Boolean) { viewModelScope.launch { appRef.settingsStore.setUseMph(useMph) } }
+
+    // --- Navigation / saved places ---------------------------------------
+    val places: Flow<List<Place>> = appRef.placesStore.places
+
+    fun addPlace(name: String, kind: PlaceKind, lat: Double, lon: Double) {
+        viewModelScope.launch {
+            appRef.placesStore.add(Place(UUID.randomUUID().toString(), name.ifBlank { "Place" }, kind, lat, lon))
+        }
+    }
+
+    fun removePlace(id: String) { viewModelScope.launch { appRef.placesStore.remove(id) } }
+
+    private val osrm = OsrmClient()
+    private val _activeRoute = MutableStateFlow<ActiveRoute?>(null)
+    val activeRoute: StateFlow<ActiveRoute?> = _activeRoute.asStateFlow()
+    private val _routeStatus = MutableStateFlow<String?>(null)
+    val routeStatus: StateFlow<String?> = _routeStatus.asStateFlow()
+
+    /** Computes a driving route from the current location to [place] and draws it on the map. */
+    fun navigateTo(place: Place) {
+        _routeStatus.value = "Routing to ${place.name}…"
+        viewModelScope.launch {
+            val here = currentHere()
+            if (here == null) { _routeStatus.value = "No location fix yet — try again."; return@launch }
+            val r = osrm.route(here.lat, here.lon, place.lat, place.lon)
+            if (r == null) { _routeStatus.value = "Couldn't find a route."; return@launch }
+            _activeRoute.value = ActiveRoute(place.name, place.lat, place.lon, r.points, r.distanceM, r.durationS)
+            _routeStatus.value = null
+        }
+    }
+
+    fun clearRoute() { _activeRoute.value = null; _routeStatus.value = null }
+
+    private suspend fun currentHere(): LatLon? {
+        val s = appRef.wardrive?.state?.value
+        if (s?.lastLat != null && s.lastLon != null) return LatLon(s.lastLat!!, s.lastLon!!)
+        return oneShotLocation()
+    }
 
     // --- Rare Birds hunt ---------------------------------------------------
     val rareBirds: StateFlow<List<RareBird>> get() = appRef.rareBirds.birds
