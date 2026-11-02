@@ -141,9 +141,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val wardriveSamples get() = appRef.wardrive?.samples
     val wardriveTrack get() = appRef.wardrive?.track
 
-    /** Use the phone's own radios as sensors. On by default (board-free use). */
+    /** Use the phone's own radios as sensors. Off by default; the boards are primary. */
     val phoneSensors: StateFlow<Boolean> =
-        appRef.settingsStore.phoneSensors.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+        appRef.settingsStore.phoneSensors.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     fun setPhoneSensors(enabled: Boolean) {
         viewModelScope.launch { appRef.settingsStore.setPhoneSensors(enabled) }

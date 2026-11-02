@@ -33,6 +33,8 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MyLocation
@@ -46,6 +48,7 @@ import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledIconToggleButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
@@ -202,6 +205,7 @@ fun WardriveScreen(vm: MainViewModel) {
     var showCameras by remember { mutableStateOf(true) }
     var showPlaces by remember { mutableStateOf(true) }
     var showBoards by remember { mutableStateOf(true) }
+    var controlsExpanded by remember { mutableStateOf(true) }
     var mapStyle by remember { mutableStateOf(MapStyle.DARK) }
     val places by vm.places.collectAsStateWithLifecycle(initialValue = emptyList())
 
@@ -368,6 +372,8 @@ fun WardriveScreen(vm: MainViewModel) {
             onTogglePhone = { vm.setPhoneSensors(it) },
             onUpload = { vm.uploadToWdg() },
             onLoadTerritory = { vm.fetchOwnedCells() },
+            expanded = controlsExpanded,
+            onToggleExpand = { controlsExpanded = !controlsExpanded },
         )
         }
 
@@ -587,6 +593,8 @@ private fun ControlPanel(
     onTogglePhone: (Boolean) -> Unit,
     onUpload: () -> Unit,
     onLoadTerritory: () -> Unit,
+    expanded: Boolean,
+    onToggleExpand: () -> Unit,
 ) {
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -601,42 +609,49 @@ private fun ControlPanel(
                     color = MaterialTheme.colorScheme.error,
                 )
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                WardriveMode.entries.forEach { m ->
-                    FilterChip(
-                        selected = mode == m,
-                        onClick = { onMode(m) },
-                        label = { Text(m.name) },
+            // Always-visible stat strip + collapse chevron.
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.weight(1f), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Stat("WiFi", wifi.toString())
+                    Stat("BT", bt.toString())
+                    Stat("Time", formatElapsed(elapsedMs))
+                    Stat("GPS", accuracy?.let { "±${it.toInt()}m" } ?: "—")
+                }
+                IconButton(onClick = onToggleExpand) {
+                    Icon(
+                        if (expanded) Icons.Default.ExpandMore else Icons.Default.ExpandLess,
+                        contentDescription = if (expanded) "Minimize controls" else "Expand controls",
                     )
                 }
             }
-            Row(
-                Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text("Phone sensors", style = MaterialTheme.typography.bodyMedium)
+            if (expanded) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    WardriveMode.entries.forEach { m ->
+                        FilterChip(selected = mode == m, onClick = { onMode(m) }, label = { Text(m.name) })
+                    }
+                }
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Phone sensors", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            if (phoneOn) "Scanning with this phone's Wi-Fi + BLE" else "Boards only",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        )
+                    }
+                    Switch(checked = phoneOn, onCheckedChange = onTogglePhone)
+                }
+                if (!locationReady) {
                     Text(
-                        if (phoneOn) "Scanning with this phone's Wi-Fi + BLE" else "Boards only",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        "Location permission needed — tap Start to grant.",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.secondary,
                     )
                 }
-                Switch(checked = phoneOn, onCheckedChange = onTogglePhone)
-            }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Stat("WiFi", wifi.toString())
-                Stat("BT", bt.toString())
-                Stat("Time", formatElapsed(elapsedMs))
-                Stat("GPS", accuracy?.let { "±${it.toInt()}m" } ?: "—")
-            }
-            if (!locationReady) {
-                Text(
-                    "Location permission needed — tap Start to grant.",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.secondary,
-                )
             }
             if (active) {
                 Button(
@@ -647,7 +662,7 @@ private fun ControlPanel(
             } else {
                 Button(onClick = onStart, modifier = Modifier.fillMaxWidth()) { Text("Start") }
             }
-            if (wdgConfigured) {
+            if (expanded && wdgConfigured) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(
                         onClick = onUpload,
@@ -661,9 +676,11 @@ private fun ControlPanel(
                     ) { Text(if (territoryCount > 0) "Territory ($territoryCount)" else "Load territory") }
                 }
             }
-            wdgStatus?.let {
-                Text(it, style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.secondary)
+            if (expanded) {
+                wdgStatus?.let {
+                    Text(it, style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.secondary)
+                }
             }
         }
     }

@@ -53,9 +53,9 @@ class SettingsStore(private val context: Context) {
         context.settingsDataStore.edit { it[wdgLastUploadKey] = summary }
     }
 
-    /** Use the phone's own Wi-Fi/BLE radios as wardrive sensors. On by default. */
+    /** Use the phone's own Wi-Fi/BLE radios as wardrive sensors. Off by default. */
     val phoneSensors: Flow<Boolean> =
-        context.settingsDataStore.data.map { it[phoneSensorsKey] ?: true }
+        context.settingsDataStore.data.map { it[phoneSensorsKey] ?: false }
 
     suspend fun setPhoneSensors(enabled: Boolean) {
         context.settingsDataStore.edit { it[phoneSensorsKey] = enabled }
