@@ -105,6 +105,7 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
                 onAdd = { openAddZone() },
                 onRemove = { vm.removeDeadZone(it) },
             )
+            HudSection(vm)
             WdgSection(vm)
             AuthorizedUseSection(
                 accepted = authorized,
@@ -183,6 +184,37 @@ private fun DeadZonesSection(zones: List<DeadZone>, onAdd: () -> Unit, onRemove:
             Spacer(Modifier.width(8.dp))
             Text("Add dead zone")
         }
+    }
+}
+
+@Composable
+private fun HudSection(vm: MainViewModel) {
+    val hud by vm.hudEnabled.collectAsStateWithLifecycle()
+    val mph by vm.useMph.collectAsStateWithLifecycle()
+    SectionCard(
+        title = "Driving HUD & cameras",
+        subtitle = "Shows your speed and the posted limit while driving, and warns you when a " +
+            "speed or Flock/ALPR camera is close and you're over the limit. Camera + limit data " +
+            "is OpenStreetMap (DeFlock), free under ODbL.",
+    ) {
+        ToggleRow("Speed HUD", "Overlay speed + limit on the map", hud) { vm.setHudEnabled(it) }
+        ToggleRow("Use mph", if (mph) "Miles per hour" else "Kilometres per hour", mph) { vm.setUseMph(it) }
+    }
+}
+
+@Composable
+private fun ToggleRow(title: String, subtitle: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+        }
+        Switch(checked = checked, onCheckedChange = onChange)
     }
 }
 
@@ -287,6 +319,11 @@ private fun AboutSection() {
                 "Scans Wi-Fi + Bluetooth, maps and feeds WDG Wars.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+        )
+        Text(
+            "Map, camera & speed-limit data © OpenStreetMap contributors (ODbL).",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
         )
     }
 }

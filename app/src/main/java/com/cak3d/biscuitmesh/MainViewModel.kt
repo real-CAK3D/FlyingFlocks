@@ -5,6 +5,9 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.cak3d.biscuitmesh.ble.FleetManager
 import com.cak3d.biscuitmesh.data.DeadZone
+import com.cak3d.biscuitmesh.geo.Hazard
+import com.cak3d.biscuitmesh.geo.HazardAlert
+import com.cak3d.biscuitmesh.geo.SpeedLimit
 import com.cak3d.biscuitmesh.hunts.RareBird
 import com.cak3d.biscuitmesh.protocol.command
 import com.cak3d.biscuitmesh.usb.UsbDeviceInfo
@@ -34,6 +37,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** USB-OTG devices currently attached (serial boards, dongles). */
     val usbDevices: kotlinx.coroutines.flow.Flow<List<UsbDeviceInfo>> get() = appRef.usbDetector.devices
+
+    // --- Cameras / HUD / speed -------------------------------------------
+    val hazards: kotlinx.coroutines.flow.Flow<List<Hazard>> =
+        appRef.hazards?.hazards ?: kotlinx.coroutines.flow.flowOf(emptyList())
+    val speedLimit: StateFlow<SpeedLimit?> = appRef.hazards?.speedLimit ?: MutableStateFlow(null)
+    val hazardAlert: StateFlow<HazardAlert?> = appRef.hazards?.alert ?: MutableStateFlow(null)
+
+    val hudEnabled: StateFlow<Boolean> =
+        appRef.settingsStore.hudEnabled.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    val useMph: StateFlow<Boolean> =
+        appRef.settingsStore.useMph.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    fun setHudEnabled(enabled: Boolean) { viewModelScope.launch { appRef.settingsStore.setHudEnabled(enabled) } }
+    fun setUseMph(useMph: Boolean) { viewModelScope.launch { appRef.settingsStore.setUseMph(useMph) } }
 
     // --- Rare Birds hunt ---------------------------------------------------
     val rareBirds: StateFlow<List<RareBird>> get() = appRef.rareBirds.birds

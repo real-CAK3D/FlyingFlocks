@@ -49,6 +49,8 @@ data class WardriveState(
     val lastLat: Double? = null,
     val lastLon: Double? = null,
     val accuracy: Float? = null,
+    /** Current ground speed in m/s from GPS, or null when unknown. */
+    val speedMps: Float? = null,
     /** True while the phone sits inside a dead zone; scanning is suppressed. */
     val inDeadZone: Boolean = false,
     val deadZoneName: String? = null,
@@ -136,6 +138,7 @@ class WardriveManager(
                     curLon = null
                     _state.update {
                         it.copy(lastLat = loc.latitude, lastLon = loc.longitude, accuracy = loc.accuracy,
+                            speedMps = if (loc.hasSpeed()) loc.speed else it.speedMps,
                             inDeadZone = true, deadZoneName = zone.name)
                     }
                 } else {
@@ -149,6 +152,7 @@ class WardriveManager(
                     _track.update { (it + LatLon(loc.latitude, loc.longitude)).takeLast(5000) }
                     _state.update {
                         it.copy(lastLat = loc.latitude, lastLon = loc.longitude, accuracy = loc.accuracy,
+                            speedMps = if (loc.hasSpeed()) loc.speed else it.speedMps,
                             inDeadZone = false, deadZoneName = null)
                     }
                 }

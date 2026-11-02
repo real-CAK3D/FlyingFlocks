@@ -18,6 +18,8 @@ class SettingsStore(private val context: Context) {
     private val wdgAutoUploadKey = booleanPreferencesKey("wdg_auto_upload")
     private val wdgLastUploadKey = stringPreferencesKey("wdg_last_upload")
     private val phoneSensorsKey = booleanPreferencesKey("phone_sensors_enabled")
+    private val hudEnabledKey = booleanPreferencesKey("hud_enabled")
+    private val useMphKey = booleanPreferencesKey("use_mph")
 
     /** True once the operator has acknowledged the authorized-use-only terms. */
     val authorizedUse: Flow<Boolean> =
@@ -57,5 +59,21 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setPhoneSensors(enabled: Boolean) {
         context.settingsDataStore.edit { it[phoneSensorsKey] = enabled }
+    }
+
+    /** Show the speed + speed-limit HUD on the wardrive map. On by default. */
+    val hudEnabled: Flow<Boolean> =
+        context.settingsDataStore.data.map { it[hudEnabledKey] ?: true }
+
+    suspend fun setHudEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit { it[hudEnabledKey] = enabled }
+    }
+
+    /** Display speeds in mph (true) or km/h (false). Defaults to mph. */
+    val useMph: Flow<Boolean> =
+        context.settingsDataStore.data.map { it[useMphKey] ?: true }
+
+    suspend fun setUseMph(useMph: Boolean) {
+        context.settingsDataStore.edit { it[useMphKey] = useMph }
     }
 }

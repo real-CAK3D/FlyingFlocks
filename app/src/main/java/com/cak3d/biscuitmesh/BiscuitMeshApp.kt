@@ -8,6 +8,9 @@ import com.cak3d.biscuitmesh.ble.FleetManager
 import com.cak3d.biscuitmesh.data.DeadZonesStore
 import com.cak3d.biscuitmesh.data.KnownDevicesStore
 import com.cak3d.biscuitmesh.data.SettingsStore
+import com.cak3d.biscuitmesh.geo.HazardManager
+import com.cak3d.biscuitmesh.geo.HazardStore
+import com.cak3d.biscuitmesh.geo.OverpassClient
 import com.cak3d.biscuitmesh.hunts.RareBirdManager
 import com.cak3d.biscuitmesh.hunts.RareBirdStore
 import com.cak3d.biscuitmesh.location.LocationProvider
@@ -64,6 +67,15 @@ class BiscuitMeshApp : Application() {
     private val rareBirdStore: RareBirdStore by lazy { RareBirdStore(this) }
 
     val rareBirds: RareBirdManager by lazy { RareBirdManager(appScope, rareBirdStore, wardrive) }
+
+    private val overpass: OverpassClient by lazy { OverpassClient() }
+    private val hazardStore: HazardStore by lazy { HazardStore(this) }
+
+    /** Camera hazards + speed limits + over-speed alerts (null if no BT adapter). */
+    val hazards: HazardManager? by lazy {
+        val wd = wardrive ?: return@lazy null
+        HazardManager(appScope, wd, overpass, hazardStore)
+    }
 
     override fun onCreate() {
         super.onCreate()

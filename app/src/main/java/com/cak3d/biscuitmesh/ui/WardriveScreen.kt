@@ -5,6 +5,10 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Color as AndroidColor
 import android.graphics.drawable.GradientDrawable
+import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
@@ -47,14 +51,17 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.border
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.cak3d.biscuitmesh.MainViewModel
+import com.cak3d.biscuitmesh.geo.HazardKind
 import com.cak3d.biscuitmesh.model.BiscuitDevice
 import com.cak3d.biscuitmesh.wardrive.PHONE_SOURCE
 import com.cak3d.biscuitmesh.wardrive.SampleKind
@@ -93,6 +100,11 @@ fun WardriveScreen(vm: MainViewModel) {
     val cells by vm.wdgCells.collectAsStateWithLifecycle()
     val devFlow = remember { vm.devices ?: MutableStateFlow(emptyMap<String, BiscuitDevice>()) }
     val deviceMap by devFlow.collectAsStateWithLifecycle(initialValue = emptyMap())
+    val hazards by vm.hazards.collectAsStateWithLifecycle(initialValue = emptyList())
+    val speedLimit by vm.speedLimit.collectAsStateWithLifecycle()
+    val alert by vm.hazardAlert.collectAsStateWithLifecycle()
+    val hudOn by vm.hudEnabled.collectAsStateWithLifecycle()
+    val useMph by vm.useMph.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
     fun hasLocation() = context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) ==
@@ -213,6 +225,17 @@ fun WardriveScreen(vm: MainViewModel) {
                     map.overlays.add(m)
                 }
 
+                // Cameras from OpenStreetMap (speed / Flock / red-light).
+                hazards.forEach { hz ->
+                    val m = Marker(map)
+                    m.position = GeoPoint(hz.lat, hz.lon)
+                    m.icon = ring(hazardColor(hz.kind), 15)
+                    m.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                    m.title = hazardLabel(hz.kind) + if (hz.name.isNotBlank()) " · ${hz.name}" else ""
+                    m.infoWindow = null
+                    map.overlays.add(m)
+                }
+
                 val lat = state.lastLat
                 val lon = state.lastLon
                 if (lat != null && lon != null) {
@@ -278,6 +301,77 @@ fun WardriveScreen(vm: MainViewModel) {
             Icon(
                 Icons.Default.Explore,
                 contentDescription = if (headingUp) "Heading up" else "North up",
+            )
+        }
+
+        // Speed + speed-limit HUD, top-left.
+        if (hudOn) {
+            SpeedHud(
+                modifier = Modifier.align(Alignment.TopStart).padding(12.dp),
+                speedMps = state.speedMps,
+                limit = speedLimit,
+                useMph = useMph,
+            )
+        }
+
+        // Over-speed camera alert banner + a buzz when it first trips.
+        LaunchedEffect(alert?.hazard?.id) { if (alert != null) vibrate(context) }
+        alert?.let { a ->
+            CameraAlert(
+                modifier = Modifier.align(Alignment.TopCenter).padding(top = 10.dp),
+                alert = a,
+                useMph = useMph,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SpeedHud(modifier: Modifier, speedMps: Float?, limit: com.cak3d.biscuitmesh.geo.SpeedLimit?, useMph: Boolean) {
+    Row(modifier, verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        val speed = speedMps?.let { if (useMph) it * 2.236936f else it * 3.6f }?.toInt()
+        Card(
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)),
+        ) {
+            Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(speed?.toString() ?: "—", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                Text(if (useMph) "mph" else "km/h", style = MaterialTheme.typography.labelSmall)
+            }
+        }
+        val postedLimit = limit?.let { if (useMph) it.mph else it.kmh }
+        if (postedLimit != null) {
+            Column(
+                Modifier.background(Color.White, RoundedCornerShape(10.dp))
+                    .border(3.dp, Color(0xFFD32F2F), RoundedCornerShape(10.dp))
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text("LIMIT", color = Color(0xFF111111), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                Text("$postedLimit", color = Color(0xFF111111), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+@Composable
+private fun CameraAlert(modifier: Modifier, alert: com.cak3d.biscuitmesh.geo.HazardAlert, useMph: Boolean) {
+    Card(
+        modifier = modifier.fillMaxWidth(0.92f),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.error),
+    ) {
+        Column(Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                "⚠  ${hazardLabel(alert.hazard.kind)} AHEAD · ${alert.distanceM} m",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onError,
+            )
+            Text(
+                "${alert.speedMph} mph" + (alert.limitMph?.let { " in a $it" } ?: "") + " — slow down",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onError,
             )
         }
     }
@@ -477,6 +571,42 @@ private fun sizeForKind(kind: SampleKind): Int = when (kind) {
     SampleKind.AP -> 11
     SampleKind.STATION -> 8
     SampleKind.BT -> 10
+}
+
+private fun hazardColor(kind: HazardKind): Int = when (kind) {
+    HazardKind.FLOCK -> AndroidColor.parseColor("#EF4444")
+    HazardKind.SPEED_CAMERA -> AndroidColor.parseColor("#F59E0B")
+    HazardKind.RED_LIGHT -> AndroidColor.parseColor("#EC4899")
+    HazardKind.CAMERA -> AndroidColor.parseColor("#94A3B8")
+}
+
+private fun hazardLabel(kind: HazardKind): String = when (kind) {
+    HazardKind.FLOCK -> "Flock/ALPR camera"
+    HazardKind.SPEED_CAMERA -> "Speed camera"
+    HazardKind.RED_LIGHT -> "Red-light camera"
+    HazardKind.CAMERA -> "Camera"
+}
+
+/** A camera marker: a filled circle with a white ring, to stand apart from pings. */
+private fun ring(color: Int, sizeDp: Int): GradientDrawable {
+    val px = (sizeDp * 2.75).toInt()
+    return GradientDrawable().apply {
+        shape = GradientDrawable.OVAL
+        setColor(color)
+        setStroke(4, AndroidColor.WHITE)
+        setSize(px, px)
+    }
+}
+
+private fun vibrate(context: Context) {
+    runCatching {
+        val v = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            (context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager).defaultVibrator
+        } else {
+            @Suppress("DEPRECATION") context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+        }
+        v.vibrate(VibrationEffect.createOneShot(350, VibrationEffect.DEFAULT_AMPLITUDE))
+    }
 }
 
 /** A small filled circle Drawable used as a map marker icon. */
