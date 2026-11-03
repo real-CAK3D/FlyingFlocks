@@ -224,6 +224,7 @@ fun WardriveScreen(vm: MainViewModel) {
             MapStyle.DARK -> { mapView.setTileSource(TileSourceFactory.MAPNIK); mapView.overlayManager.tilesOverlay.setColorFilter(TilesOverlay.INVERT_COLORS) }
             MapStyle.LIGHT -> { mapView.setTileSource(TileSourceFactory.MAPNIK); mapView.overlayManager.tilesOverlay.setColorFilter(null) }
             MapStyle.TOPO -> { mapView.setTileSource(TOPO_SOURCE); mapView.overlayManager.tilesOverlay.setColorFilter(null) }
+            MapStyle.SATELLITE -> { mapView.setTileSource(SATELLITE_SOURCE); mapView.overlayManager.tilesOverlay.setColorFilter(null) }
         }
         mapView.invalidate()
     }
@@ -452,7 +453,7 @@ fun WardriveScreen(vm: MainViewModel) {
     }
 }
 
-enum class MapStyle(val label: String) { DARK("Dark"), LIGHT("Light"), TOPO("Topo") }
+enum class MapStyle(val label: String) { DARK("Dark"), LIGHT("Light"), TOPO("Topo"), SATELLITE("Satellite") }
 
 private val TOPO_SOURCE = org.osmdroid.tileprovider.tilesource.XYTileSource(
     "OpenTopoMap", 0, 17, 256, ".png",
@@ -460,6 +461,21 @@ private val TOPO_SOURCE = org.osmdroid.tileprovider.tilesource.XYTileSource(
     "© OpenTopoMap (CC-BY-SA), © OpenStreetMap contributors",
 )
 
+// Esri World Imagery — free aerial/satellite tiles. Note the URL is z/y/x (not the
+// z/x/y that XYTileSource builds), so we format it ourselves.
+private val SATELLITE_SOURCE = object : org.osmdroid.tileprovider.tilesource.OnlineTileSourceBase(
+    "EsriWorldImagery", 0, 19, 256, "",
+    arrayOf("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/"),
+    "Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community",
+) {
+    override fun getTileURLString(pMapTileIndex: Long): String =
+        baseUrl +
+            org.osmdroid.util.MapTileIndex.getZoom(pMapTileIndex) + "/" +
+            org.osmdroid.util.MapTileIndex.getY(pMapTileIndex) + "/" +
+            org.osmdroid.util.MapTileIndex.getX(pMapTileIndex)
+}
+
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun MapMenu(
     hud: Boolean, onHud: (Boolean) -> Unit,
@@ -480,7 +496,7 @@ private fun MapMenu(
             MenuToggle("Saved places", showPlaces, onPlaces)
             Text("MAP STYLE", style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.secondary, modifier = Modifier.padding(top = 4.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 MapStyle.entries.forEach { st ->
                     FilterChip(selected = style == st, onClick = { onStyle(st) }, label = { Text(st.label) })
                 }

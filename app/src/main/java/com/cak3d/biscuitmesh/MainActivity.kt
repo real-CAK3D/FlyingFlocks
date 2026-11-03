@@ -252,6 +252,7 @@ private fun allRequestedPermissions(): Array<String> {
     val perms = corePermissions().toMutableList()
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         perms += Manifest.permission.POST_NOTIFICATIONS
+        perms += Manifest.permission.NEARBY_WIFI_DEVICES
     }
     return perms.toTypedArray()
 }

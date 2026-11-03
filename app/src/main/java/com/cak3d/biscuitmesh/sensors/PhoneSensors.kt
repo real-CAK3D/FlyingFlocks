@@ -11,6 +11,8 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.net.wifi.WifiManager
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import com.cak3d.biscuitmesh.wardrive.SampleKind
 
 /**
@@ -30,12 +32,25 @@ class PhoneSensors(context: Context, private val adapter: BluetoothAdapter?) {
     private var scanningWifi = false
     private var scanningBle = false
 
+    private val mainHandler = Handler(Looper.getMainLooper())
+
     private val wifiReceiver = object : BroadcastReceiver() {
         override fun onReceive(c: Context?, i: Intent?) {
             emitWifi()
             // Re-arm. Modern Android throttles startScan(), but the cached
             // results still refresh as the phone moves.
             if (scanningWifi) runCatching { @Suppress("DEPRECATION") wifi?.startScan() }
+        }
+    }
+
+    // Belt-and-suspenders: the SCAN_RESULTS broadcast can be throttled or dropped on
+    // newer Android, so also poll the cached results on a timer while scanning.
+    private val wifiPoller = object : Runnable {
+        override fun run() {
+            if (!scanningWifi) return
+            emitWifi()
+            runCatching { @Suppress("DEPRECATION") wifi?.startScan() }
+            mainHandler.postDelayed(this, 6000)
         }
     }
 
@@ -58,14 +73,17 @@ class PhoneSensors(context: Context, private val adapter: BluetoothAdapter?) {
             scanningWifi = true
             runCatching {
                 val filter = IntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION)
+                // SCAN_RESULTS_AVAILABLE is a SYSTEM broadcast — it must be EXPORTED, or
+                // Android 13+ silently drops it and the list never updates.
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    appContext.registerReceiver(wifiReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+                    appContext.registerReceiver(wifiReceiver, filter, Context.RECEIVER_EXPORTED)
                 } else {
                     appContext.registerReceiver(wifiReceiver, filter)
                 }
             }
             emitWifi() // seed from the last cached scan right away
             runCatching { @Suppress("DEPRECATION") wifi?.startScan() }
+            mainHandler.postDelayed(wifiPoller, 6000)
         }
         if (bleOn && !scanningBle) {
             val scanner = adapter?.bluetoothLeScanner
@@ -82,8 +100,9 @@ class PhoneSensors(context: Context, private val adapter: BluetoothAdapter?) {
     @SuppressLint("MissingPermission")
     fun stop() {
         if (scanningWifi) {
-            runCatching { appContext.unregisterReceiver(wifiReceiver) }
             scanningWifi = false
+            mainHandler.removeCallbacks(wifiPoller)
+            runCatching { appContext.unregisterReceiver(wifiReceiver) }
         }
         if (scanningBle) {
             runCatching { adapter?.bluetoothLeScanner?.stopScan(bleCallback) }
