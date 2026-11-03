@@ -3,16 +3,20 @@ package com.cak3d.biscuitmesh
 import android.app.Application
 import android.bluetooth.BluetoothManager
 import android.content.Context
+import com.cak3d.biscuitmesh.audio.Speaker
 import com.cak3d.biscuitmesh.ble.BleScanner
 import com.cak3d.biscuitmesh.ble.FleetManager
 import com.cak3d.biscuitmesh.data.DeadZonesStore
 import com.cak3d.biscuitmesh.data.KnownDevicesStore
 import com.cak3d.biscuitmesh.data.SettingsStore
+import com.cak3d.biscuitmesh.geo.HazardKind
 import com.cak3d.biscuitmesh.geo.HazardManager
 import com.cak3d.biscuitmesh.geo.HazardStore
 import com.cak3d.biscuitmesh.geo.OverpassClient
 import com.cak3d.biscuitmesh.hunts.RareBirdManager
 import com.cak3d.biscuitmesh.hunts.RareBirdStore
+import com.cak3d.biscuitmesh.nav.NavigationManager
+import com.cak3d.biscuitmesh.nav.OsrmClient
 import com.cak3d.biscuitmesh.nav.PlacesStore
 import com.cak3d.biscuitmesh.location.LocationProvider
 import com.cak3d.biscuitmesh.progress.ProgressManager
@@ -24,6 +28,7 @@ import com.cak3d.biscuitmesh.wardrive.WardriveManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 /**
  * App-wide container. The fleet manager and scanner outlive any single screen,
@@ -74,6 +79,16 @@ class BiscuitMeshApp : Application() {
 
     val placesStore: PlacesStore by lazy { PlacesStore(this) }
 
+    /** Text-to-speech for camera/speed alerts and turn-by-turn directions. */
+    val speaker: Speaker by lazy { Speaker(this) }
+
+    private val osrm: OsrmClient by lazy { OsrmClient() }
+
+    /** In-app turn-by-turn navigation. */
+    val navigation: NavigationManager by lazy {
+        NavigationManager(appScope, locationProvider, osrm, speaker)
+    }
+
     private val overpass: OverpassClient by lazy { OverpassClient() }
     private val hazardStore: HazardStore by lazy { HazardStore(this) }
 
@@ -113,5 +128,27 @@ class BiscuitMeshApp : Application() {
         // Touch the progress manager so it loads saved XP and starts scoring finds
         // from launch, even before the Field Guide screen is opened.
         progress
+
+        // Voice: honour the on/off setting, and speak a camera alert once per hazard.
+        appScope.launch { settingsStore.voiceAlerts.collect { speaker.enabled = it } }
+        hazards?.let { hz ->
+            appScope.launch {
+                var lastId: String? = null
+                hz.alert.collect { a ->
+                    if (a == null) { lastId = null; return@collect }
+                    if (a.hazard.id == lastId) return@collect
+                    lastId = a.hazard.id
+                    val kind = when (a.hazard.kind) {
+                        HazardKind.FLOCK -> "Flock camera"
+                        HazardKind.SPEED_CAMERA -> "Speed camera"
+                        HazardKind.RED_LIGHT -> "Red light camera"
+                        HazardKind.CAMERA -> "Camera"
+                    }
+                    val dist = NavigationManager.spokenDist(a.distanceM.toDouble())
+                    val over = a.limitMph?.let { " You're over the $it limit." } ?: ""
+                    speaker.say("$kind ahead, $dist.$over")
+                }
+            }
+        }
     }
 }

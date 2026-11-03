@@ -10,7 +10,7 @@ import com.cak3d.biscuitmesh.geo.HazardAlert
 import com.cak3d.biscuitmesh.geo.SpeedLimit
 import com.cak3d.biscuitmesh.hunts.RareBird
 import com.cak3d.biscuitmesh.nav.ActiveRoute
-import com.cak3d.biscuitmesh.nav.OsrmClient
+import com.cak3d.biscuitmesh.nav.NavState
 import com.cak3d.biscuitmesh.nav.Place
 import com.cak3d.biscuitmesh.nav.PlaceKind
 import com.cak3d.biscuitmesh.progress.Progress
@@ -57,6 +57,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun setHudEnabled(enabled: Boolean) { viewModelScope.launch { appRef.settingsStore.setHudEnabled(enabled) } }
     fun setUseMph(useMph: Boolean) { viewModelScope.launch { appRef.settingsStore.setUseMph(useMph) } }
 
+    /** Speak camera/speed alerts and turn-by-turn directions. On by default. */
+    val voiceAlerts: StateFlow<Boolean> =
+        appRef.settingsStore.voiceAlerts.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    fun setVoiceAlerts(enabled: Boolean) { viewModelScope.launch { appRef.settingsStore.setVoiceAlerts(enabled) } }
+
+    /** Remembered map style (DARK/LIGHT/TOPO/SATELLITE). */
+    val mapStyle: StateFlow<String> =
+        appRef.settingsStore.mapStyle.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "DARK")
+
+    fun setMapStyle(style: String) { viewModelScope.launch { appRef.settingsStore.setMapStyle(style) } }
+
     // --- Navigation / saved places ---------------------------------------
     val places: Flow<List<Place>> = appRef.placesStore.places
 
@@ -68,26 +80,30 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun removePlace(id: String) { viewModelScope.launch { appRef.placesStore.remove(id) } }
 
-    private val osrm = OsrmClient()
-    private val _activeRoute = MutableStateFlow<ActiveRoute?>(null)
-    val activeRoute: StateFlow<ActiveRoute?> = _activeRoute.asStateFlow()
+    /** The active route geometry for the map (set by the navigation manager). */
+    val activeRoute: StateFlow<ActiveRoute?> get() = appRef.navigation.route
+
+    /** Live turn-by-turn guidance state, or null when not navigating. */
+    val navState: StateFlow<NavState?> get() = appRef.navigation.state
+
     private val _routeStatus = MutableStateFlow<String?>(null)
     val routeStatus: StateFlow<String?> = _routeStatus.asStateFlow()
 
-    /** Computes a driving route from the current location to [place] and draws it on the map. */
-    fun navigateTo(place: Place) {
-        _routeStatus.value = "Routing to ${place.name}…"
+    /** Starts in-app turn-by-turn navigation to a saved place. */
+    fun navigateTo(place: Place) = navigateToTarget(place.name, place.lat, place.lon)
+
+    /** Starts in-app turn-by-turn navigation to any point (camera, bird, place). */
+    fun navigateToTarget(name: String, lat: Double, lon: Double) {
+        _routeStatus.value = "Routing to $name…"
+        appRef.navigation.start(name, lat, lon)
         viewModelScope.launch {
-            val here = currentHere()
-            if (here == null) { _routeStatus.value = "No location fix yet — try again."; return@launch }
-            val r = osrm.route(here.lat, here.lon, place.lat, place.lon)
-            if (r == null) { _routeStatus.value = "Couldn't find a route."; return@launch }
-            _activeRoute.value = ActiveRoute(place.name, place.lat, place.lon, r.points, r.distanceM, r.durationS)
+            appRef.navigation.state.first { it != null }
             _routeStatus.value = null
         }
     }
 
-    fun clearRoute() { _activeRoute.value = null; _routeStatus.value = null }
+    fun clearRoute() { appRef.navigation.stop(); _routeStatus.value = null }
+    fun stopNavigation() = clearRoute()
 
     private suspend fun currentHere(): LatLon? {
         val s = appRef.wardrive?.state?.value

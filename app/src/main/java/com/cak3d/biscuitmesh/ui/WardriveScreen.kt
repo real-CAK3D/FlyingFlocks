@@ -119,6 +119,8 @@ fun WardriveScreen(vm: MainViewModel) {
     val hudOn by vm.hudEnabled.collectAsStateWithLifecycle()
     val useMph by vm.useMph.collectAsStateWithLifecycle()
     val route by vm.activeRoute.collectAsStateWithLifecycle()
+    val navState by vm.navState.collectAsStateWithLifecycle()
+    val savedMapStyle by vm.mapStyle.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
 
@@ -217,6 +219,11 @@ fun WardriveScreen(vm: MainViewModel) {
     var showBoards by remember { mutableStateOf(true) }
     var controlsExpanded by remember { mutableStateOf(true) }
     var mapStyle by remember { mutableStateOf(MapStyle.DARK) }
+    // Restore the remembered map style, and follow the vehicle while navigating.
+    LaunchedEffect(savedMapStyle) {
+        mapStyle = runCatching { MapStyle.valueOf(savedMapStyle) }.getOrDefault(MapStyle.DARK)
+    }
+    LaunchedEffect(navState != null) { if (navState != null) followMode = true }
     val places by vm.places.collectAsStateWithLifecycle(initialValue = emptyList())
 
     LaunchedEffect(mapStyle) {
@@ -355,7 +362,9 @@ fun WardriveScreen(vm: MainViewModel) {
             Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-        route?.let { r -> NavCard(r, useMph, onClear = { vm.clearRoute() }) }
+        val nav = navState
+        if (nav != null) NavBar(nav, useMph, onEnd = { vm.stopNavigation() })
+        else route?.let { r -> NavCard(r, useMph, onClear = { vm.clearRoute() }) }
         if (showBoards) BoardsLegend(deviceMap, state.sourceCounts, phoneOn)
         ControlPanel(
             modifier = Modifier,
@@ -386,6 +395,16 @@ fun WardriveScreen(vm: MainViewModel) {
             expanded = controlsExpanded,
             onToggleExpand = { controlsExpanded = !controlsExpanded },
         )
+        }
+
+        // Turn-by-turn banner across the top while navigating.
+        navState?.let { nav ->
+            if (!nav.arrived) {
+                NavBanner(
+                    nav,
+                    Modifier.align(Alignment.TopCenter).padding(top = 10.dp, start = 60.dp, end = 60.dp),
+                )
+            }
         }
 
         // Top-right stack: heading-up compass + follow-the-vehicle toggle.
@@ -428,7 +447,7 @@ fun WardriveScreen(vm: MainViewModel) {
                     showBoards = showBoards, onBoards = { showBoards = it },
                     showCameras = showCameras, onCameras = { showCameras = it },
                     showPlaces = showPlaces, onPlaces = { showPlaces = it },
-                    style = mapStyle, onStyle = { mapStyle = it },
+                    style = mapStyle, onStyle = { mapStyle = it; vm.setMapStyle(it.name) },
                     camCount = hazards.size,
                 )
             }
@@ -751,6 +770,68 @@ private fun BoardsLegend(devices: Map<String, BiscuitDevice>, counts: Map<String
             if (phoneOn) {
                 LegendRow(Color(sourceColor(PHONE_SOURCE)), "This phone", "${counts[PHONE_SOURCE] ?: 0} pings")
             }
+        }
+    }
+}
+
+/** Top-of-screen turn prompt: big arrow, distance to the maneuver, and the instruction. */
+@Composable
+private fun NavBanner(nav: com.cak3d.biscuitmesh.nav.NavState, modifier: Modifier = Modifier) {
+    Card(
+        modifier = modifier.widthIn(max = 520.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+    ) {
+        Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(nav.arrow, style = MaterialTheme.typography.displaySmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer)
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        if (nav.offRoute) "Rerouting…" else com.cak3d.biscuitmesh.nav.fmtDistImperial(nav.distToManeuverM),
+                        style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
+                    Text(nav.instruction, style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer)
+                }
+            }
+            nav.thenInstruction?.let {
+                Text("then $it", style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f))
+            }
+        }
+    }
+}
+
+/** Bottom nav bar during guidance: ETA + distance remaining + End. */
+@Composable
+private fun NavBar(nav: com.cak3d.biscuitmesh.nav.NavState, useMph: Boolean, onEnd: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    if (nav.arrived) "Arrived" else com.cak3d.biscuitmesh.nav.fmtEta(nav.etaS),
+                    style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    "${nav.destName}  ·  ${com.cak3d.biscuitmesh.nav.fmtDistImperial(nav.distRemainingM)} left",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                )
+            }
+            Button(
+                onClick = onEnd,
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+            ) { Text(if (nav.arrived) "Done" else "End") }
         }
     }
 }

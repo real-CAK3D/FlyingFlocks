@@ -194,6 +194,7 @@ private fun DeadZonesSection(zones: List<DeadZone>, onAdd: () -> Unit, onRemove:
 private fun HudSection(vm: MainViewModel) {
     val hud by vm.hudEnabled.collectAsStateWithLifecycle()
     val mph by vm.useMph.collectAsStateWithLifecycle()
+    val voice by vm.voiceAlerts.collectAsStateWithLifecycle()
     SectionCard(
         title = "Driving HUD & cameras",
         subtitle = "Shows your speed and the posted limit while driving, and warns you when a " +
@@ -202,6 +203,7 @@ private fun HudSection(vm: MainViewModel) {
     ) {
         ToggleRow("Speed HUD", "Overlay speed + limit on the map", hud) { vm.setHudEnabled(it) }
         ToggleRow("Use mph", if (mph) "Miles per hour" else "Kilometres per hour", mph) { vm.setUseMph(it) }
+        ToggleRow("Voice alerts", "Speak camera warnings and turn-by-turn directions", voice) { vm.setVoiceAlerts(it) }
     }
 }
 

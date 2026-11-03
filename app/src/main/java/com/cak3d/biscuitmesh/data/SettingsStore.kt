@@ -20,6 +20,8 @@ class SettingsStore(private val context: Context) {
     private val phoneSensorsKey = booleanPreferencesKey("phone_sensors_enabled")
     private val hudEnabledKey = booleanPreferencesKey("hud_enabled")
     private val useMphKey = booleanPreferencesKey("use_mph")
+    private val voiceAlertsKey = booleanPreferencesKey("voice_alerts")
+    private val mapStyleKey = stringPreferencesKey("map_style")
 
     /** True once the operator has acknowledged the authorized-use-only terms. */
     val authorizedUse: Flow<Boolean> =
@@ -75,5 +77,21 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setUseMph(useMph: Boolean) {
         context.settingsDataStore.edit { it[useMphKey] = useMph }
+    }
+
+    /** Speak camera/speed alerts and turn-by-turn directions aloud. On by default. */
+    val voiceAlerts: Flow<Boolean> =
+        context.settingsDataStore.data.map { it[voiceAlertsKey] ?: true }
+
+    suspend fun setVoiceAlerts(enabled: Boolean) {
+        context.settingsDataStore.edit { it[voiceAlertsKey] = enabled }
+    }
+
+    /** Remembered map style (DARK/LIGHT/TOPO/SATELLITE). Defaults to DARK. */
+    val mapStyle: Flow<String> =
+        context.settingsDataStore.data.map { it[mapStyleKey] ?: "DARK" }
+
+    suspend fun setMapStyle(style: String) {
+        context.settingsDataStore.edit { it[mapStyleKey] = style }
     }
 }
