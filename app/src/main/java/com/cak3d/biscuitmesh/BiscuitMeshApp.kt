@@ -15,6 +15,9 @@ import com.cak3d.biscuitmesh.hunts.RareBirdManager
 import com.cak3d.biscuitmesh.hunts.RareBirdStore
 import com.cak3d.biscuitmesh.nav.PlacesStore
 import com.cak3d.biscuitmesh.location.LocationProvider
+import com.cak3d.biscuitmesh.progress.ProgressManager
+import com.cak3d.biscuitmesh.progress.ProgressStore
+import com.cak3d.biscuitmesh.sensors.PhoneScanManager
 import com.cak3d.biscuitmesh.sensors.PhoneSensors
 import com.cak3d.biscuitmesh.usb.UsbDetector
 import com.cak3d.biscuitmesh.wardrive.WardriveManager
@@ -80,8 +83,35 @@ class BiscuitMeshApp : Application() {
         HazardManager(appScope, wd, overpass, hazardStore)
     }
 
+    // --- Levelling / progression -------------------------------------------
+    private val progressStore: ProgressStore by lazy { ProgressStore(this) }
+
+    /** Scores every Wi-Fi/BLE find and camera onto its track; gates the overall rank. */
+    val progress: ProgressManager by lazy {
+        ProgressManager(appScope, progressStore, wardrive, hazards)
+    }
+
+    /** Separate phone-radio instance for the standalone WiFi/BT tab scans. */
+    private val scanSensors: PhoneSensors by lazy {
+        PhoneSensors(this, bluetoothManager?.adapter)
+    }
+
+    /** Live phone Wi-Fi/BLE scanning for the WiFi and Bluetooth tabs. */
+    val phoneScan: PhoneScanManager by lazy { PhoneScanManager(scanSensors, progress) }
+
+    /** On-demand camera sweep around a point (Field Guide "find cameras near me"). */
+    suspend fun sweepCameras(lat: Double, lon: Double): Int {
+        val radius = progress.cameraScanRadiusM()
+        val found = runCatching { overpass.cameras(lat, lon, radius) }.getOrNull() ?: return 0
+        hazardStore.merge(found)
+        return found.size
+    }
+
     override fun onCreate() {
         super.onCreate()
         usbDetector.start()
+        // Touch the progress manager so it loads saved XP and starts scoring finds
+        // from launch, even before the Field Guide screen is opened.
+        progress
     }
 }

@@ -13,6 +13,7 @@ import com.cak3d.biscuitmesh.nav.ActiveRoute
 import com.cak3d.biscuitmesh.nav.OsrmClient
 import com.cak3d.biscuitmesh.nav.Place
 import com.cak3d.biscuitmesh.nav.PlaceKind
+import com.cak3d.biscuitmesh.progress.Progress
 import com.cak3d.biscuitmesh.protocol.command
 import com.cak3d.biscuitmesh.usb.UsbDeviceInfo
 import com.cak3d.biscuitmesh.wardrive.LatLon
@@ -98,6 +99,33 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val rareBirds: StateFlow<List<RareBird>> get() = appRef.rareBirds.birds
     val rareBirdHere: StateFlow<com.cak3d.biscuitmesh.wardrive.LatLon?> get() = appRef.rareBirds.here
     fun rareBirdOnLocation(lat: Double, lon: Double) = appRef.rareBirds.onLocation(lat, lon)
+
+    // --- Progression / Field Guide ----------------------------------------
+    /** Per-track XP and the gated overall rank. */
+    val progress: StateFlow<Progress> get() = appRef.progress.state
+
+    private val _cameraSweep = MutableStateFlow<String?>(null)
+    val cameraSweep: StateFlow<String?> = _cameraSweep.asStateFlow()
+
+    /** On-demand sweep for Flock/speed/red-light cameras around the current fix. */
+    fun sweepCamerasHere() {
+        viewModelScope.launch {
+            val here = currentHere()
+            if (here == null) { _cameraSweep.value = "No location fix yet — try again."; return@launch }
+            _cameraSweep.value = "Searching for cameras nearby…"
+            val n = runCatching { appRef.sweepCameras(here.lat, here.lon) }.getOrDefault(0)
+            _cameraSweep.value = if (n == 0) "No cameras found in range yet." else "Found $n cameras in range."
+        }
+    }
+
+    fun clearCameraSweep() { _cameraSweep.value = null }
+
+    // --- Phone-only live scanning (WiFi / Bluetooth tabs) ------------------
+    val phoneScanResults get() = appRef.phoneScan.results
+    val phoneScanning get() = appRef.phoneScan.scanning
+    fun startPhoneScan(wifi: Boolean, ble: Boolean) = appRef.phoneScan.start(wifi, ble)
+    fun stopPhoneScan() = appRef.phoneScan.stop()
+    fun clearPhoneScan() = appRef.phoneScan.clear()
 
     private val _scanning = MutableStateFlow(false)
     val scanning: StateFlow<Boolean> = _scanning.asStateFlow()

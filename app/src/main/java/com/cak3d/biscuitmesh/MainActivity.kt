@@ -197,8 +197,8 @@ private fun MainShell(vm: MainViewModel) {
                     })
                 }
                 composable("wardrive") { WardriveScreen(vm) }
-                composable("wifi") { WifiScreen(onOpenTool = { nav.navigate("runtool/$it") }) }
-                composable("bluetooth") { BluetoothScreen(onOpenTool = { nav.navigate("runtool/$it") }) }
+                composable("wifi") { WifiScreen(vm, onOpenTool = { nav.navigate("runtool/$it") }) }
+                composable("bluetooth") { BluetoothScreen(vm, onOpenTool = { nav.navigate("runtool/$it") }) }
                 composable("misc") { MiscScreen(onOpenTool = { nav.navigate("runtool/$it") }) }
                 composable("rarebirds") { RareBirdsScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("places") {
