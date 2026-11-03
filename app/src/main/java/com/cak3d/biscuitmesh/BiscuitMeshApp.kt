@@ -24,6 +24,7 @@ import com.cak3d.biscuitmesh.progress.ProgressStore
 import com.cak3d.biscuitmesh.sensors.PhoneScanManager
 import com.cak3d.biscuitmesh.sensors.PhoneSensors
 import com.cak3d.biscuitmesh.usb.UsbDetector
+import com.cak3d.biscuitmesh.wardrive.DriveStore
 import com.cak3d.biscuitmesh.wardrive.WardriveManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -78,6 +79,9 @@ class BiscuitMeshApp : Application() {
     val rareBirds: RareBirdManager by lazy { RareBirdManager(appScope, rareBirdStore, wardrive) }
 
     val placesStore: PlacesStore by lazy { PlacesStore(this) }
+
+    /** Saved wardrive history (review + re-upload). */
+    val drivesStore: DriveStore by lazy { DriveStore(this) }
 
     /** Text-to-speech for camera/speed alerts and turn-by-turn directions. */
     val speaker: Speaker by lazy { Speaker(this) }

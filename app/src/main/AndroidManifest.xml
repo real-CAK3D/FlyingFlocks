@@ -71,5 +71,11 @@
                 android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
                 android:resource="@xml/device_filter" />
         </activity>
+
+        <!-- Keeps a wardrive scanning with the app backgrounded / screen off. -->
+        <service
+            android:name=".WardriveService"
+            android:exported="false"
+            android:foregroundServiceType="location" />
     </application>
 </manifest>

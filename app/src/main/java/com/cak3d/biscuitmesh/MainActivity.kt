@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.BluetoothSearching
 import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Radar
@@ -58,6 +59,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.cak3d.biscuitmesh.ui.BluetoothScreen
 import com.cak3d.biscuitmesh.ui.DeviceDetailScreen
+import com.cak3d.biscuitmesh.ui.DrivesScreen
 import com.cak3d.biscuitmesh.ui.FleetScreen
 import com.cak3d.biscuitmesh.ui.ConstellationBackground
 import com.cak3d.biscuitmesh.ui.MiscScreen
@@ -121,7 +123,10 @@ private fun MainShell(vm: MainViewModel) {
                             Icon(Icons.Default.Place, contentDescription = "Places")
                         }
                         IconButton(onClick = { nav.navigate("rarebirds") }) {
-                            Icon(Icons.Default.Radar, contentDescription = "Rare Birds")
+                            Icon(Icons.Default.Radar, contentDescription = "Field Guide")
+                        }
+                        IconButton(onClick = { nav.navigate("drives") }) {
+                            Icon(Icons.Default.History, contentDescription = "Drives")
                         }
                         IconButton(onClick = { nav.navigate("settings") }) {
                             Icon(Icons.Default.Settings, contentDescription = "Settings")
@@ -215,6 +220,7 @@ private fun MainShell(vm: MainViewModel) {
                     )
                 }
                 composable("settings") { SettingsScreen(vm = vm, onBack = { nav.popBackStack() }) }
+                composable("drives") { DrivesScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("device") {
                     val address by vm.selected.collectAsStateWithLifecycle()
                     DeviceDetailScreen(vm = vm, address = address, onBack = { nav.popBackStack() })

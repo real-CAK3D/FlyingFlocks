@@ -193,12 +193,79 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { appRef.settingsStore.setPhoneSensors(enabled) }
     }
 
-    fun startWardrive(mode: WardriveMode) { appRef.wardrive?.start(mode, phoneSensors.value) }
+    fun startWardrive(mode: WardriveMode) {
+        appRef.wardrive?.start(mode, phoneSensors.value)
+        // Keep scanning alive with the screen off / app backgrounded.
+        WardriveService.start(appRef)
+    }
 
     fun stopWardrive() {
+        // Capture the finished drive before stopping (stop keeps samples/track).
+        val st = appRef.wardrive?.state?.value
+        val samples = appRef.wardrive?.samples?.value?.values?.toList() ?: emptyList()
+        val track = appRef.wardrive?.track?.value ?: emptyList()
         appRef.wardrive?.stop()
+        WardriveService.stop(appRef)
+        if (st != null && st.startMs > 0L && (st.wifiCount + st.btCount) > 0) {
+            viewModelScope.launch { saveDrive(st.startMs, st.wifiCount, st.btCount, samples, track) }
+        }
         // Fire-and-forget upload when the operator has opted into auto-upload.
         if (wdgAutoUpload.value && wdgApiKey.value.isNotBlank()) uploadToWdg()
+    }
+
+    private suspend fun saveDrive(
+        startMs: Long,
+        wifi: Int,
+        bt: Int,
+        samples: List<com.cak3d.biscuitmesh.wardrive.WardriveSample>,
+        track: List<LatLon>,
+    ) {
+        val csv = if (WigleExport.uploadableCount(samples) > 0) WigleExport.toCsv(samples) else null
+        val session = com.cak3d.biscuitmesh.wardrive.DriveSession(
+            id = UUID.randomUUID().toString(),
+            startMs = startMs,
+            endMs = System.currentTimeMillis(),
+            wifiCount = wifi,
+            btCount = bt,
+            cameraCount = appRef.hazards?.hazards?.value?.size ?: 0,
+            distanceM = trackDistance(track),
+        )
+        appRef.drivesStore.save(session, csv)
+    }
+
+    private fun trackDistance(track: List<LatLon>): Double {
+        if (track.size < 2) return 0.0
+        val out = FloatArray(1)
+        var sum = 0.0
+        for (i in 1 until track.size) {
+            android.location.Location.distanceBetween(
+                track[i - 1].lat, track[i - 1].lon, track[i].lat, track[i].lon, out,
+            )
+            sum += out[0]
+        }
+        return sum
+    }
+
+    // --- Drive history -----------------------------------------------------
+    val drives: Flow<List<com.cak3d.biscuitmesh.wardrive.DriveSession>> = appRef.drivesStore.drives
+
+    fun deleteDrive(id: String) { viewModelScope.launch { appRef.drivesStore.remove(id) } }
+
+    /** Re-uploads a saved drive's capture to WDGWars. */
+    fun reuploadDrive(id: String) {
+        val key = wdgApiKey.value.trim()
+        if (key.isEmpty()) { _wdgStatus.value = WdgStatus.Error("Set your WDG API key in Settings first."); return }
+        _wdgStatus.value = WdgStatus.Working("Re-uploading drive…")
+        viewModelScope.launch {
+            val csv = appRef.drivesStore.captureCsv(id)
+            if (csv.isNullOrBlank()) { _wdgStatus.value = WdgStatus.Error("No capture saved for that drive."); return@launch }
+            val fileName = "biscuit-mesh-drive-$id.csv"
+            _wdgStatus.value = when (val r = wdg.uploadCsv(key, csv, fileName)) {
+                is WdgClient.Result.Ok -> { appRef.drivesStore.markUploaded(id); WdgStatus.Done("Drive re-uploaded.") }
+                is WdgClient.Result.HttpError -> WdgStatus.Error("Upload failed (${r.code}).")
+                is WdgClient.Result.Failure -> WdgStatus.Error("Network error: ${r.message}")
+            }
+        }
     }
 
     fun setWardriveMode(mode: WardriveMode) { appRef.wardrive?.setMode(mode) }
