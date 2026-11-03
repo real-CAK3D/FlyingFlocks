@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import org.json.JSONArray
 import org.json.JSONObject
@@ -19,11 +20,8 @@ class HazardStore(private val context: Context) {
     val hazards: Flow<List<Hazard>> =
         context.hazardDataStore.data.map { parse(it[key] ?: "[]") }
 
-    private suspend fun current(): List<Hazard> {
-        var out: List<Hazard> = emptyList()
-        context.hazardDataStore.edit { out = parse(it[key] ?: "[]") }
-        return out
-    }
+    private suspend fun current(): List<Hazard> =
+        parse(context.hazardDataStore.data.first()[key] ?: "[]")
 
     /** Adds any hazards we don't already have (by id); keeps the most recent 2000. */
     suspend fun merge(incoming: List<Hazard>) {

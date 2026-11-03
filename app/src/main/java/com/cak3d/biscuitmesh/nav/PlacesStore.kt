@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import org.json.JSONArray
 import org.json.JSONObject
@@ -19,18 +20,20 @@ class PlacesStore(private val context: Context) {
     val places: Flow<List<Place>> =
         context.placesDataStore.data.map { parse(it[key] ?: "[]") }
 
-    private suspend fun current(): List<Place> {
-        var out: List<Place> = emptyList()
-        context.placesDataStore.edit { out = parse(it[key] ?: "[]") }
-        return out
-    }
+    // Read the stored list WITHOUT opening an edit{}: DataStore forbids a nested
+    // updateData (calling edit{} from inside another edit{}), which is what crashed
+    // add()/remove() before. Snapshot via data.first(), then write in one edit{}.
+    private suspend fun current(): List<Place> =
+        parse(context.placesDataStore.data.first()[key] ?: "[]")
 
     suspend fun add(place: Place) {
-        context.placesDataStore.edit { it[key] = toJson(current() + place) }
+        val next = current() + place
+        context.placesDataStore.edit { it[key] = toJson(next) }
     }
 
     suspend fun remove(id: String) {
-        context.placesDataStore.edit { it[key] = toJson(current().filterNot { p -> p.id == id }) }
+        val next = current().filterNot { p -> p.id == id }
+        context.placesDataStore.edit { it[key] = toJson(next) }
     }
 
     private fun toJson(list: List<Place>): String {

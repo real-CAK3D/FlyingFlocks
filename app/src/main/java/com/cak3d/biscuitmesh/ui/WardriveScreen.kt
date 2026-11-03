@@ -67,6 +67,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -120,6 +121,15 @@ fun WardriveScreen(vm: MainViewModel) {
     val route by vm.activeRoute.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
+
+    // Keep the screen awake while the live map is showing — you're driving or
+    // navigating, so the display shouldn't time out mid-route.
+    val view = LocalView.current
+    DisposableEffect(Unit) {
+        view.keepScreenOn = true
+        onDispose { view.keepScreenOn = false }
+    }
+
     fun hasLocation() = context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) ==
         PackageManager.PERMISSION_GRANTED
     var locGranted by remember { mutableStateOf(hasLocation()) }
@@ -804,8 +814,12 @@ fun sourceColor(src: String): Int =
     if (src == PHONE_SOURCE) 0xFF22D3EE.toInt()
     else SOURCE_PALETTE[kotlin.math.abs(src.hashCode()) % SOURCE_PALETTE.size]
 
+// A point seen by two or more sources gets its own gold tint (not white, which
+// washed out over the map) so shared sightings read as "confirmed by the fleet".
+private const val SHARED_COLOR: Int = 0xFFFFC400.toInt()
+
 private fun colorForSample(s: WardriveSample): Int =
-    if (s.sources.size > 1) 0xFFFFFFFF.toInt()
+    if (s.sources.size > 1) SHARED_COLOR
     else sourceColor(s.sources.firstOrNull() ?: PHONE_SOURCE)
 
 private fun sizeForKind(kind: SampleKind): Int = when (kind) {

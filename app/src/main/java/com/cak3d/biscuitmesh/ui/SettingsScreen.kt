@@ -19,9 +19,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.LocationOff
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -296,15 +299,30 @@ private fun AuthorizedUseSection(accepted: Boolean, onAccept: () -> Unit, onRevo
             "behind an acknowledgment that you only run them on networks and devices you own " +
             "or are authorized to test.",
     ) {
-        Text(
-            if (accepted) "Status: acknowledged" else "Status: not acknowledged",
-            style = MaterialTheme.typography.bodyMedium,
-            color = if (accepted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-        )
+        val green = Color(0xFF2E7D32)
         if (accepted) {
-            OutlinedButton(onClick = onRevoke) { Text("Revoke acknowledgment") }
+            // Once acknowledged, show it green with a check so the state is obvious.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.CheckCircle, contentDescription = null, tint = green)
+                Spacer(Modifier.width(8.dp))
+                Text("Acknowledged", style = MaterialTheme.typography.bodyMedium, color = green)
+            }
+            Button(
+                onClick = onAccept,
+                enabled = false,
+                colors = ButtonDefaults.buttonColors(
+                    disabledContainerColor = green,
+                    disabledContentColor = Color.White,
+                ),
+            ) { Text("Acknowledged") }
+            TextButton(onClick = onRevoke) { Text("Revoke acknowledgment") }
         } else {
-            OutlinedButton(onClick = onAccept) { Text("Acknowledge now") }
+            Text(
+                "Status: not acknowledged",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
+            )
+            Button(onClick = onAccept) { Text("Acknowledge now") }
         }
     }
 }

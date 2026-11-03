@@ -231,25 +231,43 @@ private fun MainShell(vm: MainViewModel) {
     }
 }
 
-/** Required BLE permissions differ across Android versions. */
-private fun requiredPermissions(): Array<String> =
+/**
+ * Core permissions the app can't run without: location (GPS wardriving + BLE scan
+ * results) and, on Android 12+, the granular Bluetooth scan/connect permissions.
+ */
+private fun corePermissions(): Array<String> {
+    val perms = mutableListOf(
+        Manifest.permission.ACCESS_FINE_LOCATION,
+        Manifest.permission.ACCESS_COARSE_LOCATION,
+    )
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
-    } else {
-        arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
+        perms += Manifest.permission.BLUETOOTH_SCAN
+        perms += Manifest.permission.BLUETOOTH_CONNECT
     }
+    return perms.toTypedArray()
+}
+
+/** Core permissions plus the nice-to-haves (notifications) requested in the same prompt. */
+private fun allRequestedPermissions(): Array<String> {
+    val perms = corePermissions().toMutableList()
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        perms += Manifest.permission.POST_NOTIFICATIONS
+    }
+    return perms.toTypedArray()
+}
 
 @Composable
 private fun PermissionGate(content: @Composable () -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    fun hasAll() = requiredPermissions().all {
+    // Only the CORE set gates the app; notifications being denied must not block it.
+    fun hasCore() = corePermissions().all {
         context.checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED
     }
 
-    var granted by remember { mutableStateOf(hasAll()) }
+    var granted by remember { mutableStateOf(hasCore()) }
     val launcher = androidx.activity.compose.rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
-    ) { result -> granted = result.values.all { it } || hasAll() }
+    ) { granted = hasCore() }
 
     if (granted) {
         content()
@@ -259,16 +277,17 @@ private fun PermissionGate(content: @Composable () -> Unit) {
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text("Bluetooth permission needed", style = MaterialTheme.typography.titleLarge)
+            Text("Permissions needed", style = MaterialTheme.typography.titleLarge)
             Text(
-                "Flying Flocks uses Bluetooth to find your boards and to sense nearby " +
-                    "devices with the phone itself. It never uses Bluetooth scans for location.",
+                "Flying Flocks needs Location (for GPS wardriving and to read nearby Wi-Fi/BLE) " +
+                    "and Bluetooth (to find your boards and sense nearby devices). It never uses " +
+                    "Bluetooth scans for location, and notifications are used for camera and speed alerts.",
                 style = MaterialTheme.typography.bodyMedium,
             )
             Button(
-                onClick = { launcher.launch(requiredPermissions()) },
+                onClick = { launcher.launch(allRequestedPermissions()) },
                 modifier = Modifier.padding(top = 16.dp),
-            ) { Text("Grant permission") }
+            ) { Text("Grant permissions") }
         }
     }
 }

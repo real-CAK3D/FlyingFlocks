@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import org.json.JSONArray
 import org.json.JSONObject
@@ -23,11 +24,8 @@ class RareBirdStore(private val context: Context) {
         context.rareBirdsDataStore.edit { it[key] = toJson(birds) }
     }
 
-    private suspend fun current(): List<RareBird> {
-        var out: List<RareBird> = emptyList()
-        context.rareBirdsDataStore.edit { out = parse(it[key] ?: "[]") }
-        return out
-    }
+    private suspend fun current(): List<RareBird> =
+        parse(context.rareBirdsDataStore.data.first()[key] ?: "[]")
 
     suspend fun addIfNew(bird: RareBird) {
         val list = current()

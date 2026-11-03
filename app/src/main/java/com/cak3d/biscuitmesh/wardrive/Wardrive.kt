@@ -21,6 +21,11 @@ import kotlinx.coroutines.launch
 /** Source id used for the phone's own radios in a sample's [WardriveSample.sources]. */
 const val PHONE_SOURCE = "phone"
 
+// GPS glitch-rejection thresholds (see WardriveManager.isPlausibleFix).
+private const val MAX_ACCURACY_M = 60f      // ignore fixes fuzzier than this
+private const val MIN_MOVE_M = 25f          // moves under this are always accepted
+private const val MAX_SPEED_MPS = 75.0      // ~168 mph; anything faster is a teleport
+
 enum class WardriveMode { ALL, WIFI, BT }
 
 enum class SampleKind { AP, STATION, BT }
@@ -90,6 +95,12 @@ class WardriveManager(
     @Volatile private var curLon: Double? = null
     @Volatile private var curAcc: Float = 0f
 
+    // Last fix we accepted onto the track, for rejecting GPS glitches (a bad fix
+    // that teleports then snaps back, drawing a long straight line across the map).
+    @Volatile private var lastTrackLat: Double? = null
+    @Volatile private var lastTrackLon: Double? = null
+    @Volatile private var lastTrackMs: Long = 0L
+
     /** Latest dead-zone list, kept current from the store for synchronous checks. */
     @Volatile private var zones: List<DeadZone> = emptyList()
     /** True while suppressed, so we only broadcast on dead-zone transitions. */
@@ -112,11 +123,32 @@ class WardriveManager(
         }
     }
 
+    /**
+     * Rejects GPS fixes that can't be real: very poor accuracy, or a jump from the
+     * last accepted point that would imply an impossible ground speed. The first
+     * fix (and the first after a dead-zone break) always seeds the track.
+     */
+    private fun isPlausibleFix(loc: Location): Boolean {
+        val pLat = lastTrackLat
+        val pLon = lastTrackLon
+        if (pLat == null || pLon == null) return true           // seed point
+        val acc = loc.accuracy
+        if (acc > 0f && acc > MAX_ACCURACY_M) return false       // fix too fuzzy to trust
+        val out = FloatArray(1)
+        Location.distanceBetween(pLat, pLon, loc.latitude, loc.longitude, out)
+        val dist = out[0]
+        if (dist <= MIN_MOVE_M) return true                      // small move: always fine
+        val dtSec = ((loc.time - lastTrackMs).coerceAtLeast(1L)) / 1000.0
+        val speed = dist / dtSec
+        return speed <= MAX_SPEED_MPS
+    }
+
     @SuppressLint("MissingPermission")
     fun start(mode: WardriveMode, usePhone: Boolean = false) {
         if (_state.value.active) return
         lastProcessedMs = System.currentTimeMillis()
         suppressed = false
+        lastTrackLat = null; lastTrackLon = null; lastTrackMs = 0L
         _samples.value = emptyMap()
         _track.value = emptyList()
         _state.update {
@@ -138,6 +170,8 @@ class WardriveManager(
                     }
                     curLat = null
                     curLon = null
+                    // Break the track here so no line is drawn across the dead zone.
+                    lastTrackLat = null; lastTrackLon = null
                     _state.update {
                         it.copy(lastLat = loc.latitude, lastLon = loc.longitude, accuracy = loc.accuracy,
                             speedMps = if (loc.hasSpeed()) loc.speed else it.speedMps,
@@ -148,15 +182,25 @@ class WardriveManager(
                         suppressed = false
                         fleet.broadcast(scanCommand(_state.value.mode))
                     }
-                    curLat = loc.latitude
-                    curLon = loc.longitude
-                    curAcc = loc.accuracy
-                    _track.update { (it + LatLon(loc.latitude, loc.longitude)).takeLast(5000) }
-                    _state.update {
-                        it.copy(lastLat = loc.latitude, lastLon = loc.longitude, accuracy = loc.accuracy,
-                            speedMps = if (loc.hasSpeed()) loc.speed else it.speedMps,
-                            altitudeM = if (loc.hasAltitude()) loc.altitude else it.altitudeM,
-                            inDeadZone = false, deadZoneName = null)
+                    if (isPlausibleFix(loc)) {
+                        curLat = loc.latitude
+                        curLon = loc.longitude
+                        curAcc = loc.accuracy
+                        lastTrackLat = loc.latitude; lastTrackLon = loc.longitude; lastTrackMs = loc.time
+                        _track.update { (it + LatLon(loc.latitude, loc.longitude)).takeLast(5000) }
+                        _state.update {
+                            it.copy(lastLat = loc.latitude, lastLon = loc.longitude, accuracy = loc.accuracy,
+                                speedMps = if (loc.hasSpeed()) loc.speed else it.speedMps,
+                                altitudeM = if (loc.hasAltitude()) loc.altitude else it.altitudeM,
+                                inDeadZone = false, deadZoneName = null)
+                        }
+                    } else {
+                        // Rejected glitch: keep the puck and geotag point where they were,
+                        // so a bad fix neither moves the marker nor draws a straight line.
+                        _state.update {
+                            it.copy(speedMps = if (loc.hasSpeed()) loc.speed else it.speedMps,
+                                inDeadZone = false, deadZoneName = null)
+                        }
                     }
                 }
             }

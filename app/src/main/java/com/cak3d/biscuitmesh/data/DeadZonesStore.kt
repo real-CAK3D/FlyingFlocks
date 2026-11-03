@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import org.json.JSONArray
 import org.json.JSONObject
@@ -42,11 +43,8 @@ class DeadZonesStore(private val context: Context) {
         write(current().filterNot { it.id == id })
     }
 
-    private suspend fun current(): List<DeadZone> {
-        var out: List<DeadZone> = emptyList()
-        context.deadZonesDataStore.edit { out = parse(it[key] ?: "[]") }
-        return out
-    }
+    private suspend fun current(): List<DeadZone> =
+        parse(context.deadZonesDataStore.data.first()[key] ?: "[]")
 
     private suspend fun write(zones: List<DeadZone>) {
         context.deadZonesDataStore.edit { it[key] = toJson(zones) }
