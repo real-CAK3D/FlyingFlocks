@@ -26,7 +26,7 @@ class PhoneSensors(context: Context, private val adapter: BluetoothAdapter?) {
     private val appContext = context.applicationContext
     private val wifi = appContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
 
-    data class Hit(val kind: SampleKind, val id: String, val label: String, val rssi: Int)
+    data class Hit(val kind: SampleKind, val id: String, val label: String, val rssi: Int, val channel: Int = 0)
 
     private var onHit: ((Hit) -> Unit)? = null
     private var scanningWifi = false
@@ -119,7 +119,15 @@ class PhoneSensors(context: Context, private val adapter: BluetoothAdapter?) {
             val bssid = r.BSSID ?: return@forEach
             @Suppress("DEPRECATION")
             val ssid = r.SSID ?: ""
-            cb(Hit(SampleKind.AP, bssid, ssid, r.level))
+            cb(Hit(SampleKind.AP, bssid, ssid, r.level, channelFromFreq(r.frequency)))
         }
+    }
+
+    /** Wi-Fi channel number from a centre frequency in MHz (2.4 GHz and 5 GHz). */
+    private fun channelFromFreq(mhz: Int): Int = when {
+        mhz == 2484 -> 14
+        mhz in 2412..2472 -> (mhz - 2407) / 5      // 2.4 GHz: ch 1-13
+        mhz in 5000..5900 -> (mhz - 5000) / 5       // 5 GHz: ch 32+
+        else -> 0
     }
 }

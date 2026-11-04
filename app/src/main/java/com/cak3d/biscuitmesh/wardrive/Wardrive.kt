@@ -41,9 +41,14 @@ data class WardriveSample(
     val rssi: Int,
     val timeMs: Long,
     val accuracyM: Float = 0f,
+    /** Wi-Fi channel (0 = unknown / not Wi-Fi). Channel >= 32 means the 5 GHz band. */
+    val channel: Int = 0,
     /** Which board(s) — or the phone — saw this point. >1 means a shared sighting. */
     val sources: Set<String> = emptySet(),
-)
+) {
+    /** True for a 5 GHz Wi-Fi network (what the wtBLEep node uniquely catches). */
+    val is5GHz: Boolean get() = channel >= 32
+}
 
 data class WardriveState(
     val active: Boolean = false,
@@ -286,7 +291,7 @@ class WardriveManager(
         if (!matchesMode(hit.kind, _state.value.mode)) return
         val sample = WardriveSample(
             hit.kind, hit.id, hit.label, lat, lon, hit.rssi, System.currentTimeMillis(), curAcc,
-            sources = setOf(PHONE_SOURCE),
+            channel = hit.channel, sources = setOf(PHONE_SOURCE),
         )
         if (mergeSample(sample)) recount()
     }
@@ -316,8 +321,8 @@ class WardriveManager(
         if (msg.type != BiscuitMessage.Type.DATA) return null
         val f = msg.payload.split(",")
         return when (msg.subtype) {
-            "AP" -> if (f.size >= 4) WardriveSample(SampleKind.AP, f[1], f[0], lat, lon, f[3].toIntOrNull() ?: 0, timeMs, acc) else null
-            "STA" -> if (f.size >= 4) WardriveSample(SampleKind.STATION, f[0], f[0], lat, lon, f[3].toIntOrNull() ?: 0, timeMs, acc) else null
+            "AP" -> if (f.size >= 4) WardriveSample(SampleKind.AP, f[1], f[0], lat, lon, f[3].toIntOrNull() ?: 0, timeMs, acc, channel = f[2].toIntOrNull() ?: 0) else null
+            "STA" -> if (f.size >= 4) WardriveSample(SampleKind.STATION, f[0], f[0], lat, lon, f[3].toIntOrNull() ?: 0, timeMs, acc, channel = f.getOrNull(2)?.toIntOrNull() ?: 0) else null
             "BT" -> if (f.size >= 3) WardriveSample(SampleKind.BT, f[1], f[0], lat, lon, f[2].toIntOrNull() ?: 0, timeMs, acc) else null
             else -> null
         }

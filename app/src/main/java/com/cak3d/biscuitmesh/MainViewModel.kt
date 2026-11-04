@@ -119,6 +119,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun disconnectWtf() { appRef.wtfSerial.disconnect() }
     fun pullWtfSaved() { appRef.wtfSerial.requestDump() }
     fun loadWtfSdLog() { appRef.wtfSerial.requestSdDump() }
+    val wtfGps: StateFlow<com.cak3d.biscuitmesh.usb.WtfGps?> = appRef.wtfSerial.gps
+    fun refreshWtfGps() { appRef.wtfSerial.requestGpsStatus() }
 
     // --- Meshtastic ------------------------------------------------------
     val meshLink: StateFlow<com.cak3d.biscuitmesh.mesh.MeshLinkState> = appRef.mesh.link

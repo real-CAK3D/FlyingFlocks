@@ -308,19 +308,30 @@ fun WardriveScreen(vm: MainViewModel) {
                     map.overlays.add(line)
                 }
 
-                // Wi-Fi/BT sightings: all of them by default, only board-seen ones in Biscuit view.
-                if (viewMode == MapViewMode.DEFAULT || viewMode == MapViewMode.BISCUITS) {
+                // Wi-Fi/BT sightings: all by default, board-seen in Biscuit view, 5 GHz in wtBLEep view.
+                if (viewMode == MapViewMode.DEFAULT || viewMode == MapViewMode.BISCUITS || viewMode == MapViewMode.WTBLEEP) {
                     samples.values.asSequence()
-                        .filter { viewMode == MapViewMode.DEFAULT || it.sources.any { src -> src != PHONE_SOURCE } }
+                        .filter {
+                            when (viewMode) {
+                                MapViewMode.BISCUITS -> it.sources.any { src -> src != PHONE_SOURCE }
+                                MapViewMode.WTBLEEP -> it.is5GHz
+                                else -> true
+                            }
+                        }
                         .sortedByDescending { it.timeMs }.take(900).forEach { s ->
                             val shared = s.sources.size > 1
                             val m = Marker(map)
                             m.position = GeoPoint(s.lat, s.lon)
-                            val color = if (viewMode == MapViewMode.BISCUITS) GINGERBREAD else colorForSample(s)
+                            val color = when (viewMode) {
+                                MapViewMode.BISCUITS -> GINGERBREAD
+                                MapViewMode.WTBLEEP -> WTBLEEP_BLUE
+                                else -> colorForSample(s)
+                            }
                             m.icon = dot(color, if (shared) 13 else sizeForKind(s.kind))
                             m.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                            val ch = if (s.channel > 0) "  ch${s.channel}" else ""
                             val seenBy = if (shared) "  ·  seen by ${s.sources.size}" else ""
-                            m.title = "${s.label.ifBlank { s.id }}  ${s.rssi} dBm$seenBy"
+                            m.title = "${s.label.ifBlank { s.id }}  ${s.rssi} dBm$ch$seenBy"
                             map.overlays.add(m)
                         }
                 }
@@ -559,7 +570,9 @@ fun WardriveScreen(vm: MainViewModel) {
 enum class MapStyle(val label: String) { DARK("Dark"), LIGHT("Light"), TOPO("Topo"), SATELLITE("Satellite") }
 
 /** Themed map views: each shows only its own world. Default = the full map. */
-enum class MapViewMode(val label: String) { DEFAULT("All"), FLOCK("Flock"), BISCUITS("Biscuits"), MESH("Mesh") }
+enum class MapViewMode(val label: String) {
+    DEFAULT("All"), FLOCK("Flock"), BISCUITS("Biscuits"), MESH("Mesh"), WTBLEEP("wtBLEep")
+}
 
 /** Mesh-view helper: place GPS-less nodes (a home node) by panning the map and tapping. */
 @Composable
@@ -594,6 +607,7 @@ private fun MeshPlacePanel(
 
 private val GINGERBREAD = AndroidColor.parseColor("#D9893B")   // warm biscuit brown
 private val FLOCK_BLUE = AndroidColor.parseColor("#7DD3FC")    // light blue
+private val WTBLEEP_BLUE = AndroidColor.parseColor("#7DF9FF")  // electric blue — 5 GHz / wtBLEep
 
 /** A translucent full-screen wash that gives each view its mood (over the dark map). */
 private fun viewTint(mode: MapViewMode): androidx.compose.ui.graphics.Color = when (mode) {
@@ -601,6 +615,7 @@ private fun viewTint(mode: MapViewMode): androidx.compose.ui.graphics.Color = wh
     MapViewMode.MESH -> androidx.compose.ui.graphics.Color(0x33330066)      // purple/black cyber
     MapViewMode.BISCUITS -> androidx.compose.ui.graphics.Color(0x2A5A3A1A)  // warm gingerbread
     MapViewMode.FLOCK -> androidx.compose.ui.graphics.Color(0x33001E4D)     // deep blue
+    MapViewMode.WTBLEEP -> androidx.compose.ui.graphics.Color(0x2600333D)   // electric teal
 }
 
 private val TOPO_SOURCE = org.osmdroid.tileprovider.tilesource.XYTileSource(

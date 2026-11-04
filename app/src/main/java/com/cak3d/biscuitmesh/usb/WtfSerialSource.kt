@@ -44,6 +44,9 @@ data class WtfDetection(
     val live: Boolean,
 )
 
+/** The dongle's GPS state, from its board-info report. */
+data class WtfGps(val present: Boolean, val fix: Boolean, val sats: Int)
+
 /** Connection state of the dongle link, surfaced to the UI. */
 enum class WtfLinkState { DISCONNECTED, CONNECTING, CONNECTED }
 
@@ -67,6 +70,10 @@ class WtfSerialSource(context: Context, private val scope: CoroutineScope) {
 
     private val _deviceName = MutableStateFlow<String?>(null)
     val deviceName: StateFlow<String?> = _deviceName.asStateFlow()
+
+    /** Dongle GPS status, once the board has reported it. null until queried. */
+    private val _gps = MutableStateFlow<WtfGps?>(null)
+    val gps: StateFlow<WtfGps?> = _gps.asStateFlow()
 
     // Replay buffer 0: a late collector shouldn't re-see old sightings; extra 64 so a
     // burst of session_det lines during a dump isn't dropped before ingestion.
@@ -172,9 +179,10 @@ class WtfSerialSource(context: Context, private val scope: CoroutineScope) {
         _link.value = WtfLinkState.CONNECTED
         android.util.Log.d(TAG, "connected ${_deviceName.value} dataIf=${data.id} in=${inEp.endpointNumber} out=${outEp?.endpointNumber}")
 
-        // Ask for its current beep config, then (shortly after) replay anything it
-        // caught while unplugged — the same handshake the WTF app uses on connect.
+        // Ask for its current beep config + board status (GPS), then (shortly after)
+        // replay anything it caught while unplugged — the WTF app's connect handshake.
         send(JSONObject().put("cmd", "get_config"))
+        send(JSONObject().put("cmd", "sd_info"))
         startReadLoop(inEp)
     }
 
@@ -218,7 +226,14 @@ class WtfSerialSource(context: Context, private val scope: CoroutineScope) {
             "detection" -> emit(ev, live = true)
             "session_det" -> emit(ev, live = false)
             "sd_det" -> emit(ev, live = false)   // a line of the board's microSD detection log
-            // session_begin/end, sd_info/sd_end, config, *_error carry no sighting.
+            "sd_info" -> {                        // board status, incl. GPS module/fix/sats
+                if (ev.has("gps") || ev.has("gps_fix") || ev.has("sats")) {
+                    val g = WtfGps(ev.optInt("gps") == 1, ev.optInt("gps_fix") == 1, ev.optInt("sats"))
+                    _gps.value = g
+                    android.util.Log.d(TAG, "GPS present=${g.present} fix=${g.fix} sats=${g.sats}")
+                }
+            }
+            // session_begin/end, sd_end, config, *_error carry no sighting.
             else -> Unit
         }
     }
@@ -251,6 +266,11 @@ class WtfSerialSource(context: Context, private val scope: CoroutineScope) {
     /** Load the board's full microSD detection log (XIAO Sense) onto the map. */
     fun requestSdDump() {
         send(JSONObject().put("cmd", "sd_dump").put("from", 0).put("max", 1000))
+    }
+
+    /** Re-query the board's status (including GPS module presence / fix / satellites). */
+    fun requestGpsStatus() {
+        send(JSONObject().put("cmd", "sd_info"))
     }
 
     private fun send(obj: JSONObject) {

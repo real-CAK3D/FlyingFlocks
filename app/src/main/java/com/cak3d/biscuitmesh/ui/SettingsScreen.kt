@@ -380,7 +380,23 @@ private fun WtfSection(vm: MainViewModel) {
         }
 
         if (connected) {
+            val gps by vm.wtfGps.collectAsStateWithLifecycle()
+            val gpsText = gps?.let { g ->
+                when {
+                    !g.present -> "GPS: no module detected"
+                    g.fix -> "GPS: fix · ${g.sats} satellites"
+                    else -> "GPS: searching… ${g.sats} satellites"
+                }
+            } ?: "GPS: tap Check"
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Icon(Icons.Default.MyLocation, contentDescription = null,
+                    tint = if (gps?.fix == true) Color(0xFF3DDC84) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                Text(gpsText, style = MaterialTheme.typography.bodyMedium)
+            }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { vm.refreshWtfGps() }, modifier = Modifier.weight(1f)) {
+                    Text("Check GPS")
+                }
                 OutlinedButton(onClick = { vm.pullWtfSaved() }, modifier = Modifier.weight(1f)) {
                     Text("Pull saved")
                 }
