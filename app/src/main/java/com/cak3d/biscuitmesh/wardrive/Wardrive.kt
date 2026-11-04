@@ -28,7 +28,7 @@ private const val MAX_SPEED_MPS = 75.0      // ~168 mph; anything faster is a te
 
 enum class WardriveMode { ALL, WIFI, BT }
 
-enum class SampleKind { AP, STATION, BT }
+enum class SampleKind { AP, STATION, BT, RF }
 
 data class LatLon(val lat: Double, val lon: Double)
 
@@ -324,6 +324,13 @@ class WardriveManager(
             "AP" -> if (f.size >= 4) WardriveSample(SampleKind.AP, f[1], f[0], lat, lon, f[3].toIntOrNull() ?: 0, timeMs, acc, channel = f[2].toIntOrNull() ?: 0) else null
             "STA" -> if (f.size >= 4) WardriveSample(SampleKind.STATION, f[0], f[0], lat, lon, f[3].toIntOrNull() ?: 0, timeMs, acc, channel = f.getOrNull(2)?.toIntOrNull() ?: 0) else null
             "BT" -> if (f.size >= 3) WardriveSample(SampleKind.BT, f[1], f[0], lat, lon, f[2].toIntOrNull() ?: 0, timeMs, acc) else null
+            // Sub-GHz activity from a CC1101: DATA:RF:<freqMHz>,<rssi>. There's no device
+            // id, so key each ping by frequency + a ~11 m location bucket — a spot that keeps
+            // firing merges, while moving drops a new dot, giving a sub-GHz activity heatmap.
+            "RF" -> if (f.size >= 2) WardriveSample(
+                SampleKind.RF, "rf:${f[0]}:${(lat * 1e4).toInt()},${(lon * 1e4).toInt()}",
+                "${f[0]} MHz", lat, lon, f[1].toIntOrNull() ?: 0, timeMs, acc,
+            ) else null
             else -> null
         }
     }

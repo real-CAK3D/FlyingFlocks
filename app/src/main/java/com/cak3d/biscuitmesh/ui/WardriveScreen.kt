@@ -308,14 +308,18 @@ fun WardriveScreen(vm: MainViewModel) {
                     map.overlays.add(line)
                 }
 
-                // Wi-Fi/BT sightings: all by default, board-seen in Biscuit view, 5 GHz in wtBLEep view.
-                if (viewMode == MapViewMode.DEFAULT || viewMode == MapViewMode.BISCUITS || viewMode == MapViewMode.WTBLEEP) {
+                // Sightings: everything by default, board-seen in Biscuit view, 5 GHz in
+                // wtBLEep view, sub-GHz pings in the Sub-GHz view. RF is kept out of the
+                // other views so each theme shows only its own band.
+                if (viewMode == MapViewMode.DEFAULT || viewMode == MapViewMode.BISCUITS ||
+                    viewMode == MapViewMode.WTBLEEP || viewMode == MapViewMode.RF) {
                     samples.values.asSequence()
                         .filter {
                             when (viewMode) {
-                                MapViewMode.BISCUITS -> it.sources.any { src -> src != PHONE_SOURCE }
+                                MapViewMode.BISCUITS -> it.kind != SampleKind.RF && it.sources.any { src -> src != PHONE_SOURCE }
                                 MapViewMode.WTBLEEP -> it.is5GHz
-                                else -> true
+                                MapViewMode.RF -> it.kind == SampleKind.RF
+                                else -> it.kind != SampleKind.RF
                             }
                         }
                         .sortedByDescending { it.timeMs }.take(900).forEach { s ->
@@ -325,6 +329,7 @@ fun WardriveScreen(vm: MainViewModel) {
                             val color = when (viewMode) {
                                 MapViewMode.BISCUITS -> GINGERBREAD
                                 MapViewMode.WTBLEEP -> WTBLEEP_BLUE
+                                MapViewMode.RF -> RF_AMBER
                                 else -> colorForSample(s)
                             }
                             m.icon = dot(color, if (shared) 13 else sizeForKind(s.kind))
@@ -571,7 +576,7 @@ enum class MapStyle(val label: String) { DARK("Dark"), LIGHT("Light"), TOPO("Top
 
 /** Themed map views: each shows only its own world. Default = the full map. */
 enum class MapViewMode(val label: String) {
-    DEFAULT("All"), FLOCK("Flock"), BISCUITS("Biscuits"), MESH("Mesh"), WTBLEEP("wtBLEep")
+    DEFAULT("All"), FLOCK("Flock"), BISCUITS("Biscuits"), MESH("Mesh"), WTBLEEP("wtBLEep"), RF("Sub-GHz")
 }
 
 /** Mesh-view helper: place GPS-less nodes (a home node) by panning the map and tapping. */
@@ -608,6 +613,7 @@ private fun MeshPlacePanel(
 private val GINGERBREAD = AndroidColor.parseColor("#D9893B")   // warm biscuit brown
 private val FLOCK_BLUE = AndroidColor.parseColor("#7DD3FC")    // light blue
 private val WTBLEEP_BLUE = AndroidColor.parseColor("#7DF9FF")  // electric blue — 5 GHz / wtBLEep
+private val RF_AMBER = AndroidColor.parseColor("#FF8A3D")      // warm amber — sub-GHz / 433 MHz radio
 
 /** A translucent full-screen wash that gives each view its mood (over the dark map). */
 private fun viewTint(mode: MapViewMode): androidx.compose.ui.graphics.Color = when (mode) {
@@ -616,6 +622,7 @@ private fun viewTint(mode: MapViewMode): androidx.compose.ui.graphics.Color = wh
     MapViewMode.BISCUITS -> androidx.compose.ui.graphics.Color(0x2A5A3A1A)  // warm gingerbread
     MapViewMode.FLOCK -> androidx.compose.ui.graphics.Color(0x33001E4D)     // deep blue
     MapViewMode.WTBLEEP -> androidx.compose.ui.graphics.Color(0x2600333D)   // electric teal
+    MapViewMode.RF -> androidx.compose.ui.graphics.Color(0x26331A00)        // warm amber — sub-GHz
 }
 
 private val TOPO_SOURCE = org.osmdroid.tileprovider.tilesource.XYTileSource(
@@ -1073,6 +1080,7 @@ private fun sizeForKind(kind: SampleKind): Int = when (kind) {
     SampleKind.AP -> 11
     SampleKind.STATION -> 8
     SampleKind.BT -> 10
+    SampleKind.RF -> 9
 }
 
 private fun hazardColor(kind: HazardKind): Int = when (kind) {

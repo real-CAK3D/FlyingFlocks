@@ -75,6 +75,7 @@ class ProgressManager(
             val track = when (s.kind) {
                 SampleKind.AP, SampleKind.STATION -> wifiTrack(s.is5GHz)
                 SampleKind.BT -> ProgressTrack.BLUETOOTH
+                SampleKind.RF -> return@forEach   // sub-GHz band activity isn't a levelling find
             }
             val bonus = if (s.label.isBlank()) 7 else 0   // hidden networks / unnamed beacons are juicier
             if (award(track, "s:${s.id}", bonus)) changed = true
@@ -100,6 +101,7 @@ class ProgressManager(
         val track = when (kind) {
             SampleKind.AP, SampleKind.STATION -> wifiTrack(channel >= 32)
             SampleKind.BT -> ProgressTrack.BLUETOOTH
+            SampleKind.RF -> return   // phone radios never emit sub-GHz
         }
         if (award(track, "s:$id", if (label.isBlank()) 7 else 0)) commit()
     }

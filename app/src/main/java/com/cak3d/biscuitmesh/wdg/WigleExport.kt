@@ -36,6 +36,7 @@ object WigleExport {
                 SampleKind.AP -> "WIFI"
                 SampleKind.BT -> "BLE"
                 SampleKind.STATION -> return@forEach
+                SampleKind.RF -> return@forEach   // sub-GHz activity isn't a WiGLE AP/BLE row
             }
             val first = fmt.format(Date(s.timeMs))
             val acc = if (s.accuracyM > 0f) s.accuracyM.toInt().toString() else ""
