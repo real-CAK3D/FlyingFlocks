@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Radar
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SettingsInputAntenna
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Button
@@ -72,6 +73,7 @@ import com.cak3d.biscuitmesh.ui.RareBirdsScreen
 import com.cak3d.biscuitmesh.ui.RunToolScreen
 import com.cak3d.biscuitmesh.ui.SettingsScreen
 import com.cak3d.biscuitmesh.ui.StatsScreen
+import com.cak3d.biscuitmesh.ui.SubGhzScreen
 import com.cak3d.biscuitmesh.ui.WardriveScreen
 import com.cak3d.biscuitmesh.ui.WifiScreen
 import com.cak3d.biscuitmesh.ui.theme.BiscuitMeshTheme
@@ -123,6 +125,7 @@ private val TABS = listOf(
     Tab("wardrive", "Wardrive", Icons.Default.Map),
     Tab("wifi", "WiFi", Icons.Default.Wifi),
     Tab("bluetooth", "Bluetooth", Icons.Default.Bluetooth),
+    Tab("subghz", "Sub-GHz", Icons.Default.SettingsInputAntenna),
     Tab("misc", "Misc", Icons.Default.Apps),
 )
 
@@ -236,6 +239,15 @@ private fun MainShell(vm: MainViewModel) {
                 composable("wardrive") { WardriveScreen(vm) }
                 composable("wifi") { WifiScreen(vm, onOpenTool = { nav.navigate("runtool/$it") }) }
                 composable("bluetooth") { BluetoothScreen(vm, onOpenTool = { nav.navigate("runtool/$it") }) }
+                composable("subghz") {
+                    SubGhzScreen(vm, onOpenMap = {
+                        nav.navigate("wardrive") {
+                            popUpTo("fleet") { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    })
+                }
                 composable("misc") { MiscScreen(onOpenTool = { nav.navigate("runtool/$it") }) }
                 composable("rarebirds") {
                     RareBirdsScreen(

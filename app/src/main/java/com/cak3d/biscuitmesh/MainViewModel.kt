@@ -263,6 +263,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun connect(address: String): Boolean = fleet?.connect(address) ?: false
     fun disconnect(address: String) = fleet?.disconnect(address)
+
+    /** Tell connected boards to start a full sweep — WiFi + sub-GHz — which drives DATA:RF. */
+    fun startSubGhzSweep() { fleet?.broadcast(command("scanall")) }
+    fun stopSubGhzSweep() { fleet?.broadcast(command("stopscan")) }
     fun connectAll() = fleet?.connectAll()
     fun disconnectAll() = fleet?.disconnectAll()
     fun forget(address: String) = fleet?.forget(address)
