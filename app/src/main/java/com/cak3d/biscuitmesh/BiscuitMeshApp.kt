@@ -23,7 +23,10 @@ import com.cak3d.biscuitmesh.progress.ProgressManager
 import com.cak3d.biscuitmesh.progress.ProgressStore
 import com.cak3d.biscuitmesh.sensors.PhoneScanManager
 import com.cak3d.biscuitmesh.sensors.PhoneSensors
+import com.cak3d.biscuitmesh.geo.Hazard
 import com.cak3d.biscuitmesh.usb.UsbDetector
+import com.cak3d.biscuitmesh.usb.WtfCamera
+import com.cak3d.biscuitmesh.usb.WtfSerialSource
 import com.cak3d.biscuitmesh.wardrive.DriveStore
 import com.cak3d.biscuitmesh.wardrive.WardriveManager
 import kotlinx.coroutines.CoroutineScope
@@ -74,6 +77,19 @@ class BiscuitMeshApp : Application() {
     /** Watches for USB-OTG devices (serial boards, dongles) being plugged in. */
     val usbDetector: UsbDetector by lazy { UsbDetector(this) }
 
+    /** The plugged-in What the Flock dongle (USB-serial), when connected. */
+    val wtfSerial: WtfSerialSource by lazy { WtfSerialSource(this, appScope) }
+
+    /** Meshtastic mesh — connects to a node over BLE and reads its node database. */
+    val mesh: com.cak3d.biscuitmesh.mesh.MeshtasticManager by lazy {
+        com.cak3d.biscuitmesh.mesh.MeshtasticManager(this, bluetoothManager?.adapter)
+    }
+
+    /** Manual map locations for GPS-less mesh nodes (e.g. a home node). */
+    val meshPlacementStore: com.cak3d.biscuitmesh.data.MeshPlacementStore by lazy {
+        com.cak3d.biscuitmesh.data.MeshPlacementStore(this)
+    }
+
     private val rareBirdStore: RareBirdStore by lazy { RareBirdStore(this) }
 
     val rareBirds: RareBirdManager by lazy { RareBirdManager(appScope, rareBirdStore, wardrive) }
@@ -107,7 +123,7 @@ class BiscuitMeshApp : Application() {
 
     /** Scores every Wi-Fi/BLE find and camera onto its track; gates the overall rank. */
     val progress: ProgressManager by lazy {
-        ProgressManager(appScope, progressStore, wardrive, hazards)
+        ProgressManager(appScope, progressStore, wardrive, hazards, rareBirds)
     }
 
     /** Separate phone-radio instance for the standalone WiFi/BT tab scans. */
@@ -126,6 +142,41 @@ class BiscuitMeshApp : Application() {
         return found.size
     }
 
+    @Volatile private var wtfEnabled = true
+    @Volatile private var vibrateEnabled = true
+
+    /** Short buzz for a camera alert (respects the vibrate-on-alert setting at the call site). */
+    private fun buzz() {
+        val v = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            (getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? android.os.VibratorManager)?.defaultVibrator
+        } else {
+            @Suppress("DEPRECATION") getSystemService(Context.VIBRATOR_SERVICE) as? android.os.Vibrator
+        } ?: return
+        runCatching {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                v.vibrate(android.os.VibrationEffect.createOneShot(250, android.os.VibrationEffect.DEFAULT_AMPLITUDE))
+            } else {
+                @Suppress("DEPRECATION") v.vibrate(250)
+            }
+        }
+    }
+
+    /**
+     * Turns a set of dongle/backup camera sightings into map hazards. Each becomes a
+     * Flock/ALPR [Hazard] keyed by its MAC (so the live stream, the board's saved
+     * session and an imported backup all dedup to one pin). Returns how many had a
+     * usable location and were merged. Used by the import path and reusable in tests.
+     */
+    suspend fun ingestWtfCameras(cams: List<WtfCamera>): Int {
+        val hz = cams.mapNotNull { c ->
+            val lat = c.lat ?: return@mapNotNull null
+            val lon = c.lon ?: return@mapNotNull null
+            Hazard("wtf:${c.mac}", HazardKind.FLOCK, lat, lon, c.name.ifBlank { c.mac })
+        }
+        hazardStore.merge(hz)
+        return hz.size
+    }
+
     override fun onCreate() {
         super.onCreate()
         usbDetector.start()
@@ -135,6 +186,25 @@ class BiscuitMeshApp : Application() {
 
         // Voice: honour the on/off setting, and speak a camera alert once per hazard.
         appScope.launch { settingsStore.voiceAlerts.collect { speaker.enabled = it } }
+        appScope.launch { settingsStore.vibrateAlerts.collect { vibrateEnabled = it } }
+
+        // Mirror the dongle-source toggle, and plot its live sightings as Flock
+        // hazards (using the sighting's own GPS if it has one, else the current fix).
+        appScope.launch { settingsStore.wtfSourceEnabled.collect { wtfEnabled = it } }
+        appScope.launch {
+            wtfSerial.detections.collect { d ->
+                if (!wtfEnabled) return@collect
+                // A live sighting with no board GPS is happening here now, so the phone's
+                // current fix is right. A replayed saved sighting was seen elsewhere earlier,
+                // so only plot it if it carries its own location — never borrow the current fix.
+                val lat = d.lat ?: (if (d.live) wardrive?.state?.value?.lastLat else null) ?: return@collect
+                val lon = d.lon ?: (if (d.live) wardrive?.state?.value?.lastLon else null) ?: return@collect
+                hazardStore.merge(listOf(
+                    Hazard("wtf:${d.mac}", HazardKind.FLOCK, lat, lon, d.ssid.ifBlank { d.mac })
+                ))
+            }
+        }
+
         hazards?.let { hz ->
             appScope.launch {
                 var lastId: String? = null
@@ -142,6 +212,7 @@ class BiscuitMeshApp : Application() {
                     if (a == null) { lastId = null; return@collect }
                     if (a.hazard.id == lastId) return@collect
                     lastId = a.hazard.id
+                    if (vibrateEnabled) buzz()
                     val kind = when (a.hazard.kind) {
                         HazardKind.FLOCK -> "Flock camera"
                         HazardKind.SPEED_CAMERA -> "Speed camera"

@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.BluetoothSearching
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Radar
@@ -60,6 +61,7 @@ import androidx.navigation.compose.rememberNavController
 import com.cak3d.biscuitmesh.ui.BluetoothScreen
 import com.cak3d.biscuitmesh.ui.DeviceDetailScreen
 import com.cak3d.biscuitmesh.ui.DrivesScreen
+import com.cak3d.biscuitmesh.ui.FindsScreen
 import com.cak3d.biscuitmesh.ui.FleetScreen
 import com.cak3d.biscuitmesh.ui.ConstellationBackground
 import com.cak3d.biscuitmesh.ui.MiscScreen
@@ -67,6 +69,7 @@ import com.cak3d.biscuitmesh.ui.PlacesScreen
 import com.cak3d.biscuitmesh.ui.RareBirdsScreen
 import com.cak3d.biscuitmesh.ui.RunToolScreen
 import com.cak3d.biscuitmesh.ui.SettingsScreen
+import com.cak3d.biscuitmesh.ui.StatsScreen
 import com.cak3d.biscuitmesh.ui.WardriveScreen
 import com.cak3d.biscuitmesh.ui.WifiScreen
 import com.cak3d.biscuitmesh.ui.theme.BiscuitMeshTheme
@@ -76,6 +79,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        handleUsbIntent(intent)
         setContent {
             BiscuitMeshTheme {
                 Surface(
@@ -83,9 +87,29 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background,
                 ) {
                     val vm: MainViewModel = viewModel()
+                    val keepAwake by vm.keepAwake.collectAsStateWithLifecycle()
+                    androidx.compose.runtime.DisposableEffect(keepAwake) {
+                        if (keepAwake) window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                        else window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                        onDispose { }
+                    }
                     PermissionGate { MainShell(vm) }
                 }
             }
+        }
+    }
+
+    // singleTask: a dongle plugged in while we're running re-delivers through onNewIntent.
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleUsbIntent(intent)
+    }
+
+    /** Plugging in the WTF dongle launches/foregrounds us with this action — auto-connect. */
+    private fun handleUsbIntent(intent: android.content.Intent?) {
+        if (intent?.action == android.hardware.usb.UsbManager.ACTION_USB_DEVICE_ATTACHED) {
+            (application as? BiscuitMeshApp)?.wtfSerial?.connect()
         }
     }
 }
@@ -127,6 +151,9 @@ private fun MainShell(vm: MainViewModel) {
                         }
                         IconButton(onClick = { nav.navigate("drives") }) {
                             Icon(Icons.Default.History, contentDescription = "Drives")
+                        }
+                        IconButton(onClick = { nav.navigate("stats") }) {
+                            Icon(Icons.Default.Insights, contentDescription = "Stats & Data")
                         }
                         IconButton(onClick = { nav.navigate("settings") }) {
                             Icon(Icons.Default.Settings, contentDescription = "Settings")
@@ -205,7 +232,18 @@ private fun MainShell(vm: MainViewModel) {
                 composable("wifi") { WifiScreen(vm, onOpenTool = { nav.navigate("runtool/$it") }) }
                 composable("bluetooth") { BluetoothScreen(vm, onOpenTool = { nav.navigate("runtool/$it") }) }
                 composable("misc") { MiscScreen(onOpenTool = { nav.navigate("runtool/$it") }) }
-                composable("rarebirds") { RareBirdsScreen(vm = vm, onBack = { nav.popBackStack() }) }
+                composable("rarebirds") {
+                    RareBirdsScreen(
+                        vm = vm,
+                        onBack = { nav.popBackStack() },
+                        onOpenFinds = { kind -> nav.navigate("finds/$kind") },
+                        onOpenStats = { nav.navigate("stats") },
+                    )
+                }
+                composable("finds/{kind}") { entry ->
+                    FindsScreen(vm = vm, kind = entry.arguments?.getString("kind") ?: "WIFI",
+                        onBack = { nav.popBackStack() })
+                }
                 composable("places") {
                     PlacesScreen(
                         vm = vm,
@@ -221,6 +259,7 @@ private fun MainShell(vm: MainViewModel) {
                 }
                 composable("settings") { SettingsScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("drives") { DrivesScreen(vm = vm, onBack = { nav.popBackStack() }) }
+                composable("stats") { StatsScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("device") {
                     val address by vm.selected.collectAsStateWithLifecycle()
                     DeviceDetailScreen(vm = vm, address = address, onBack = { nav.popBackStack() })

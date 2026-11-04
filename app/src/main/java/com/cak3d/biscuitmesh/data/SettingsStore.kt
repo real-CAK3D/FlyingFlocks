@@ -22,6 +22,9 @@ class SettingsStore(private val context: Context) {
     private val useMphKey = booleanPreferencesKey("use_mph")
     private val voiceAlertsKey = booleanPreferencesKey("voice_alerts")
     private val mapStyleKey = stringPreferencesKey("map_style")
+    private val wtfSourceEnabledKey = booleanPreferencesKey("wtf_source_enabled")
+    private val keepAwakeKey = booleanPreferencesKey("keep_awake")
+    private val vibrateAlertsKey = booleanPreferencesKey("vibrate_alerts")
 
     /** True once the operator has acknowledged the authorized-use-only terms. */
     val authorizedUse: Flow<Boolean> =
@@ -93,5 +96,29 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setMapStyle(style: String) {
         context.settingsDataStore.edit { it[mapStyleKey] = style }
+    }
+
+    /** Ingest live sightings from a plugged-in What the Flock dongle. On by default. */
+    val wtfSourceEnabled: Flow<Boolean> =
+        context.settingsDataStore.data.map { it[wtfSourceEnabledKey] ?: true }
+
+    suspend fun setWtfSourceEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit { it[wtfSourceEnabledKey] = enabled }
+    }
+
+    /** Keep the screen on everywhere in the app, not just on the wardrive map. Off by default. */
+    val keepAwake: Flow<Boolean> =
+        context.settingsDataStore.data.map { it[keepAwakeKey] ?: false }
+
+    suspend fun setKeepAwake(enabled: Boolean) {
+        context.settingsDataStore.edit { it[keepAwakeKey] = enabled }
+    }
+
+    /** Buzz the phone when a camera/speed alert fires. On by default. */
+    val vibrateAlerts: Flow<Boolean> =
+        context.settingsDataStore.data.map { it[vibrateAlertsKey] ?: true }
+
+    suspend fun setVibrateAlerts(enabled: Boolean) {
+        context.settingsDataStore.edit { it[vibrateAlertsKey] = enabled }
     }
 }

@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -68,6 +69,94 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         appRef.settingsStore.mapStyle.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "DARK")
 
     fun setMapStyle(style: String) { viewModelScope.launch { appRef.settingsStore.setMapStyle(style) } }
+
+    // --- What the Flock dongle (USB-serial) ------------------------------
+    /** Link state of the plugged-in WTF dongle. */
+    val wtfLink: StateFlow<com.cak3d.biscuitmesh.usb.WtfLinkState> = appRef.wtfSerial.link
+    val wtfDeviceName: StateFlow<String?> = appRef.wtfSerial.deviceName
+
+    /** Whether the dongle's live sightings are plotted on the map. On by default. */
+    val wtfSourceEnabled: StateFlow<Boolean> =
+        appRef.settingsStore.wtfSourceEnabled.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    fun setWtfSourceEnabled(on: Boolean) { viewModelScope.launch { appRef.settingsStore.setWtfSourceEnabled(on) } }
+
+    // --- Screen / alerts / export ----------------------------------------
+    val keepAwake: StateFlow<Boolean> =
+        appRef.settingsStore.keepAwake.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    fun setKeepAwake(on: Boolean) { viewModelScope.launch { appRef.settingsStore.setKeepAwake(on) } }
+
+    val vibrateAlerts: StateFlow<Boolean> =
+        appRef.settingsStore.vibrateAlerts.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    fun setVibrateAlerts(on: Boolean) { viewModelScope.launch { appRef.settingsStore.setVibrateAlerts(on) } }
+
+    /** All cameras currently on the map (Overpass + dongle + imported), for export. */
+    val hazardsState: StateFlow<List<Hazard>> =
+        hazards.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** Cameras as CSV — the same shape as a What the Flock camera export. */
+    fun camerasCsv(): String {
+        val sb = StringBuilder("id,kind,lat,lon,name\n")
+        hazardsState.value.forEach { h ->
+            fun cell(v: String) = if (v.any { it == ',' || it == '"' || it == '\n' }) "\"${v.replace("\"", "\"\"")}\"" else v
+            sb.append("${cell(h.id)},${h.kind.name},${h.lat},${h.lon},${cell(h.name)}\n")
+        }
+        return sb.toString()
+    }
+
+    /** Cameras as KML, so they open straight into Google Earth / Maps. */
+    fun camerasKml(): String {
+        fun esc(s: String) = s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        val pins = hazardsState.value.joinToString("") { h ->
+            "<Placemark><name>${esc(h.name.ifBlank { h.id })}</name>" +
+                "<description>${esc(h.kind.name)}</description>" +
+                "<Point><coordinates>${h.lon},${h.lat},0</coordinates></Point></Placemark>"
+        }
+        return "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
+            "<kml xmlns=\"http://www.opengis.net/kml/2.2\"><Document><name>Flying Flocks cameras</name>$pins</Document></kml>"
+    }
+    fun connectWtf() { appRef.wtfSerial.connect() }
+    fun disconnectWtf() { appRef.wtfSerial.disconnect() }
+    fun pullWtfSaved() { appRef.wtfSerial.requestDump() }
+    fun loadWtfSdLog() { appRef.wtfSerial.requestSdDump() }
+
+    // --- Meshtastic ------------------------------------------------------
+    val meshLink: StateFlow<com.cak3d.biscuitmesh.mesh.MeshLinkState> = appRef.mesh.link
+    val meshNodes: StateFlow<List<com.cak3d.biscuitmesh.mesh.MeshNode>> =
+        appRef.mesh.nodes
+            .map { it.values.sortedBy { n -> n.name } }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    fun connectMesh() { appRef.mesh.scanAndConnect() }
+    fun disconnectMesh() { appRef.mesh.disconnect() }
+
+    /** Manual map locations for GPS-less mesh nodes. */
+    val meshPlacements: StateFlow<Map<Long, Pair<Double, Double>>> =
+        appRef.meshPlacementStore.placements.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+    fun placeMeshNode(num: Long, lat: Double, lon: Double) {
+        viewModelScope.launch { appRef.meshPlacementStore.place(num, lat, lon) }
+    }
+
+    /**
+     * Imports a What the Flock backup file's text: parses it and drops every located
+     * camera onto the map. Reports the outcome through [importResult] for a toast.
+     */
+    private val _importResult = MutableStateFlow<String?>(null)
+    val importResult: StateFlow<String?> = _importResult.asStateFlow()
+    fun clearImportResult() { _importResult.value = null }
+
+    fun importWtfBackup(text: String) {
+        viewModelScope.launch {
+            val cams = runCatching { com.cak3d.biscuitmesh.usb.parseWtfBackup(text) }
+                .getOrElse { _importResult.value = "Import failed: ${it.message}"; return@launch }
+            val located = appRef.ingestWtfCameras(cams)
+            val skipped = cams.size - located
+            _importResult.value = buildString {
+                append("Imported $located camera")
+                if (located != 1) append("s")
+                if (skipped > 0) append(" ($skipped had no location)")
+            }
+        }
+    }
 
     // --- Navigation / saved places ---------------------------------------
     val places: Flow<List<Place>> = appRef.placesStore.places
@@ -249,6 +338,42 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     // --- Drive history -----------------------------------------------------
     val drives: Flow<List<com.cak3d.biscuitmesh.wardrive.DriveSession>> = appRef.drivesStore.drives
 
+    /** Snapshot of drives for the Stats screen and backup export. */
+    val drivesState: StateFlow<List<com.cak3d.biscuitmesh.wardrive.DriveSession>> =
+        drives.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /**
+     * A full Flying Flocks data backup: cameras on the map, saved drives, and the
+     * progression summary — the "all the data" export, as JSON text.
+     */
+    fun backupJson(): String {
+        val root = org.json.JSONObject()
+        root.put("app", "flying-flocks")
+        root.put("version", 1)
+        root.put("exportedAt", System.currentTimeMillis())
+
+        val cams = org.json.JSONArray()
+        hazardsState.value.forEach { h ->
+            cams.put(org.json.JSONObject().put("id", h.id).put("kind", h.kind.name)
+                .put("lat", h.lat).put("lon", h.lon).put("name", h.name))
+        }
+        root.put("cameras", cams)
+
+        val dr = org.json.JSONArray()
+        drivesState.value.forEach { d ->
+            dr.put(org.json.JSONObject().put("id", d.id).put("start", d.startMs).put("end", d.endMs)
+                .put("wifi", d.wifiCount).put("bt", d.btCount).put("cameras", d.cameraCount)
+                .put("distanceM", d.distanceM).put("uploaded", d.uploaded))
+        }
+        root.put("drives", dr)
+
+        val p = progress.value
+        root.put("progress", org.json.JSONObject().put("rank", p.rank).put("rankName", p.rankName)
+            .put("levelXp", p.levelXp).put("totalFinds", p.totalFinds).put("cameraBoostXp", p.cameraBoostXp)
+            .put("bonusLevels", p.bonusLevels))
+        return root.toString(2)
+    }
+
     fun deleteDrive(id: String) { viewModelScope.launch { appRef.drivesStore.remove(id) } }
 
     /** Re-uploads a saved drive's capture to WDGWars. */
@@ -302,6 +427,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun removeDeadZone(id: String) {
         viewModelScope.launch { appRef.deadZonesStore.remove(id) }
+    }
+
+    fun setDeadZoneRadius(id: String, radiusM: Double) {
+        viewModelScope.launch { appRef.deadZonesStore.setRadius(id, radiusM) }
     }
 
     /**

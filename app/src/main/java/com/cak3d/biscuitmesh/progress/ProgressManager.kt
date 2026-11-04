@@ -15,19 +15,23 @@ import kotlinx.coroutines.launch
 
 /**
  * The levelling engine. Every unique Wi-Fi/BLE hit and every discovered camera
- * scores XP on its track exactly once (ever), and the aggregate rank is gated
- * behind the weakest track. Persistence is debounced so a busy drive doesn't
- * hammer disk.
+ * scores XP exactly once (ever); the rank is your level for all that XP together,
+ * so Wi-Fi/BT volume drives it and each camera is a one-time boost. Persistence is
+ * debounced so a busy drive doesn't hammer disk.
  */
 class ProgressManager(
     private val scope: CoroutineScope,
     private val store: ProgressStore,
     wardrive: WardriveManager?,
     hazards: HazardManager?,
+    rareBirds: com.cak3d.biscuitmesh.hunts.RareBirdManager? = null,
 ) {
     private val xp = HashMap<ProgressTrack, Int>()
     private val count = HashMap<ProgressTrack, Int>()
     private val awarded = LinkedHashSet<String>()
+
+    /** Each captured rare bird is worth a full extra rank. */
+    @Volatile private var bonusLevels = 0
 
     private val _state = MutableStateFlow(rebuild())
     val state: StateFlow<Progress> = _state.asStateFlow()
@@ -45,6 +49,14 @@ class ProgressManager(
             }
             hazards?.let { hz ->
                 launch { hz.hazards.collect { list -> awardHazards(list) } }
+            }
+            rareBirds?.let { rb ->
+                launch {
+                    rb.birds.collect { birds ->
+                        val captured = birds.count { it.captured }
+                        if (captured != bonusLevels) { bonusLevels = captured; commit() }
+                    }
+                }
             }
         }
         // Debounced persistence: coalesce bursts of awards into one write.
@@ -109,7 +121,7 @@ class ProgressManager(
     }
 
     private fun rebuild(): Progress =
-        progressFrom(ProgressTrack.entries.map { TrackState(it, xp[it] ?: 0, count[it] ?: 0) })
+        progressFrom(ProgressTrack.entries.map { TrackState(it, xp[it] ?: 0, count[it] ?: 0) }, bonusLevels)
 
     /** Camera count so far; drives how far afield the "find cameras" sweep reaches. */
     fun cameraFinds(): Int =

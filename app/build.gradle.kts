@@ -12,8 +12,8 @@ android {
         applicationId = "com.cak3d.biscuitmesh"
         minSdk = 26
         targetSdk = 36
-        versionCode = 22
-        versionName = "0.12.0"
+        versionCode = 30
+        versionName = "0.20.0"
         vectorDrawables { useSupportLibrary = true }
     }
 

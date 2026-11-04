@@ -18,6 +18,8 @@ import android.hardware.SensorManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,11 +35,13 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -121,6 +125,8 @@ fun WardriveScreen(vm: MainViewModel) {
     val route by vm.activeRoute.collectAsStateWithLifecycle()
     val navState by vm.navState.collectAsStateWithLifecycle()
     val savedMapStyle by vm.mapStyle.collectAsStateWithLifecycle()
+    val meshNodes by vm.meshNodes.collectAsStateWithLifecycle()
+    val meshPlacements by vm.meshPlacements.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
 
@@ -214,6 +220,16 @@ fun WardriveScreen(vm: MainViewModel) {
     // What-the-Flock-style controls: follow the vehicle, layer toggles, telemetry.
     var followMode by remember { mutableStateOf(true) }
     var menuOpen by remember { mutableStateOf(false) }
+    var showOffline by remember { mutableStateOf(false) }
+    var viewMode by remember { mutableStateOf(MapViewMode.DEFAULT) }
+    // Mesh nodes with an effective location: their own GPS, or a manual placement.
+    val placedMesh = remember(meshNodes, meshPlacements) {
+        meshNodes.mapNotNull { n ->
+            val lat = n.lat ?: meshPlacements[n.num]?.first
+            val lon = n.lon ?: meshPlacements[n.num]?.second
+            if (lat != null && lon != null) Triple(n, lat, lon) else null
+        }
+    }
     var showCameras by remember { mutableStateOf(true) }
     var showPlaces by remember { mutableStateOf(true) }
     var showBoards by remember { mutableStateOf(true) }
@@ -226,8 +242,12 @@ fun WardriveScreen(vm: MainViewModel) {
     LaunchedEffect(navState != null) { if (navState != null) followMode = true }
     val places by vm.places.collectAsStateWithLifecycle(initialValue = emptyList())
 
-    LaunchedEffect(mapStyle) {
-        when (mapStyle) {
+    LaunchedEffect(mapStyle, viewMode) {
+        if (viewMode != MapViewMode.DEFAULT) {
+            // Themed views always use a dark base so their coloured markers pop.
+            mapView.setTileSource(TileSourceFactory.MAPNIK)
+            mapView.overlayManager.tilesOverlay.setColorFilter(TilesOverlay.INVERT_COLORS)
+        } else when (mapStyle) {
             MapStyle.DARK -> { mapView.setTileSource(TileSourceFactory.MAPNIK); mapView.overlayManager.tilesOverlay.setColorFilter(TilesOverlay.INVERT_COLORS) }
             MapStyle.LIGHT -> { mapView.setTileSource(TileSourceFactory.MAPNIK); mapView.overlayManager.tilesOverlay.setColorFilter(null) }
             MapStyle.TOPO -> { mapView.setTileSource(TOPO_SOURCE); mapView.overlayManager.tilesOverlay.setColorFilter(null) }
@@ -269,7 +289,7 @@ fun WardriveScreen(vm: MainViewModel) {
                 map.overlays.add(rotationOverlay)
 
                 // WDG owned-territory cells first, so samples/track draw on top.
-                cells.forEach { c ->
+                if (viewMode == MapViewMode.DEFAULT) cells.forEach { c ->
                     val poly = Polygon(map)
                     poly.points = Polygon.pointsAsCircle(GeoPoint(c.lat, c.lon), 900.0)
                     poly.fillPaint.color = AndroidColor.parseColor("#44F59E0B")
@@ -279,7 +299,8 @@ fun WardriveScreen(vm: MainViewModel) {
                     map.overlays.add(poly)
                 }
 
-                if (track.size >= 2) {
+                val showTrack = viewMode == MapViewMode.DEFAULT || viewMode == MapViewMode.BISCUITS
+                if (showTrack && track.size >= 2) {
                     val line = Polyline(map)
                     line.setPoints(track.map { GeoPoint(it.lat, it.lon) })
                     line.outlinePaint.color = AndroidColor.parseColor("#22D3EE")
@@ -287,15 +308,43 @@ fun WardriveScreen(vm: MainViewModel) {
                     map.overlays.add(line)
                 }
 
-                samples.values.sortedByDescending { it.timeMs }.take(900).forEach { s ->
-                    val shared = s.sources.size > 1
-                    val m = Marker(map)
-                    m.position = GeoPoint(s.lat, s.lon)
-                    m.icon = dot(colorForSample(s), if (shared) 13 else sizeForKind(s.kind))
-                    m.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
-                    val seenBy = if (shared) "  ·  seen by ${s.sources.size}" else ""
-                    m.title = "${s.label.ifBlank { s.id }}  ${s.rssi} dBm$seenBy"
-                    map.overlays.add(m)
+                // Wi-Fi/BT sightings: all of them by default, only board-seen ones in Biscuit view.
+                if (viewMode == MapViewMode.DEFAULT || viewMode == MapViewMode.BISCUITS) {
+                    samples.values.asSequence()
+                        .filter { viewMode == MapViewMode.DEFAULT || it.sources.any { src -> src != PHONE_SOURCE } }
+                        .sortedByDescending { it.timeMs }.take(900).forEach { s ->
+                            val shared = s.sources.size > 1
+                            val m = Marker(map)
+                            m.position = GeoPoint(s.lat, s.lon)
+                            val color = if (viewMode == MapViewMode.BISCUITS) GINGERBREAD else colorForSample(s)
+                            m.icon = dot(color, if (shared) 13 else sizeForKind(s.kind))
+                            m.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                            val seenBy = if (shared) "  ·  seen by ${s.sources.size}" else ""
+                            m.title = "${s.label.ifBlank { s.id }}  ${s.rssi} dBm$seenBy"
+                            map.overlays.add(m)
+                        }
+                }
+
+                // Mesh view: weave a spider web between all located nodes, then dot them.
+                if (viewMode == MapViewMode.MESH) {
+                    for (a in placedMesh.indices) {
+                        for (b in a + 1 until placedMesh.size) {
+                            val web = Polyline(map)
+                            web.setPoints(listOf(GeoPoint(placedMesh[a].second, placedMesh[a].third),
+                                GeoPoint(placedMesh[b].second, placedMesh[b].third)))
+                            web.outlinePaint.color = AndroidColor.parseColor("#6600E5A0")
+                            web.outlinePaint.strokeWidth = 4f
+                            map.overlays.add(web)
+                        }
+                    }
+                    placedMesh.forEach { (node, nlat, nlon) ->
+                        val m = Marker(map)
+                        m.position = GeoPoint(nlat, nlon)
+                        m.icon = dot(AndroidColor.parseColor("#00E5A0"), 16)
+                        m.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                        m.title = node.name + (node.battery?.let { "  ·  $it%" } ?: "")
+                        map.overlays.add(m)
+                    }
                 }
 
                 // Active navigation route + destination.
@@ -316,7 +365,7 @@ fun WardriveScreen(vm: MainViewModel) {
                 }
 
                 // Saved places (tappable labels).
-                if (showPlaces) {
+                if (showPlaces && viewMode == MapViewMode.DEFAULT) {
                     places.forEach { p ->
                         val m = Marker(map)
                         m.position = GeoPoint(p.lat, p.lon)
@@ -327,12 +376,13 @@ fun WardriveScreen(vm: MainViewModel) {
                     }
                 }
 
-                // Cameras from OpenStreetMap (speed / Flock / red-light).
-                if (showCameras) {
+                // Cameras: shown by default (if the layer's on) and the whole point of Flock view.
+                if ((viewMode == MapViewMode.DEFAULT && showCameras) || viewMode == MapViewMode.FLOCK) {
                     hazards.forEach { hz ->
                         val m = Marker(map)
                         m.position = GeoPoint(hz.lat, hz.lon)
-                        m.icon = ring(hazardColor(hz.kind), 15)
+                        val color = if (viewMode == MapViewMode.FLOCK) FLOCK_BLUE else hazardColor(hz.kind)
+                        m.icon = ring(color, if (viewMode == MapViewMode.FLOCK) 17 else 15)
                         m.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
                         m.title = hazardLabel(hz.kind) + if (hz.name.isNotBlank()) " · ${hz.name}" else ""
                         map.overlays.add(m)
@@ -358,6 +408,23 @@ fun WardriveScreen(vm: MainViewModel) {
             },
         )
 
+        // A translucent wash gives each themed view its mood (non-interactive).
+        if (viewMode != MapViewMode.DEFAULT) {
+            Box(Modifier.fillMaxSize().background(viewTint(viewMode)))
+        }
+
+        // View switcher: default (everything) plus the themed single-purpose views.
+        Row(
+            Modifier.align(Alignment.TopCenter).padding(top = 6.dp)
+                .horizontalScroll(rememberScrollState()).padding(horizontal = 56.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            MapViewMode.entries.forEach { vmode ->
+                FilterChip(selected = viewMode == vmode, onClick = { viewMode = vmode },
+                    label = { Text(vmode.label) })
+            }
+        }
+
         Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -365,7 +432,19 @@ fun WardriveScreen(vm: MainViewModel) {
         val nav = navState
         if (nav != null) NavBar(nav, useMph, onEnd = { vm.stopNavigation() })
         else route?.let { r -> NavCard(r, useMph, onClear = { vm.clearRoute() }) }
-        if (showBoards) BoardsLegend(deviceMap, state.sourceCounts, phoneOn)
+        if (viewMode == MapViewMode.MESH) {
+            val unplaced = meshNodes.filter { it.lat == null && meshPlacements[it.num] == null }
+            MeshPlacePanel(
+                connected = meshNodes.isNotEmpty(),
+                placed = placedMesh.size,
+                unplaced = unplaced,
+                onPlace = { node ->
+                    val c = mapView.mapCenter
+                    vm.placeMeshNode(node.num, c.latitude, c.longitude)
+                },
+            )
+        }
+        if (showBoards && viewMode == MapViewMode.DEFAULT) BoardsLegend(deviceMap, state.sourceCounts, phoneOn)
         ControlPanel(
             modifier = Modifier,
             active = state.active,
@@ -449,6 +528,7 @@ fun WardriveScreen(vm: MainViewModel) {
                     showPlaces = showPlaces, onPlaces = { showPlaces = it },
                     style = mapStyle, onStyle = { mapStyle = it; vm.setMapStyle(it.name) },
                     camCount = hazards.size,
+                    onOffline = { menuOpen = false; showOffline = true },
                 )
             }
             if (hudOn) {
@@ -469,10 +549,59 @@ fun WardriveScreen(vm: MainViewModel) {
                 useMph = useMph,
             )
         }
+
+        if (showOffline) {
+            OfflineMapDialog(mapView = mapView, styleLabel = mapStyle.label) { showOffline = false }
+        }
     }
 }
 
 enum class MapStyle(val label: String) { DARK("Dark"), LIGHT("Light"), TOPO("Topo"), SATELLITE("Satellite") }
+
+/** Themed map views: each shows only its own world. Default = the full map. */
+enum class MapViewMode(val label: String) { DEFAULT("All"), FLOCK("Flock"), BISCUITS("Biscuits"), MESH("Mesh") }
+
+/** Mesh-view helper: place GPS-less nodes (a home node) by panning the map and tapping. */
+@Composable
+private fun MeshPlacePanel(
+    connected: Boolean,
+    placed: Int,
+    unplaced: List<com.cak3d.biscuitmesh.mesh.MeshNode>,
+    onPlace: (com.cak3d.biscuitmesh.mesh.MeshNode) -> Unit,
+) {
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)),
+    ) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                if (!connected) "No mesh connected — connect in Settings → Meshtastic."
+                else "$placed node${if (placed == 1) "" else "s"} on the web" +
+                    if (unplaced.isNotEmpty()) " · pan to a spot, then pin a node with no GPS:" else ".",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+            )
+            unplaced.take(6).forEach { node ->
+                OutlinedButton(onClick = { onPlace(node) }, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Default.Place, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Pin ${node.name} here")
+                }
+            }
+        }
+    }
+}
+
+private val GINGERBREAD = AndroidColor.parseColor("#D9893B")   // warm biscuit brown
+private val FLOCK_BLUE = AndroidColor.parseColor("#7DD3FC")    // light blue
+
+/** A translucent full-screen wash that gives each view its mood (over the dark map). */
+private fun viewTint(mode: MapViewMode): androidx.compose.ui.graphics.Color = when (mode) {
+    MapViewMode.DEFAULT -> androidx.compose.ui.graphics.Color.Transparent
+    MapViewMode.MESH -> androidx.compose.ui.graphics.Color(0x33330066)      // purple/black cyber
+    MapViewMode.BISCUITS -> androidx.compose.ui.graphics.Color(0x2A5A3A1A)  // warm gingerbread
+    MapViewMode.FLOCK -> androidx.compose.ui.graphics.Color(0x33001E4D)     // deep blue
+}
 
 private val TOPO_SOURCE = org.osmdroid.tileprovider.tilesource.XYTileSource(
     "OpenTopoMap", 0, 17, 256, ".png",
@@ -503,6 +632,7 @@ private fun MapMenu(
     showPlaces: Boolean, onPlaces: (Boolean) -> Unit,
     style: MapStyle, onStyle: (MapStyle) -> Unit,
     camCount: Int,
+    onOffline: () -> Unit,
 ) {
     Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Column(Modifier.padding(14.dp).widthIn(min = 220.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -519,6 +649,11 @@ private fun MapMenu(
                 MapStyle.entries.forEach { st ->
                     FilterChip(selected = style == st, onClick = { onStyle(st) }, label = { Text(st.label) })
                 }
+            }
+            OutlinedButton(onClick = onOffline, modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
+                Icon(Icons.Default.Download, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Download offline map")
             }
         }
     }

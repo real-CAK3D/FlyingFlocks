@@ -1,0 +1,103 @@
+package com.cak3d.biscuitmesh.ui
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.cak3d.biscuitmesh.MainViewModel
+import com.cak3d.biscuitmesh.wardrive.SampleKind
+import com.cak3d.biscuitmesh.wardrive.WardriveSample
+import kotlinx.coroutines.flow.MutableStateFlow
+
+/**
+ * Drill-down from the Field Guide: the actual Wi-Fi networks or Bluetooth devices
+ * currently geo-tagged this run, with name, address and signal. (The lifetime count
+ * on the Field Guide is persisted; this live list is what's loaded in memory now.)
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun FindsScreen(vm: MainViewModel, kind: String, onBack: () -> Unit) {
+    val wifi = kind.equals("WIFI", ignoreCase = true)
+    val samplesFlow = vm.wardriveSamples ?: MutableStateFlow(emptyMap())
+    val samples by samplesFlow.collectAsStateWithLifecycle()
+
+    val items = samples.values
+        .filter { if (wifi) it.kind == SampleKind.AP || it.kind == SampleKind.STATION else it.kind == SampleKind.BT }
+        .sortedByDescending { it.rssi }
+
+    Scaffold(
+        containerColor = Color.Transparent,
+        topBar = {
+            TopAppBar(
+                title = { Text(if (wifi) "Wi-Fi networks" else "Bluetooth devices") },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
+                navigationIcon = {
+                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
+                },
+            )
+        },
+    ) { padding ->
+        LazyColumn(
+            Modifier.fillMaxSize().padding(padding),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            item("head") {
+                Text("${items.size} loaded this session", style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.secondary, fontFamily = FontFamily.Monospace)
+            }
+            if (items.isEmpty()) {
+                item("empty") {
+                    Text("Nothing loaded yet. Start a wardrive (or a phone scan) and they'll appear here.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                }
+            } else {
+                items(items, key = { it.id }) { s -> FindRow(s, wifi) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FindRow(s: WardriveSample, wifi: Boolean) {
+    val name = s.label.ifBlank { if (wifi) "(hidden network)" else "(unnamed device)" }
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+        Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.padding(end = 8.dp)) {
+                Text(name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                Text(s.id, style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+            }
+            Text("${s.rssi} dBm", style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+        }
+    }
+}

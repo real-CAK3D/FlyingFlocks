@@ -20,14 +20,19 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.LocationOff
+import androidx.compose.material.icons.filled.Usb
 import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.Straighten
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -107,8 +112,13 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
                 zones = zones,
                 onAdd = { openAddZone() },
                 onRemove = { vm.removeDeadZone(it) },
+                onSetRadius = { id, r -> vm.setDeadZoneRadius(id, r) },
             )
             HudSection(vm)
+            AlertsScreenSection(vm)
+            MeshSection(vm)
+            WtfSection(vm)
+            ExportSection(vm)
             WdgSection(vm)
             AuthorizedUseSection(
                 accepted = authorized,
@@ -147,11 +157,18 @@ private fun SectionCard(title: String, subtitle: String? = null, content: @Compo
 }
 
 @Composable
-private fun DeadZonesSection(zones: List<DeadZone>, onAdd: () -> Unit, onRemove: (String) -> Unit) {
+private fun DeadZonesSection(
+    zones: List<DeadZone>,
+    onAdd: () -> Unit,
+    onRemove: (String) -> Unit,
+    onSetRadius: (String, Double) -> Unit,
+) {
+    var editing by remember { mutableStateOf<DeadZone?>(null) }
     SectionCard(
         title = "Scanning dead zones",
         subtitle = "Inside these areas the fleet stops scanning and nothing is " +
-            "logged — use them to keep home, work, or a friend's place out of your captures.",
+            "logged — use them to keep home, work, or a friend's place out of your captures. " +
+            "Tap the ruler to change how far a zone reaches.",
     ) {
         if (zones.isEmpty()) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -175,6 +192,10 @@ private fun DeadZonesSection(zones: List<DeadZone>, onAdd: () -> Unit, onRemove:
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                         )
                     }
+                    IconButton(onClick = { editing = z }) {
+                        Icon(Icons.Default.Straighten, contentDescription = "Change radius of ${z.name}",
+                            tint = MaterialTheme.colorScheme.primary)
+                    }
                     IconButton(onClick = { onRemove(z.id) }) {
                         Icon(Icons.Default.Delete, contentDescription = "Delete ${z.name}",
                             tint = MaterialTheme.colorScheme.error)
@@ -186,6 +207,205 @@ private fun DeadZonesSection(zones: List<DeadZone>, onAdd: () -> Unit, onRemove:
             Icon(Icons.Default.Add, contentDescription = null)
             Spacer(Modifier.width(8.dp))
             Text("Add dead zone")
+        }
+    }
+
+    editing?.let { z ->
+        RadiusDialog(
+            title = z.name,
+            initialM = z.radiusM,
+            onDismiss = { editing = null },
+            onSave = { onSetRadius(z.id, it); editing = null },
+        )
+    }
+}
+
+/** Slider + quick presets for setting a dead-zone radius in metres. */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun RadiusDialog(title: String, initialM: Double, onDismiss: () -> Unit, onSave: (Double) -> Unit) {
+    var meters by remember { mutableStateOf(initialM.toFloat().coerceIn(20f, 2000f)) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Radius · $title") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("${meters.toInt()} m", style = MaterialTheme.typography.headlineSmall)
+                Slider(value = meters, onValueChange = { meters = it }, valueRange = 20f..2000f)
+                androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(100, 250, 500, 1000, 2000).forEach { preset ->
+                        FilterChip(selected = meters.toInt() == preset, onClick = { meters = preset.toFloat() },
+                            label = { Text("$preset m") })
+                    }
+                }
+            }
+        },
+        confirmButton = { Button(onClick = { onSave(meters.toDouble()) }) { Text("Save") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+@Composable
+private fun AlertsScreenSection(vm: MainViewModel) {
+    val awake by vm.keepAwake.collectAsStateWithLifecycle()
+    val vibrate by vm.vibrateAlerts.collectAsStateWithLifecycle()
+    SectionCard(
+        title = "Alerts & screen",
+        subtitle = "How the app behaves while you're driving.",
+    ) {
+        ToggleRow("Keep screen on", "Stay awake everywhere, not just the map", awake) { vm.setKeepAwake(it) }
+        ToggleRow("Vibrate on alert", "Buzz when a camera is close", vibrate) { vm.setVibrateAlerts(it) }
+    }
+}
+
+@Composable
+private fun ExportSection(vm: MainViewModel) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    fun writeTo(uri: android.net.Uri?, text: String, label: String) {
+        if (uri == null) return
+        scope.launch {
+            val ok = runCatching {
+                context.contentResolver.openOutputStream(uri)?.use { it.write(text.toByteArray()) }
+            }.isSuccess
+            android.widget.Toast.makeText(
+                context,
+                if (ok) "Exported $label" else "Export failed",
+                android.widget.Toast.LENGTH_SHORT,
+            ).show()
+        }
+    }
+
+    val csvPicker = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) {
+        writeTo(it, vm.camerasCsv(), "cameras CSV")
+    }
+    val kmlPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/vnd.google-earth.kml+xml")
+    ) { writeTo(it, vm.camerasKml(), "cameras KML") }
+
+    SectionCard(
+        title = "Export",
+        subtitle = "Save the cameras on your map to a file — CSV for spreadsheets, " +
+            "KML to open in Google Earth or Maps.",
+    ) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = { csvPicker.launch("flyingflocks-cameras.csv") }, modifier = Modifier.weight(1f)) {
+                Text("Cameras CSV")
+            }
+            OutlinedButton(onClick = { kmlPicker.launch("flyingflocks-cameras.kml") }, modifier = Modifier.weight(1f)) {
+                Text("Cameras KML")
+            }
+        }
+    }
+}
+
+@Composable
+private fun MeshSection(vm: MainViewModel) {
+    val link by vm.meshLink.collectAsStateWithLifecycle()
+    val nodes by vm.meshNodes.collectAsStateWithLifecycle()
+    val connected = link == com.cak3d.biscuitmesh.mesh.MeshLinkState.CONNECTED
+    val busy = link == com.cak3d.biscuitmesh.mesh.MeshLinkState.SCANNING ||
+        link == com.cak3d.biscuitmesh.mesh.MeshLinkState.CONNECTING
+    SectionCard(
+        title = "Meshtastic",
+        subtitle = "Connect to one of your Meshtastic nodes over Bluetooth to show the mesh " +
+            "on the map. Disconnect the node in the Meshtastic app first (only one app can " +
+            "hold it), and allow pairing if it asks for a PIN.",
+    ) {
+        val status = when (link) {
+            com.cak3d.biscuitmesh.mesh.MeshLinkState.CONNECTED -> "Connected · ${nodes.size} nodes"
+            com.cak3d.biscuitmesh.mesh.MeshLinkState.SCANNING -> "Scanning for a node…"
+            com.cak3d.biscuitmesh.mesh.MeshLinkState.CONNECTING -> "Connecting…"
+            else -> "Not connected"
+        }
+        Text(status, style = MaterialTheme.typography.bodyMedium)
+        if (connected) {
+            OutlinedButton(onClick = { vm.disconnectMesh() }, modifier = Modifier.fillMaxWidth()) { Text("Disconnect") }
+        } else {
+            Button(onClick = { vm.connectMesh() }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                Text("Connect to mesh")
+            }
+        }
+    }
+}
+
+@Composable
+private fun WtfSection(vm: MainViewModel) {
+    val link by vm.wtfLink.collectAsStateWithLifecycle()
+    val name by vm.wtfDeviceName.collectAsStateWithLifecycle()
+    val sourceOn by vm.wtfSourceEnabled.collectAsStateWithLifecycle()
+    val importResult by vm.importResult.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+
+    // Fire a toast when an import finishes, then clear it so it shows only once.
+    androidx.compose.runtime.LaunchedEffect(importResult) {
+        importResult?.let {
+            android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_LONG).show()
+            vm.clearImportResult()
+        }
+    }
+
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            val text = runCatching {
+                context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+            }.getOrNull()
+            if (text != null) vm.importWtfBackup(text)
+            else android.widget.Toast.makeText(context, "Couldn't read that file", android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    val connected = link == com.cak3d.biscuitmesh.usb.WtfLinkState.CONNECTED
+    val connecting = link == com.cak3d.biscuitmesh.usb.WtfLinkState.CONNECTING
+
+    SectionCard(
+        title = "What the Flock dongle",
+        subtitle = "Plug a What the Flock XIAO into the phone (USB-OTG) and its camera " +
+            "sightings drop onto the map as Flock/ALPR hazards. Or import a backup JSON " +
+            "the What the Flock app exported to put its saved locations on the map.",
+    ) {
+        val status = when {
+            connected -> name ?: "Connected"
+            connecting -> "Connecting…"
+            else -> "Not connected"
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Icon(
+                if (connected) Icons.Default.CheckCircle else Icons.Default.Usb,
+                contentDescription = null,
+                tint = if (connected) Color(0xFF3DDC84) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+            )
+            Text(status, style = MaterialTheme.typography.bodyMedium)
+        }
+
+        if (connected) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { vm.pullWtfSaved() }, modifier = Modifier.weight(1f)) {
+                    Text("Pull saved")
+                }
+                OutlinedButton(onClick = { vm.disconnectWtf() }, modifier = Modifier.weight(1f)) {
+                    Text("Disconnect")
+                }
+            }
+            OutlinedButton(onClick = { vm.loadWtfSdLog() }, modifier = Modifier.fillMaxWidth()) {
+                Text("Load board log (SD) to map")
+            }
+        } else {
+            Button(onClick = { vm.connectWtf() }, enabled = !connecting, modifier = Modifier.fillMaxWidth()) {
+                Text("Connect dongle")
+            }
+        }
+
+        ToggleRow("Plot dongle sightings", "Add live detections to the map", sourceOn) { vm.setWtfSourceEnabled(it) }
+
+        OutlinedButton(
+            onClick = { picker.launch(arrayOf("application/json", "application/octet-stream", "*/*")) },
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Icon(Icons.Default.FileUpload, contentDescription = null)
+            Spacer(Modifier.width(8.dp))
+            Text("Import What the Flock backup")
         }
     }
 }
@@ -348,6 +568,7 @@ private fun AboutSection() {
     }
 }
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun AddDeadZoneDialog(
     vm: MainViewModel,
@@ -402,6 +623,12 @@ private fun AddDeadZoneDialog(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth(),
                 )
+                androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(100, 250, 500, 1000).forEach { preset ->
+                        FilterChip(selected = radius == preset.toString(), onClick = { radius = preset.toString() },
+                            label = { Text("$preset m") })
+                    }
+                }
                 OutlinedButton(
                     onClick = { fetchLocation() },
                     enabled = !locating && locationGranted,

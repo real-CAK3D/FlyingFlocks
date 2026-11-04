@@ -1,0 +1,323 @@
+package com.cak3d.biscuitmesh.mesh
+
+import android.annotation.SuppressLint
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothGatt
+import android.bluetooth.BluetoothGattCallback
+import android.bluetooth.BluetoothGattCharacteristic
+import android.bluetooth.BluetoothGattDescriptor
+import android.bluetooth.BluetoothProfile
+import android.bluetooth.le.ScanCallback
+import android.bluetooth.le.ScanFilter
+import android.bluetooth.le.ScanResult
+import android.bluetooth.le.ScanSettings
+import android.content.Context
+import android.os.Build
+import android.os.ParcelUuid
+import android.util.Log
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import java.util.ArrayDeque
+import java.util.UUID
+import java.util.concurrent.atomic.AtomicBoolean
+
+/** One node in the Meshtastic mesh, as read from the connected node's NodeDB. */
+data class MeshNode(
+    val num: Long,
+    val name: String,
+    val lat: Double?,
+    val lon: Double?,
+    val battery: Int? = null,
+)
+
+enum class MeshLinkState { DISCONNECTED, SCANNING, CONNECTING, CONNECTED }
+
+/**
+ * Connects to a Meshtastic node over BLE and reads its mesh NodeDB so the whole mesh
+ * (your nodes and anyone you can hear) can be shown on the Flying Flocks map.
+ *
+ * Meshtastic's BLE API is protobuf, not the Biscuits' plain text: you enable notify
+ * on `fromNum`, write a `want_config_id` ToRadio to make the node dump its config +
+ * node list, then drain `fromRadio` (each read = one FromRadio packet; an empty read
+ * means "nothing more for now"). We hand-parse only the NodeInfo fields we need.
+ *
+ * Note: Meshtastic allows a single BLE client, so the official app must release the
+ * node first, and the first connect may require BLE bonding with the node's PIN.
+ */
+@SuppressLint("MissingPermission")
+class MeshtasticManager(private val context: Context, private val adapter: BluetoothAdapter?) {
+
+    private val _link = MutableStateFlow(MeshLinkState.DISCONNECTED)
+    val link: StateFlow<MeshLinkState> = _link.asStateFlow()
+
+    private val _nodes = MutableStateFlow<Map<Long, MeshNode>>(emptyMap())
+    /** Live mesh node database, keyed by node number. */
+    val nodes: StateFlow<Map<Long, MeshNode>> = _nodes.asStateFlow()
+
+    private var gatt: BluetoothGatt? = null
+    private var toRadio: BluetoothGattCharacteristic? = null
+    private var fromRadio: BluetoothGattCharacteristic? = null
+    private val opQueue = ArrayDeque<() -> Unit>()
+    private val opRunning = AtomicBoolean(false)
+
+    private var scanning = false
+    private val scanner get() = adapter?.bluetoothLeScanner
+
+    /** Scan for any Meshtastic node and connect to the first/strongest one. */
+    fun scanAndConnect() {
+        if (_link.value != MeshLinkState.DISCONNECTED) return
+        val s = scanner ?: return
+        _link.value = MeshLinkState.SCANNING
+        scanning = true
+        val filter = ScanFilter.Builder().setServiceUuid(ParcelUuid(SERVICE)).build()
+        val settings = ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build()
+        runCatching { s.startScan(listOf(filter), settings, scanCb) }
+            .onFailure { _link.value = MeshLinkState.DISCONNECTED; scanning = false }
+    }
+
+    private val scanCb = object : ScanCallback() {
+        override fun onScanResult(callbackType: Int, result: ScanResult) {
+            val dev = result.device ?: return
+            Log.d(TAG, "found mesh node ${dev.address} rssi=${result.rssi}")
+            stopScan()
+            _link.value = MeshLinkState.CONNECTING
+            gatt = dev.connectGatt(context, false, callback, android.bluetooth.BluetoothDevice.TRANSPORT_LE)
+        }
+        override fun onScanFailed(errorCode: Int) {
+            Log.w(TAG, "mesh scan failed $errorCode")
+            _link.value = MeshLinkState.DISCONNECTED; scanning = false
+        }
+    }
+
+    private fun stopScan() {
+        if (scanning) { runCatching { scanner?.stopScan(scanCb) }; scanning = false }
+    }
+
+    fun disconnect() {
+        stopScan()
+        runCatching { gatt?.disconnect() }
+        cleanup()
+        _link.value = MeshLinkState.DISCONNECTED
+    }
+
+    // --- GATT op queue (BLE ops must be serialized) ------------------------
+    private fun enqueue(op: () -> Unit) { synchronized(opQueue) { opQueue.add(op) }; pump() }
+    private fun pump() {
+        if (opRunning.compareAndSet(false, true)) {
+            val op = synchronized(opQueue) { opQueue.poll() }
+            if (op == null) opRunning.set(false) else op()
+        }
+    }
+    private fun opComplete() { opRunning.set(false); pump() }
+
+    private val callback = object : BluetoothGattCallback() {
+        override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) {
+            when (newState) {
+                BluetoothProfile.STATE_CONNECTED -> g.requestMtu(512)
+                BluetoothProfile.STATE_DISCONNECTED -> { cleanup(); _link.value = MeshLinkState.DISCONNECTED }
+            }
+        }
+
+        override fun onMtuChanged(g: BluetoothGatt, mtu: Int, status: Int) { g.discoverServices() }
+
+        override fun onServicesDiscovered(g: BluetoothGatt, status: Int) {
+            val svc = g.getService(SERVICE)
+            if (svc == null) { Log.w(TAG, "no mesh service"); disconnect(); return }
+            toRadio = svc.getCharacteristic(TO_RADIO)
+            fromRadio = svc.getCharacteristic(FROM_RADIO)
+            val fromNum = svc.getCharacteristic(FROM_NUM)
+            if (toRadio == null || fromRadio == null || fromNum == null) {
+                Log.w(TAG, "mesh chars missing"); disconnect(); return
+            }
+            g.setCharacteristicNotification(fromNum, true)
+            val cccd = fromNum.getDescriptor(CCCD)
+            if (cccd != null) {
+                enqueue {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        g.writeDescriptor(cccd, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
+                    } else {
+                        @Suppress("DEPRECATION") run { cccd.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE; g.writeDescriptor(cccd) }
+                    }
+                }
+            }
+        }
+
+        override fun onDescriptorWrite(g: BluetoothGatt, d: BluetoothGattDescriptor, status: Int) {
+            _link.value = MeshLinkState.CONNECTED
+            opComplete()
+            // Ask the node to stream its config + node database.
+            writeToRadio(byteArrayOf(0x18, 0x2A))  // want_config_id = 42
+            drain()
+        }
+
+        override fun onCharacteristicWrite(g: BluetoothGatt, c: BluetoothGattCharacteristic, status: Int) { opComplete() }
+
+        @Deprecated("Deprecated in Java")
+        override fun onCharacteristicChanged(g: BluetoothGatt, c: BluetoothGattCharacteristic) {
+            if (c.uuid == FROM_NUM) drain()
+        }
+        override fun onCharacteristicChanged(g: BluetoothGatt, c: BluetoothGattCharacteristic, value: ByteArray) {
+            if (c.uuid == FROM_NUM) drain()
+        }
+
+        @Deprecated("Deprecated in Java")
+        override fun onCharacteristicRead(g: BluetoothGatt, c: BluetoothGattCharacteristic, status: Int) {
+            @Suppress("DEPRECATION") onFromRadio(c.value, status); opComplete()
+        }
+        override fun onCharacteristicRead(g: BluetoothGatt, c: BluetoothGattCharacteristic, value: ByteArray, status: Int) {
+            onFromRadio(value, status); opComplete()
+        }
+    }
+
+    private fun writeToRadio(bytes: ByteArray) {
+        val g = gatt ?: return
+        val c = toRadio ?: return
+        enqueue {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                g.writeCharacteristic(c, bytes, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT)
+            } else {
+                @Suppress("DEPRECATION") run { c.value = bytes; c.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT; g.writeCharacteristic(c) }
+            }
+        }
+    }
+
+    /** Read one FromRadio packet; onCharacteristicRead schedules the next. */
+    private fun drain() {
+        val g = gatt ?: return
+        val c = fromRadio ?: return
+        enqueue { g.readCharacteristic(c) }
+    }
+
+    private fun onFromRadio(value: ByteArray?, status: Int) {
+        if (status != BluetoothGatt.GATT_SUCCESS || value == null || value.isEmpty()) return  // empty = no more for now
+        Log.d(TAG, "fromRadio ${value.size}B: ${value.joinToString("") { "%02x".format(it) }.take(160)}")
+        runCatching { parseFromRadio(value) }.onFailure { Log.w(TAG, "parse failed: ${it.message}") }
+        drain()  // keep reading until an empty packet
+    }
+
+    // --- Minimal protobuf decode (only the NodeInfo fields we plot) --------
+
+    private fun parseFromRadio(buf: ByteArray) {
+        val r = Pb(buf)
+        while (r.has()) {
+            val (field, wire) = r.tag()
+            when {
+                field == 4 && wire == 2 -> parseNodeInfo(r.lenBytes())  // node_info
+                else -> r.skip(wire)
+            }
+        }
+    }
+
+    private fun parseNodeInfo(buf: ByteArray) {
+        val r = Pb(buf)
+        var num = 0L; var name = ""; var lat: Double? = null; var lon: Double? = null; var batt: Int? = null
+        while (r.has()) {
+            val (field, wire) = r.tag()
+            when {
+                field == 1 && wire == 0 -> num = r.varint()                 // num
+                field == 2 && wire == 2 -> name = parseUserName(r.lenBytes()) // user
+                field == 3 && wire == 2 -> {                               // position
+                    val p = parsePosition(r.lenBytes()); lat = p.first; lon = p.second
+                }
+                field == 6 && wire == 2 -> batt = parseBattery(r.lenBytes()) // device_metrics
+                else -> r.skip(wire)
+            }
+        }
+        if (num != 0L) {
+            val node = MeshNode(num, name.ifBlank { "!%08x".format(num) }, lat, lon, batt)
+            _nodes.value = _nodes.value + (num to node)
+            Log.d(TAG, "node $node")
+        }
+    }
+
+    private fun parseUserName(buf: ByteArray): String {
+        val r = Pb(buf); var long = ""; var short = ""
+        while (r.has()) {
+            val (field, wire) = r.tag()
+            when {
+                field == 2 && wire == 2 -> long = String(r.lenBytes(), Charsets.UTF_8)
+                field == 3 && wire == 2 -> short = String(r.lenBytes(), Charsets.UTF_8)
+                else -> r.skip(wire)
+            }
+        }
+        return long.ifBlank { short }
+    }
+
+    /** Returns lat, lon in degrees, handling both sfixed32 and varint encodings. */
+    private fun parsePosition(buf: ByteArray): Pair<Double?, Double?> {
+        val r = Pb(buf); var lat: Double? = null; var lon: Double? = null
+        while (r.has()) {
+            val (field, wire) = r.tag()
+            when {
+                field == 1 -> lat = r.scaledInt(wire)
+                field == 2 -> lon = r.scaledInt(wire)
+                else -> r.skip(wire)
+            }
+        }
+        return lat to lon
+    }
+
+    private fun parseBattery(buf: ByteArray): Int? {
+        val r = Pb(buf); var b: Int? = null
+        while (r.has()) {
+            val (field, wire) = r.tag()
+            when {
+                field == 1 && wire == 0 -> b = r.varint().toInt()  // battery_level
+                else -> r.skip(wire)
+            }
+        }
+        return b
+    }
+
+    private fun cleanup() {
+        synchronized(opQueue) { opQueue.clear() }
+        opRunning.set(false)
+        toRadio = null; fromRadio = null
+        runCatching { gatt?.close() }
+        gatt = null
+    }
+
+    /** Tiny protobuf field reader over a byte array. */
+    private class Pb(val b: ByteArray) {
+        var i = 0
+        fun has() = i < b.size
+        fun tag(): Pair<Int, Int> { val t = varint().toInt(); return (t ushr 3) to (t and 7) }
+        fun varint(): Long {
+            var result = 0L; var shift = 0
+            while (i < b.size) {
+                val x = b[i++].toInt() and 0xFF
+                result = result or ((x and 0x7F).toLong() shl shift)
+                if (x < 0x80) break
+                shift += 7
+            }
+            return result
+        }
+        fun lenBytes(): ByteArray { val n = varint().toInt(); val out = b.copyOfRange(i, minOf(i + n, b.size)); i += n; return out }
+        /** A lat/lon field: sfixed32 (wire 5) or varint int32 (wire 0), scaled by 1e-7. */
+        fun scaledInt(wire: Int): Double? = when (wire) {
+            5 -> { val v = (b[i].toInt() and 0xFF) or ((b[i+1].toInt() and 0xFF) shl 8) or
+                ((b[i+2].toInt() and 0xFF) shl 16) or ((b[i+3].toInt() and 0xFF) shl 24); i += 4; v / 1e7 }
+            0 -> varint().toInt() / 1e7
+            else -> { skip(wire); null }
+        }
+        fun skip(wire: Int) {
+            when (wire) {
+                0 -> varint()
+                1 -> i += 8
+                2 -> { val n = varint().toInt(); i += n }
+                5 -> i += 4
+                else -> i = b.size
+            }
+        }
+    }
+
+    companion object {
+        private const val TAG = "MeshBLE"
+        val SERVICE: UUID = UUID.fromString("6ba1b218-15a8-461f-9fa8-5dcae273eafd")
+        val TO_RADIO: UUID = UUID.fromString("f75c76d2-129e-4dad-a1dd-7866124401e7")
+        val FROM_RADIO: UUID = UUID.fromString("2c55e69e-4993-11ed-b878-0242ac120002")
+        val FROM_NUM: UUID = UUID.fromString("ed9da18c-a800-4f66-a670-aa7547e34453")
+        val CCCD: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
+    }
+}

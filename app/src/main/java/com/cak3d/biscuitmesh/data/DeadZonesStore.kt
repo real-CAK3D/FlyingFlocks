@@ -43,6 +43,11 @@ class DeadZonesStore(private val context: Context) {
         write(current().filterNot { it.id == id })
     }
 
+    /** Change an existing zone's radius (metres), clamped to a sane range. */
+    suspend fun setRadius(id: String, radiusM: Double) {
+        write(current().map { if (it.id == id) it.copy(radiusM = radiusM.coerceIn(20.0, 5000.0)) else it })
+    }
+
     private suspend fun current(): List<DeadZone> =
         parse(context.deadZonesDataStore.data.first()[key] ?: "[]")
 

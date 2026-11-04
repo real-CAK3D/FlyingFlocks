@@ -70,7 +70,12 @@ import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun RareBirdsScreen(vm: MainViewModel, onBack: () -> Unit) {
+fun RareBirdsScreen(
+    vm: MainViewModel,
+    onBack: () -> Unit,
+    onOpenFinds: (String) -> Unit = {},
+    onOpenStats: () -> Unit = {},
+) {
     val birds by vm.rareBirds.collectAsStateWithLifecycle(initialValue = emptyList())
     val here by vm.rareBirdHere.collectAsStateWithLifecycle()
     val progress by vm.progress.collectAsStateWithLifecycle()
@@ -114,8 +119,9 @@ fun RareBirdsScreen(vm: MainViewModel, onBack: () -> Unit) {
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item("rank") { RankCard(progress) }
-            items(progress.tracks, key = { it.track.name }) { t -> TrackRow(t) }
+            item("rank") { RankCard(progress, onClick = onOpenStats) }
+            items(progress.radios, key = { it.track.name }) { t -> TrackRow(t, onClick = { onOpenFinds(t.track.name) }) }
+            item("boosts") { CameraBoostCard(progress) }
 
             item("camhead") { SectionLabel("> CAMERA HUNT") }
             item("camsweep") {
@@ -132,7 +138,7 @@ fun RareBirdsScreen(vm: MainViewModel, onBack: () -> Unit) {
                     if (cameraTargets.isEmpty()) {
                         Text(
                             "No cameras logged yet. Sweep here, or start a wardrive — every Flock, " +
-                                "speed and red-light camera you pass is logged and levels its track.",
+                                "speed and red-light camera you pass is logged and boosts your rank.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                         )
@@ -169,27 +175,39 @@ private fun SectionLabel(text: String) {
     )
 }
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
-private fun RankCard(progress: Progress) {
+private fun RankCard(progress: Progress, onClick: () -> Unit) {
     Card(
+        onClick = onClick,
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("FLOCK RANK", style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.secondary, fontFamily = FontFamily.Monospace)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("FLOCK RANK", style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.secondary, fontFamily = FontFamily.Monospace)
+                Text("Stats ›", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+            }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("${progress.rank}", style = MaterialTheme.typography.displaySmall,
                     fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                 Text(progress.rankName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             }
-            val weak = progress.weakest.joinToString(", ") { it.short }
+            LinearProgressIndicator(
+                progress = { progress.rankProgress },
+                modifier = Modifier.fillMaxWidth().height(8.dp),
+                color = MaterialTheme.colorScheme.primary,
+                trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f),
+            )
             Text(
-                "Raise $weak to level ${progress.nextRankLevel} to reach rank ${progress.rank + 1}.",
+                "${progress.xpToNext} XP to rank ${progress.rank + 1}. Wi-Fi and Bluetooth level you up; " +
+                    "each camera is a one-time boost, and every rare bird is a full level.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
             )
-            Text("${progress.totalFinds} total finds logged",
+            val birdLine = if (progress.bonusLevels > 0) " · ${progress.bonusLevels} rare-bird levels" else ""
+            Text("${progress.totalFinds} total finds · ${progress.cameraBoostXp} camera boost XP$birdLine",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
         }
@@ -197,9 +215,43 @@ private fun RankCard(progress: Progress) {
 }
 
 @Composable
-private fun TrackRow(t: TrackState) {
+private fun CameraBoostCard(progress: Progress) {
+    Card(
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("CAMERA BOOSTS", style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.secondary, fontFamily = FontFamily.Monospace)
+            if (progress.cameraFinds == 0) {
+                Text("No cameras yet. Each Flock, speed or red-light camera you find gives a big " +
+                    "one-time boost toward your next rank.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+            } else {
+                progress.cameras.filter { it.count > 0 }.forEach { t ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Icon(trackIcon(t.track), contentDescription = null, tint = trackColor(t.track),
+                                modifier = Modifier.size(22.dp))
+                            Text("${t.track.displayName} · ${t.count}", style = MaterialTheme.typography.bodyMedium)
+                        }
+                        Text("+${t.xp} XP", style = MaterialTheme.typography.titleSmall,
+                            color = trackColor(t.track), fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun TrackRow(t: TrackState, onClick: () -> Unit) {
     val accent = trackColor(t.track)
     Card(
+        onClick = onClick,
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
