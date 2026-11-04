@@ -375,7 +375,7 @@ private fun CompassArrow(here: LatLon?, lat: Double, lon: Double, size: Int) {
 }
 
 private fun trackIcon(track: ProgressTrack): ImageVector = when (track) {
-    ProgressTrack.WIFI -> Icons.Default.Wifi
+    ProgressTrack.WIFI_24, ProgressTrack.WIFI_5 -> Icons.Default.Wifi
     ProgressTrack.BLUETOOTH -> Icons.Default.Bluetooth
     ProgressTrack.FLOCK -> Icons.Default.PhotoCamera
     ProgressTrack.SPEED_CAM -> Icons.Default.Speed
@@ -383,7 +383,8 @@ private fun trackIcon(track: ProgressTrack): ImageVector = when (track) {
 }
 
 private fun trackColor(track: ProgressTrack): Color = when (track) {
-    ProgressTrack.WIFI -> Color(0xFF34D399)
+    ProgressTrack.WIFI_24 -> Color(0xFF34D399)   // emerald — the common 2.4 GHz grind
+    ProgressTrack.WIFI_5 -> Color(0xFF7DF9FF)    // electric teal — matches the wtBLEep map view
     ProgressTrack.BLUETOOTH -> Color(0xFF22D3EE)
     ProgressTrack.FLOCK -> Color(0xFFF87171)
     ProgressTrack.SPEED_CAM -> Color(0xFFFBBF24)

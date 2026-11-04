@@ -73,7 +73,7 @@ class ProgressManager(
         var changed = false
         samples.forEach { s ->
             val track = when (s.kind) {
-                SampleKind.AP, SampleKind.STATION -> ProgressTrack.WIFI
+                SampleKind.AP, SampleKind.STATION -> wifiTrack(s.is5GHz)
                 SampleKind.BT -> ProgressTrack.BLUETOOTH
             }
             val bonus = if (s.label.isBlank()) 7 else 0   // hidden networks / unnamed beacons are juicier
@@ -96,13 +96,16 @@ class ProgressManager(
     }
 
     /** Standalone phone scans (WiFi/BT tabs) feed the same tracks. */
-    fun recordPhoneHit(kind: SampleKind, id: String, label: String) {
+    fun recordPhoneHit(kind: SampleKind, id: String, label: String, channel: Int = 0) {
         val track = when (kind) {
-            SampleKind.AP, SampleKind.STATION -> ProgressTrack.WIFI
+            SampleKind.AP, SampleKind.STATION -> wifiTrack(channel >= 32)
             SampleKind.BT -> ProgressTrack.BLUETOOTH
         }
         if (award(track, "s:$id", if (label.isBlank()) 7 else 0)) commit()
     }
+
+    /** 5 GHz networks (channel >= 32) grind the rarer WIFI_5 track; everything else 2.4 GHz. */
+    private fun wifiTrack(is5GHz: Boolean) = if (is5GHz) ProgressTrack.WIFI_5 else ProgressTrack.WIFI_24
 
     private fun award(track: ProgressTrack, id: String, bonus: Int): Boolean {
         if (!awarded.add(id)) return false

@@ -38,7 +38,7 @@ class PhoneScanManager(
         sensors.start(wifi, ble) { hit ->
             rows[hit.id] = PhoneScanRow(hit.kind, hit.id, hit.label, hit.rssi, System.currentTimeMillis())
             _results.value = rows.values.sortedByDescending { it.rssi }
-            progress?.recordPhoneHit(hit.kind, hit.id, hit.label)
+            progress?.recordPhoneHit(hit.kind, hit.id, hit.label, hit.channel)
         }
     }
 

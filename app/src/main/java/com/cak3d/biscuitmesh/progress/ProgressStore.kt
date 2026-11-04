@@ -67,5 +67,8 @@ class ProgressStore(private val context: Context) {
     }
 
     private fun trackOf(name: String): ProgressTrack? =
-        runCatching { ProgressTrack.valueOf(name) }.getOrNull()
+        // Legacy saves used a single "WIFI" track before the 2.4/5 GHz split; fold that
+        // grind into the 2.4 GHz track so existing progress isn't lost.
+        if (name == "WIFI") ProgressTrack.WIFI_24
+        else runCatching { ProgressTrack.valueOf(name) }.getOrNull()
 }

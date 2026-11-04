@@ -7,15 +7,16 @@ package com.cak3d.biscuitmesh.progress
  * tracked you only ever get that boost once per camera. Meshtastic is left out.
  */
 enum class ProgressTrack(val displayName: String, val short: String, val xpPerFind: Int) {
-    WIFI("Wi-Fi networks", "Wi-Fi", 3),
+    WIFI_24("Wi-Fi 2.4 GHz", "2.4G", 3),
+    WIFI_5("Wi-Fi 5 GHz", "5G", 3),
     BLUETOOTH("Bluetooth devices", "BT", 3),
     FLOCK("Flock / ALPR cameras", "Flock", 250),
     SPEED_CAM("Speed cameras", "Speed", 180),
     REDLIGHT("Red-light cameras", "Red-light", 180),
 }
 
-/** The radios you grind to rank up. */
-val RADIO_TRACKS = setOf(ProgressTrack.WIFI, ProgressTrack.BLUETOOTH)
+/** The radios you grind to rank up. Wi-Fi is split by band — 5 GHz is rarer to catch. */
+val RADIO_TRACKS = setOf(ProgressTrack.WIFI_24, ProgressTrack.WIFI_5, ProgressTrack.BLUETOOTH)
 
 /** Cameras — one-time boosts toward your rank, not a gate. */
 val CAMERA_TRACKS = setOf(ProgressTrack.FLOCK, ProgressTrack.SPEED_CAM, ProgressTrack.REDLIGHT)

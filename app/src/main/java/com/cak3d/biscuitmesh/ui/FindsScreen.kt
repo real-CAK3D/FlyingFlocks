@@ -43,19 +43,33 @@ import kotlinx.coroutines.flow.MutableStateFlow
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FindsScreen(vm: MainViewModel, kind: String, onBack: () -> Unit) {
-    val wifi = kind.equals("WIFI", ignoreCase = true)
+    val wifi24 = kind.equals("WIFI_24", ignoreCase = true)
+    val wifi5 = kind.equals("WIFI_5", ignoreCase = true)
+    val wifi = wifi24 || wifi5
+    val title = when {
+        wifi24 -> "Wi-Fi 2.4 GHz"
+        wifi5 -> "Wi-Fi 5 GHz"
+        else -> "Bluetooth devices"
+    }
     val samplesFlow = vm.wardriveSamples ?: MutableStateFlow(emptyMap())
     val samples by samplesFlow.collectAsStateWithLifecycle()
 
     val items = samples.values
-        .filter { if (wifi) it.kind == SampleKind.AP || it.kind == SampleKind.STATION else it.kind == SampleKind.BT }
+        .filter {
+            val isWifiKind = it.kind == SampleKind.AP || it.kind == SampleKind.STATION
+            when {
+                wifi24 -> isWifiKind && !it.is5GHz
+                wifi5 -> isWifiKind && it.is5GHz
+                else -> it.kind == SampleKind.BT
+            }
+        }
         .sortedByDescending { it.rssi }
 
     Scaffold(
         containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
-                title = { Text(if (wifi) "Wi-Fi networks" else "Bluetooth devices") },
+                title = { Text(title) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
