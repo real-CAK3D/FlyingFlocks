@@ -66,14 +66,15 @@ private val RF_BANDS = listOf(
 
 private data class RfHit(val freq: Double, val rssi: Int, val timeMs: Long)
 
-private data class Capability(val title: String, val desc: String, val icon: ImageVector, val live: Boolean)
+private data class Capability(val title: String, val desc: String, val icon: ImageVector)
 
-private val CAPABILITIES = listOf(
-    Capability("Band activity monitor", "Which sub-GHz bands are busy and how strong — live from the node's CC1101.", Icons.Default.GraphicEq, true),
-    Capability("TPMS reader", "Decode tire-pressure sensors as cars pass: sensor ID, pressure, temperature.", Icons.Default.DirectionsCar, false),
-    Capability("Weather & 433 sensors", "433/868 MHz temperature, humidity and rain stations in range.", Icons.Default.Thermostat, false),
-    Capability("Keyfobs · remotes · garage", "OOK 433 remotes, doorbells and garage openers — activity and device IDs.", Icons.Default.SettingsRemote, false),
-)
+/** A decoded TPMS sensor — keyed by its 4-byte ID, latest pressure/temp. */
+private data class TpmsSensor(val id: String, val freq: Double, val kpa: Int, val tempC: Int, val timeMs: Long) {
+    val psi: Float get() = kpa * 0.145038f
+}
+
+/** A keyfob/remote OOK burst the node caught. */
+private data class KeyfobEvent(val freq: Double, val pulses: Int, val bits: String, val timeMs: Long)
 
 /**
  * The sub-GHz hub for the wtBLEep node's CC1101 antenna. Shows live 315/433/868/915 MHz
@@ -97,7 +98,37 @@ fun SubGhzScreen(vm: MainViewModel, onOpenMap: () -> Unit) {
             }
             .toList()
     }
+    // Decoded TPMS: DATA:TPMS:<mhz>,<id>,<kpa>,<tempC>,<rawhex> — keep the latest per sensor id.
+    val tpms = remember(log) {
+        log.asSequence()
+            .filter { it.message.type == BiscuitMessage.Type.DATA && it.message.subtype == "TPMS" }
+            .mapNotNull { e ->
+                val f = e.message.payload.split(",")
+                val freq = f.getOrNull(0)?.toDoubleOrNull() ?: return@mapNotNull null
+                val id = f.getOrNull(1) ?: return@mapNotNull null
+                TpmsSensor(id, freq, f.getOrNull(2)?.toIntOrNull() ?: 0, f.getOrNull(3)?.toIntOrNull() ?: 0, e.timeMs)
+            }
+            .associateBy { it.id }.values.sortedByDescending { it.timeMs }
+    }
+    // Keyfob/remote bursts: DATA:KEYFOB:<mhz>,<pulses>,<bits>.
+    val keyfobs = remember(log) {
+        log.asSequence()
+            .filter { it.message.type == BiscuitMessage.Type.DATA && it.message.subtype == "KEYFOB" }
+            .mapNotNull { e ->
+                val f = e.message.payload.split(",")
+                val freq = f.getOrNull(0)?.toDoubleOrNull() ?: return@mapNotNull null
+                KeyfobEvent(freq, f.getOrNull(1)?.toIntOrNull() ?: 0, f.getOrNull(2) ?: "", e.timeMs)
+            }
+            .toList()
+    }
     val now = System.currentTimeMillis()
+    // Capability cards go LIVE as real decodes arrive; weather has no decoder yet.
+    val capabilities = listOf(
+        Capability("Band activity monitor", "Which sub-GHz bands are busy and how strong — live from the node's CC1101.", Icons.Default.GraphicEq) to true,
+        Capability("TPMS reader", "Decode tire-pressure sensors as cars pass: sensor ID, pressure, temperature.", Icons.Default.DirectionsCar) to tpms.isNotEmpty(),
+        Capability("Weather & 433 sensors", "433/868 MHz temperature, humidity and rain stations in range.", Icons.Default.Thermostat) to false,
+        Capability("Keyfobs · remotes · garage", "OOK 433 remotes, doorbells and garage openers — activity and device IDs.", Icons.Default.SettingsRemote) to keyfobs.isNotEmpty(),
+    )
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(14.dp),
@@ -152,10 +183,18 @@ fun SubGhzScreen(vm: MainViewModel, onOpenMap: () -> Unit) {
             BandMeter(band, best, recent.size)
         }
 
+        // Decoded TPMS sensors + keyfob bursts (populated once the CC1101 is wired).
+        if (tpms.isNotEmpty() || keyfobs.isNotEmpty()) {
+            Text("DECODED", style = MaterialTheme.typography.labelMedium, color = RF_AMBER,
+                fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+            tpms.take(8).forEach { TpmsRow(it) }
+            keyfobs.takeLast(6).reversed().forEach { KeyfobRow(it) }
+        }
+
         // Capability roadmap.
         Text("CAPABILITIES", style = MaterialTheme.typography.labelMedium, color = RF_AMBER,
             fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
-        CAPABILITIES.forEach { CapabilityRow(it) }
+        capabilities.forEach { (cap, live) -> CapabilityRow(cap, live) }
 
         // Raw RF log.
         Text("RF LOG", style = MaterialTheme.typography.labelMedium, color = RF_AMBER,
@@ -217,7 +256,49 @@ private fun BandMeter(band: RfBand, bestRssi: Int?, count: Int) {
 }
 
 @Composable
-private fun CapabilityRow(cap: Capability) {
+private fun TpmsRow(s: TpmsSensor) {
+    Card(
+        Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.DirectionsCar, contentDescription = null, tint = RF_AMBER, modifier = Modifier.size(24.dp))
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text("TPMS ${s.id}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold,
+                    fontFamily = FontFamily.Monospace)
+                Text("${"%.2f".format(s.freq)} MHz · ${s.tempC}°C", style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+            }
+            Text("${"%.1f".format(s.psi)} psi", style = MaterialTheme.typography.titleMedium,
+                color = RF_AMBER, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+        }
+    }
+}
+
+@Composable
+private fun KeyfobRow(k: KeyfobEvent) {
+    Card(
+        Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.SettingsRemote, contentDescription = null, tint = RF_AMBER, modifier = Modifier.size(24.dp))
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text("Remote · ${"%.2f".format(k.freq)} MHz", style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold)
+                Text("${k.pulses} pulses", style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun CapabilityRow(cap: Capability, live: Boolean) {
     Card(
         Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
@@ -234,7 +315,7 @@ private fun CapabilityRow(cap: Capability) {
                 Text(cap.desc, style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f))
             }
-            StatusChip(cap.live)
+            StatusChip(live)
         }
     }
 }
