@@ -13,7 +13,11 @@ data class PhoneScanRow(
     val label: String,
     val rssi: Int,
     val lastSeenMs: Long,
-)
+    /** Wi-Fi channel (0 = unknown / not Wi-Fi). >= 32 means the 5 GHz band. */
+    val channel: Int = 0,
+) {
+    val is5GHz: Boolean get() = channel >= 32
+}
 
 /**
  * Drives a standalone Wi-Fi / BLE scan with the phone's own radios for the WiFi and

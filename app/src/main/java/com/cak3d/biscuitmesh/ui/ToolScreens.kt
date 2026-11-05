@@ -1,5 +1,6 @@
 package com.cak3d.biscuitmesh.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -8,9 +9,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -47,48 +50,120 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.cak3d.biscuitmesh.MainViewModel
+import com.cak3d.biscuitmesh.sensors.PhoneScanRow
 import com.cak3d.biscuitmesh.tools.Tool
 import com.cak3d.biscuitmesh.tools.ToolCatalog
 import com.cak3d.biscuitmesh.wardrive.SampleKind
 
+private val WIFI_CYAN = Color(0xFF22D3EE)
+private val BT_BLUE = Color(0xFF7C9CFF)
+
+/**
+ * WiFi hub — a live monitor dashboard in the Sub-GHz page's style. Scans with the
+ * phone's own radio and lists every network split by band (5 GHz, which only the
+ * wtBLEep node otherwise catches, and 2.4 GHz) with full info: SSID, BSSID, channel
+ * and signal. The WiFi tool launcher stays below.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WifiScreen(vm: MainViewModel, onOpenTool: (String) -> Unit) {
-    Column(Modifier.fillMaxSize()) {
-        PhoneScanCard(vm, wifi = true)
-        Box(Modifier.fillMaxSize()) {
-            TabbedToolScreen(
-                title = "WiFi Tools",
-                leadingIcon = Icons.Default.Wifi,
-                tabs = listOf(
-                    "Sniffing" to ToolCatalog.wifiSniffing,
-                    "Attacks" to ToolCatalog.wifiAttacks,
-                    "Scanners" to ToolCatalog.wifiScanners,
-                ),
-                onOpenTool = onOpenTool,
+    val scanning by vm.phoneScanning.collectAsStateWithLifecycle(initialValue = false)
+    val results by vm.phoneScanResults.collectAsStateWithLifecycle(initialValue = emptyList())
+    val nets = results.filter { it.kind == SampleKind.AP || it.kind == SampleKind.STATION }
+    val g5 = nets.filter { it.channel >= 32 }
+    val g24 = nets.filter { it.channel in 1..14 }
+    val other = nets.filter { it.channel == 0 }
+    DisposableEffect(Unit) { onDispose { vm.stopPhoneScan() } }
+
+    var tab by remember { mutableIntStateOf(0) }
+    val tabs = listOf(
+        "Sniffing" to ToolCatalog.wifiSniffing,
+        "Attacks" to ToolCatalog.wifiAttacks,
+        "Scanners" to ToolCatalog.wifiScanners,
+    )
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        item("head") {
+            ScanHeaderCard(
+                accent = WIFI_CYAN, icon = Icons.Default.Wifi, title = "WiFi",
+                subtitle = if (scanning) "${nets.size} network${plural(nets.size)} · ${g5.size} on 5 GHz — live"
+                else "Scan with the phone's own radio — no board needed",
+                scanning = scanning,
+                onScan = { vm.clearPhoneScan(); vm.startPhoneScan(wifi = true, ble = false) },
+                onStop = { vm.stopPhoneScan() },
             )
+        }
+        if (g5.isNotEmpty()) {
+            item("l5") { SectionLabel("5 GHZ · ${g5.size}", WIFI_CYAN) }
+            items(g5, key = { "g5-${it.id}" }) { NetworkRow(it, WIFI_CYAN) }
+        }
+        if (g24.isNotEmpty()) {
+            item("l24") { SectionLabel("2.4 GHZ · ${g24.size}", WIFI_CYAN) }
+            items(g24, key = { "g24-${it.id}" }) { NetworkRow(it, WIFI_CYAN) }
+        }
+        if (other.isNotEmpty()) {
+            item("lo") { SectionLabel("OTHER · ${other.size}", WIFI_CYAN) }
+            items(other, key = { "go-${it.id}" }) { NetworkRow(it, WIFI_CYAN) }
+        }
+        if (nets.isEmpty()) item("empty") { EmptyScanHint(scanning, "networks", WIFI_CYAN) }
+
+        item("tlabel") { SectionLabel("TOOLS", WIFI_CYAN) }
+        item("tabs") { ToolTabRow(tabs.map { it.first }, tab) { tab = it } }
+        items(tabs[tab.coerceIn(0, tabs.lastIndex)].second, key = { "t-${it.key}" }) {
+            ToolRow(it, Icons.Default.Wifi) { onOpenTool(it.key) }
         }
     }
 }
 
+/**
+ * Bluetooth hub — the same live monitor dashboard, for BLE. Lists every device the
+ * phone's radio sees with name, MAC and signal (BLE is 2.4 GHz only). Tool launcher below.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BluetoothScreen(vm: MainViewModel, onOpenTool: (String) -> Unit) {
-    Column(Modifier.fillMaxSize()) {
-        PhoneScanCard(vm, wifi = false)
-        Box(Modifier.fillMaxSize()) {
-            TabbedToolScreen(
-                title = "Bluetooth Tools",
-                leadingIcon = Icons.Default.Bluetooth,
-                tabs = listOf(
-                    "Scanning" to ToolCatalog.btScanning,
-                    "Attacks" to ToolCatalog.btAttacks,
-                ),
-                onOpenTool = onOpenTool,
+    val scanning by vm.phoneScanning.collectAsStateWithLifecycle(initialValue = false)
+    val results by vm.phoneScanResults.collectAsStateWithLifecycle(initialValue = emptyList())
+    val devs = results.filter { it.kind == SampleKind.BT }
+    DisposableEffect(Unit) { onDispose { vm.stopPhoneScan() } }
+
+    var tab by remember { mutableIntStateOf(0) }
+    val tabs = listOf(
+        "Scanning" to ToolCatalog.btScanning,
+        "Attacks" to ToolCatalog.btAttacks,
+    )
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        item("head") {
+            ScanHeaderCard(
+                accent = BT_BLUE, icon = Icons.Default.Bluetooth, title = "Bluetooth",
+                subtitle = if (scanning) "${devs.size} device${plural(devs.size)} — live"
+                else "Scan with the phone's own radio — no board needed",
+                scanning = scanning,
+                onScan = { vm.clearPhoneScan(); vm.startPhoneScan(wifi = false, ble = true) },
+                onStop = { vm.stopPhoneScan() },
             )
+        }
+        if (devs.isNotEmpty()) {
+            item("ld") { SectionLabel("DEVICES · ${devs.size}", BT_BLUE) }
+            items(devs, key = { "d-${it.id}" }) { DeviceRow(it, BT_BLUE) }
+        } else item("empty") { EmptyScanHint(scanning, "BLE devices", BT_BLUE) }
+
+        item("tlabel") { SectionLabel("TOOLS", BT_BLUE) }
+        item("tabs") { ToolTabRow(tabs.map { it.first }, tab) { tab = it } }
+        items(tabs[tab.coerceIn(0, tabs.lastIndex)].second, key = { "t-${it.key}" }) {
+            ToolRow(it, Icons.Default.Bluetooth) { onOpenTool(it.key) }
         }
     }
 }
+
+private fun plural(n: Int) = if (n == 1) "" else "s"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -101,69 +176,125 @@ fun MiscScreen(onOpenTool: (String) -> Unit) {
     )
 }
 
-/**
- * Phone-only live scan. Uses the phone's own Wi-Fi or BLE radio (no board needed)
- * to list nearby signals in real time; everything it sees also levels the Field
- * Guide tracks. Scanning stops automatically when you leave the tab.
- */
+/** Dashboard header: icon + title + live count, and a full-width Scan/Stop control. */
 @Composable
-private fun PhoneScanCard(vm: MainViewModel, wifi: Boolean) {
-    val scanning by vm.phoneScanning.collectAsStateWithLifecycle(initialValue = false)
-    val results by vm.phoneScanResults.collectAsStateWithLifecycle(initialValue = emptyList())
-    val rows = results.filter {
-        if (wifi) it.kind == SampleKind.AP || it.kind == SampleKind.STATION else it.kind == SampleKind.BT
-    }
-    DisposableEffect(Unit) { onDispose { vm.stopPhoneScan() } }
-
+private fun ScanHeaderCard(
+    accent: Color,
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    scanning: Boolean,
+    onScan: () -> Unit,
+    onStop: () -> Unit,
+) {
     Card(
-        modifier = Modifier.fillMaxWidth().padding(12.dp),
-        shape = RoundedCornerShape(14.dp),
+        Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
-        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(30.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(if (wifi) "Scan with this phone" else "BLE scan with this phone",
-                        style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                    Text(
-                        if (scanning) "${rows.size} seen — live" else "No board needed — uses the phone's radio",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
-                    )
-                }
-                Spacer(Modifier.width(10.dp))
-                if (scanning) {
-                    Button(onClick = { vm.stopPhoneScan() }) {
-                        Icon(Icons.Default.Stop, contentDescription = null)
-                        Spacer(Modifier.width(6.dp)); Text("Stop")
-                    }
-                } else {
-                    Button(onClick = { vm.clearPhoneScan(); vm.startPhoneScan(wifi = wifi, ble = !wifi) }) {
-                        Icon(Icons.Default.Wifi, contentDescription = null)
-                        Spacer(Modifier.width(6.dp)); Text("Scan")
-                    }
+                    Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text(subtitle, style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f))
                 }
             }
-            rows.take(12).forEach { r ->
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(
-                        r.label.ifBlank { if (wifi) "(hidden)" else r.id },
-                        style = MaterialTheme.typography.bodySmall,
-                        fontFamily = FontFamily.Monospace,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Text("${r.rssi} dBm", style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.secondary)
-                }
-            }
-            if (rows.size > 12) {
-                Text("+${rows.size - 12} more", style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+            Button(onClick = { if (scanning) onStop() else onScan() }, modifier = Modifier.fillMaxWidth()) {
+                Icon(if (scanning) Icons.Default.Stop else icon, contentDescription = null)
+                Spacer(Modifier.width(6.dp))
+                Text(if (scanning) "Stop scan" else "Scan with this phone")
             }
         }
     }
 }
+
+@Composable
+private fun SectionLabel(text: String, accent: Color) {
+    Text(text, style = MaterialTheme.typography.labelMedium, color = accent,
+        fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+}
+
+@Composable
+private fun EmptyScanHint(scanning: Boolean, what: String, accent: Color) {
+    Card(
+        Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF0A0A0C)),
+    ) {
+        Text(
+            if (scanning) "scanning… nothing yet" else "tap Scan to sense $what with this phone",
+            style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace,
+            color = accent.copy(alpha = 0.6f), modifier = Modifier.padding(14.dp),
+        )
+    }
+}
+
+/** One Wi-Fi network: SSID, BSSID, channel + band, signal and a strength bar. */
+@Composable
+private fun NetworkRow(row: PhoneScanRow, accent: Color) {
+    val band = when {
+        row.channel >= 32 -> "5 GHz"
+        row.channel in 1..14 -> "2.4 GHz"
+        else -> "band ?"
+    }
+    val meta = buildString {
+        if (row.channel > 0) { append("ch ${row.channel}"); append("  ·  ") }
+        append(band)
+    }
+    SignalCard(accent, row.label.ifBlank { "(hidden network)" }, row.id, meta, row.rssi, wifiStrength(row.rssi))
+}
+
+/** One BLE device: name, MAC, signal and a strength bar. */
+@Composable
+private fun DeviceRow(row: PhoneScanRow, accent: Color) {
+    SignalCard(accent, row.label.ifBlank { "(unnamed)" }, row.id, "BLE  ·  2.4 GHz", row.rssi, btStrength(row.rssi))
+}
+
+@Composable
+private fun SignalCard(accent: Color, title: String, mono: String, meta: String, rssi: Int, strength: Float) {
+    Card(
+        Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text(mono, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f))
+                }
+                Text("$rssi dBm", style = MaterialTheme.typography.labelMedium,
+                    fontFamily = FontFamily.Monospace, color = accent)
+            }
+            Text(meta, style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+            Box(
+                Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp))
+                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)),
+            ) {
+                if (strength > 0f) Box(Modifier.fillMaxWidth(strength).height(6.dp)
+                    .clip(RoundedCornerShape(3.dp)).background(accent))
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ToolTabRow(labels: List<String>, selected: Int, onSelect: (Int) -> Unit) {
+    TabRow(selectedTabIndex = selected.coerceIn(0, labels.lastIndex), containerColor = Color.Transparent) {
+        labels.forEachIndexed { i, l ->
+            Tab(selected = selected == i, onClick = { onSelect(i) }, text = { Text(l) })
+        }
+    }
+}
+
+// RSSI → 0..1 bar. Wi-Fi: ~ -90 (weak) .. -30 (strong). BLE: ~ -100 .. -40.
+private fun wifiStrength(rssi: Int) = ((rssi + 90f) / 60f).coerceIn(0f, 1f)
+private fun btStrength(rssi: Int) = ((rssi + 100f) / 60f).coerceIn(0f, 1f)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

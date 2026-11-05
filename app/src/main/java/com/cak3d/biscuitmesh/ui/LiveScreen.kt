@@ -47,6 +47,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.cak3d.biscuitmesh.MainViewModel
 import com.cak3d.biscuitmesh.mesh.MeshLinkState
 import com.cak3d.biscuitmesh.usb.WtfLinkState
+import com.cak3d.biscuitmesh.wardrive.SampleKind
+import com.cak3d.biscuitmesh.wardrive.WardriveSample
 import com.cak3d.biscuitmesh.wardrive.WardriveState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlin.math.atan2
@@ -79,6 +81,8 @@ fun LiveScreen(vm: MainViewModel, onBack: () -> Unit) {
     val wsFlow = remember { vm.wardriveState ?: MutableStateFlow(WardriveState()) }
     val ws by wsFlow.collectAsStateWithLifecycle()
     val samplesFlow = vm.wardriveSamples
+    val samplesState = remember(samplesFlow) { samplesFlow ?: MutableStateFlow(emptyMap<String, WardriveSample>()) }
+    val samplesMap by samplesState.collectAsStateWithLifecycle(initialValue = emptyMap())
 
     val actTrace = remember { mutableStateListOf<Float>() }
     val sigTrace = remember { mutableStateListOf<Float>() }
@@ -100,9 +104,9 @@ fun LiveScreen(vm: MainViewModel, onBack: () -> Unit) {
             actTrace.add(n.toFloat()); if (actTrace.size > 60) actTrace.removeAt(0)
             sigTrace.add((bestSig + 110).toFloat().coerceAtLeast(0f)); if (sigTrace.size > 60) sigTrace.removeAt(0)
             batt[0] = runCatching { bm?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: -1 }.getOrDefault(-1)
-            val loc = if (s.lastLat != null && s.lastLon != null) "%.5f,%.5f".format(s.lastLat, s.lastLon) else "no-fix"
-            val spd = s.speedMps?.let { if (mph) "%.0fmph".format(it * 2.23694f) else "%.0fkmh".format(it * 3.6f) } ?: "0"
-            push("TLM", "gps=$loc spd=$spd sig=${bestSig}dBm wifi=${s.wifiCount} bt=${s.btCount}" + if (s.inDeadZone) " [DEADZONE]" else "")
+            // Live telemetry drives the gauges/graphs above and the signals monitor below.
+            // It is NOT spammed into the log — that line used to repeat every 1.3 s and
+            // bury the real events. Dead-zone entry is the one telemetry worth logging.
             kotlinx.coroutines.delay(1300)
         }
     }
@@ -112,6 +116,7 @@ fun LiveScreen(vm: MainViewModel, onBack: () -> Unit) {
     LaunchedEffect(meshLink) { push("MESH", "link ${meshLink.name.lowercase()}") }
     LaunchedEffect(meshNodes.size) { if (meshNodes.isNotEmpty()) push("MESH", "${meshNodes.size} nodes: ${meshNodes.joinToString { it.name.trim() }}") }
     LaunchedEffect(progress.rank) { push("RANK", "${progress.rank} ${progress.rankName} ${progress.levelXp}xp") }
+    LaunchedEffect(ws.inDeadZone) { if (ws.inDeadZone) push("TLM", "entered dead zone — no signal") }
 
     val logState = rememberLazyListState()
     LaunchedEffect(feed.size) { if (feed.isNotEmpty()) logState.animateScrollToItem(feed.size - 1) }
@@ -130,6 +135,9 @@ fun LiveScreen(vm: MainViewModel, onBack: () -> Unit) {
     val spd = ws.speedMps?.let { if (mph) it * 2.23694f else it * 3.6f } ?: 0f
     val meshBatt = meshNodes.mapNotNull { it.battery }.maxOrNull()
     val dongleOn = wtfLink == WtfLinkState.CONNECTED
+    // Live snapshot of the strongest signals in view — re-sorted each frame, so it
+    // shows a lot of real info without the log's repetition.
+    val topSignals = remember(samplesMap) { samplesMap.values.sortedByDescending { it.rssi }.take(40) }
 
     Column(Modifier.fillMaxSize().background(BG).padding(horizontal = 6.dp)) {
         Row(Modifier.fillMaxWidth().height(36.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -184,22 +192,68 @@ fun LiveScreen(vm: MainViewModel, onBack: () -> Unit) {
             GraphCol("SIGNAL", sigTrace, GREEN, Modifier.weight(1.4f))
         }
 
-        // LIVE LOG (scrolls inside its own panel)
-        Column(Modifier.fillMaxWidth().weight(0.95f).background(PANEL).padding(horizontal = 6.dp, vertical = 3.dp)) {
-            Text("root@flyingflocks:~# tail -f live", color = GREEN.copy(alpha = 0.6f), fontFamily = FontFamily.Monospace, fontSize = 9.sp)
-            LazyColumn(state = logState, modifier = Modifier.fillMaxSize()) {
-                items(feed) { line ->
-                    val color = when {
-                        " CAM " in line -> RED
-                        " WTF " in line || " MESH " in line -> CYAN
-                        " RANK " in line || " SYS " in line -> AMBER
-                        " TLM " in line -> GREEN.copy(alpha = 0.55f)
-                        else -> GREEN
+        // Bottom: events (fire on change, no spam) over a live signals monitor.
+        Column(Modifier.fillMaxWidth().weight(0.95f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            // EVENTS — only things that actually happened: cameras, mesh, dongle, rank.
+            Column(Modifier.fillMaxWidth().weight(0.4f).background(PANEL).padding(horizontal = 6.dp, vertical = 3.dp)) {
+                Text("root@flyingflocks:~# tail -f events", color = GREEN.copy(alpha = 0.6f), fontFamily = FontFamily.Monospace, fontSize = 9.sp)
+                LazyColumn(state = logState, modifier = Modifier.fillMaxSize()) {
+                    items(feed) { line ->
+                        val color = when {
+                            " CAM " in line -> RED
+                            " WTF " in line || " MESH " in line -> CYAN
+                            " RANK " in line || " SYS " in line -> AMBER
+                            " TLM " in line -> GREEN.copy(alpha = 0.55f)
+                            else -> GREEN
+                        }
+                        Text(line, color = color, fontFamily = FontFamily.Monospace, fontSize = 9.sp, lineHeight = 12.sp)
                     }
-                    Text(line, color = color, fontFamily = FontFamily.Monospace, fontSize = 9.sp, lineHeight = 12.sp)
+                }
+            }
+            // SIGNALS — live monitor of the strongest signals in view, full info, no repetition.
+            Column(Modifier.fillMaxWidth().weight(0.6f).background(PANEL).padding(horizontal = 6.dp, vertical = 3.dp)) {
+                Text(
+                    "signals // ${topSignals.size} shown · ${samplesMap.size} tracked",
+                    color = GREEN.copy(alpha = 0.6f), fontFamily = FontFamily.Monospace, fontSize = 9.sp,
+                )
+                if (topSignals.isEmpty()) {
+                    Text("awaiting signals — start a wardrive or connect a board",
+                        color = GREEN.copy(alpha = 0.4f), fontFamily = FontFamily.Monospace, fontSize = 9.sp)
+                } else {
+                    LazyColumn(Modifier.fillMaxSize()) {
+                        items(topSignals, key = { it.id }) { SignalLine(it) }
+                    }
                 }
             }
         }
+    }
+}
+
+/** One live signal row: a band/kind tag, its label, and signal strength. */
+@Composable
+private fun SignalLine(s: WardriveSample) {
+    val (tag, color) = when {
+        s.kind == SampleKind.RF -> "RF  " to AMBER
+        s.kind == SampleKind.BT -> "BT  " to CYAN
+        s.is5GHz -> "5G  " to GREEN
+        s.kind == SampleKind.AP || s.kind == SampleKind.STATION -> "WiFi" to GREEN
+        else -> "?   " to GRID
+    }
+    val detail = buildString {
+        if (s.channel > 0) append("ch${s.channel} ")
+        if (s.sources.size > 1) append("×${s.sources.size}")
+    }.trim()
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(tag, color = color, fontFamily = FontFamily.Monospace, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+        Text(
+            s.label.ifBlank { s.id }, color = Color.White.copy(alpha = 0.82f),
+            fontFamily = FontFamily.Monospace, fontSize = 9.sp, lineHeight = 12.sp,
+            maxLines = 1, modifier = Modifier.weight(1f),
+        )
+        if (detail.isNotEmpty()) {
+            Text(detail, color = Color.White.copy(alpha = 0.35f), fontFamily = FontFamily.Monospace, fontSize = 8.sp)
+        }
+        Text("${s.rssi}", color = color, fontFamily = FontFamily.Monospace, fontSize = 9.sp)
     }
 }
 
