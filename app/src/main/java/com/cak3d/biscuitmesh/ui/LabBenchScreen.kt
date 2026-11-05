@@ -1,6 +1,8 @@
 package com.cak3d.biscuitmesh.ui
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -79,6 +82,141 @@ fun LabBenchScreen(onBack: () -> Unit) {
             MacDecoderCard()
             SignalDistanceCard()
             CrackTimeCard()
+            BeaconAnatomyCard()
+            ChannelPlannerCard()
+            FieldExamCard()
+        }
+    }
+}
+
+private data class BeaconField(val name: String, val value: String, val desc: String)
+
+@Composable
+private fun BeaconAnatomyCard() {
+    val fields = listOf(
+        BeaconField("Timestamp", "0x00A3F2", "The AP clock in microseconds — keeps every client on the network in sync."),
+        BeaconField("Interval", "100 TU", "How often the beacon is sent: ~10 times a second (1 TU = 1024 µs)."),
+        BeaconField("Capability", "ESS · Privacy", "Flags: ESS = it's an access point; Privacy = encryption is on."),
+        BeaconField("SSID", "\"Smith_Home\"", "The network name the AP shouts — the human-readable label."),
+        BeaconField("Rates", "1..54 Mb/s", "The data rates this AP supports, oldest to newest."),
+        BeaconField("DS Param", "channel 6", "The channel the AP is actually on — what our scanner reads."),
+        BeaconField("RSN IE", "CCMP · PSK", "The security suite: CCMP cipher, pre-shared-key auth (that's WPA2)."),
+        BeaconField("BSSID", "A4:83:E7", "The AP's MAC address — its unique hardware fingerprint."),
+    )
+    var sel by remember { mutableStateOf(0) }
+    LabCard("BEACON FRAME ANATOMY", "A router shouts \"I am here!\" ~10 times a second. Tap a field to see what it carries:") {
+        // simple two-column wrap
+        fields.chunked(2).forEach { pair ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                pair.forEach { f ->
+                    val idx = fields.indexOf(f)
+                    val on = idx == sel
+                    Column(
+                        Modifier.weight(1f).clip(RoundedCornerShape(10.dp))
+                            .background(if (on) GOOD.copy(alpha = 0.18f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
+                            .clickable { sel = idx }.padding(8.dp),
+                    ) {
+                        Text(f.name.uppercase(), style = MaterialTheme.typography.labelSmall,
+                            color = if (on) GOOD else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), fontFamily = FontFamily.Monospace)
+                        Text(f.value, style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace)
+                    }
+                }
+                if (pair.size == 1) Column(Modifier.weight(1f)) {}
+            }
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(fields[sel].name, color = ACCENT, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+            Text(fields[sel].desc, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f))
+        }
+    }
+}
+
+@Composable
+private fun ChannelPlannerCard() {
+    var a by remember { mutableFloatStateOf(1f) }
+    var b by remember { mutableFloatStateOf(6f) }
+    var c by remember { mutableFloatStateOf(11f) }
+    LabCard("2.4 GHZ CHANNEL PLANNER", "Each channel is ~22 MHz wide and bleeds into its neighbours. Set three and watch why only 1 / 6 / 11 stay clear:") {
+        val cols = listOf(Triple(a, Color(0xFF22D3EE), "A"), Triple(b, Color(0xFF34D399), "B"), Triple(c, Color(0xFFFF7AD9), "C"))
+        Canvas(Modifier.fillMaxWidth().height(110.dp)) {
+            val w = size.width; val h = size.height
+            fun x(ch: Float) = (ch - 1f) / 12f * w
+            // baseline
+            cols.forEach { (ch, col, _) ->
+                val p = Path().apply {
+                    moveTo(x(ch - 2.5f), h); lineTo(x(ch), h * 0.08f); lineTo(x(ch + 2.5f), h); close()
+                }
+                drawPath(p, col.copy(alpha = 0.33f))
+                drawPath(p, col, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2f))
+            }
+        }
+        Row(Modifier.fillMaxWidth()) {
+            listOf("1", "6", "11").forEach {
+                Text(it, style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), modifier = Modifier.weight(1f))
+            }
+        }
+        ChannelSlider("AP A · ${a.toInt()}", a, Color(0xFF22D3EE)) { a = it }
+        ChannelSlider("AP B · ${b.toInt()}", b, Color(0xFF34D399)) { b = it }
+        ChannelSlider("AP C · ${c.toInt()}", c, Color(0xFFFF7AD9)) { c = it }
+        val clean = setOf(a.toInt(), b.toInt(), c.toInt()) == setOf(1, 6, 11)
+        Text(
+            if (clean) "✓ 1 / 6 / 11 — the only trio with no overlap." else "Overlap! Non-1/6/11 channels bleed into each other and slow everyone down.",
+            style = MaterialTheme.typography.bodySmall, color = if (clean) GOOD else WARN, fontWeight = FontWeight.SemiBold,
+        )
+    }
+}
+
+@Composable
+private fun ChannelSlider(label: String, value: Float, color: Color, onChange: (Float) -> Unit) {
+    Column {
+        Text(label, style = MaterialTheme.typography.labelMedium, color = color, fontFamily = FontFamily.Monospace)
+        Slider(value = value, onValueChange = { onChange(it) }, valueRange = 1f..13f, steps = 11)
+    }
+}
+
+private data class Quiz(val q: String, val options: List<String>, val answer: Int)
+
+@Composable
+private fun FieldExamCard() {
+    val quiz = remember {
+        listOf(
+            Quiz("RSSI of −90 dBm means the signal is…", listOf("Very strong", "At the edge of range", "Medium"), 1),
+            Quiz("Which 2.4 GHz channels don't overlap?", listOf("1, 6, 11", "All 14", "Any three"), 0),
+            Quiz("A randomized/private MAC has which bit set?", listOf("Multicast bit", "Locally-administered bit", "Broadcast bit"), 1),
+        )
+    }
+    var i by remember { mutableStateOf(0) }
+    var picked by remember { mutableStateOf(-1) }
+    var score by remember { mutableStateOf(0) }
+    LabCard("FIELD EXAM", "Three questions from what you've learned.") {
+        if (i >= quiz.size) {
+            Text("Score: $score / ${quiz.size}", color = ACCENT, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+            Text(if (score == quiz.size) "Perfect — you read the air." else "Scroll back up and try the instruments again.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+        } else {
+            val q = quiz[i]
+            Text("${i + 1}/${quiz.size} · ${q.q}", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+            q.options.forEachIndexed { oi, opt ->
+                val color = when {
+                    picked < 0 -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)
+                    oi == q.answer -> GOOD.copy(alpha = 0.22f)
+                    oi == picked -> BAD.copy(alpha = 0.22f)
+                    else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)
+                }
+                Row(
+                    Modifier.fillMaxWidth().padding(top = 6.dp).clip(RoundedCornerShape(10.dp)).background(color)
+                        .clickable(enabled = picked < 0) {
+                            picked = oi; if (oi == q.answer) score++
+                        }.padding(12.dp),
+                ) { Text(opt, style = MaterialTheme.typography.bodyMedium) }
+            }
+            if (picked >= 0) {
+                Row(Modifier.fillMaxWidth().padding(top = 8.dp).clip(RoundedCornerShape(10.dp))
+                    .background(ACCENT.copy(alpha = 0.14f)).clickable { i++; picked = -1 }.padding(12.dp)) {
+                    Text(if (i == quiz.size - 1) "See score" else "Next question →", color = ACCENT, fontWeight = FontWeight.Bold)
+                }
+            }
         }
     }
 }

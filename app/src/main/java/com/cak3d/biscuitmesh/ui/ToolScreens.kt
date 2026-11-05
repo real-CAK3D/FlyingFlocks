@@ -115,6 +115,7 @@ fun WifiScreen(vm: MainViewModel, onOpenTool: (String) -> Unit) {
         if (nets.isNotEmpty()) item("spectrum") { SpectrumCard(g24, g5, WIFI_CYAN) }
         if (nets.isNotEmpty()) item("enc") { EncryptionCard(nets, WIFI_CYAN) }
         if (nets.isNotEmpty()) item("mfg") { ManufacturersCard(nets, ouiReady, WIFI_CYAN) }
+        if (nets.isNotEmpty()) item("rssi") { RssiHistogramCard(nets, WIFI_CYAN) }
         if (g5.isNotEmpty()) {
             item("l5") { SectionLabel("5 GHZ · ${g5.size}", WIFI_CYAN) }
             items(g5, key = { "g5-${it.id}" }) { NetworkRow(it, WIFI_CYAN) }
@@ -403,6 +404,53 @@ private fun ChannelBar(label: String, count: Int, max: Int, color: Color) {
         }
         Text("$count", style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+    }
+}
+
+/** Signal-strength histogram — how many networks fall in each RSSI band. */
+@Composable
+private fun RssiHistogramCard(nets: List<PhoneScanRow>, accent: Color) {
+    val counts = IntArray(6)
+    nets.forEach {
+        val i = when {
+            it.rssi >= -40 -> 0
+            it.rssi >= -50 -> 1
+            it.rssi >= -60 -> 2
+            it.rssi >= -70 -> 3
+            it.rssi >= -80 -> 4
+            else -> 5
+        }
+        counts[i]++
+    }
+    val labels = listOf("≥ −40", "−40 to −50", "−50 to −60", "−60 to −70", "−70 to −80", "< −80")
+    val max = (counts.maxOrNull() ?: 1).coerceAtLeast(1)
+    Card(
+        Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("SIGNAL STRENGTH", style = MaterialTheme.typography.labelMedium, color = accent,
+                fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+            Text("closer to 0 is stronger; the pile near −80 is the edge of range.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+            labels.forEachIndexed { i, lab -> HistRow(lab, counts[i], max, accent) }
+        }
+    }
+}
+
+@Composable
+private fun HistRow(label: String, count: Int, max: Int, color: Color) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(label, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace,
+            modifier = Modifier.width(84.dp))
+        Box(Modifier.weight(1f).height(10.dp).clip(RoundedCornerShape(5.dp))
+            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f))) {
+            if (count > 0) Box(Modifier.fillMaxWidth(count.toFloat() / max).height(10.dp)
+                .clip(RoundedCornerShape(5.dp)).background(color))
+        }
+        Text("$count", style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f), modifier = Modifier.width(40.dp))
     }
 }
 
