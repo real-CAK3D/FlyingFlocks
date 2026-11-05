@@ -5,12 +5,17 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.graphics.Canvas
 import android.graphics.Color as AndroidColor
+import android.graphics.Paint
+import android.graphics.Point
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import android.view.MotionEvent
+import android.widget.Toast
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
@@ -91,6 +96,7 @@ import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
+import org.osmdroid.views.overlay.Overlay
 import org.osmdroid.views.overlay.Polygon
 import org.osmdroid.views.overlay.Polyline
 import org.osmdroid.views.overlay.TilesOverlay
@@ -231,6 +237,7 @@ fun WardriveScreen(vm: MainViewModel) {
         }
     }
     var showCameras by remember { mutableStateOf(true) }
+    var pendingDeleteCam by remember { mutableStateOf<com.cak3d.biscuitmesh.geo.Hazard?>(null) }
     var showPlaces by remember { mutableStateOf(true) }
     var showBoards by remember { mutableStateOf(true) }
     var controlsExpanded by remember { mutableStateOf(true) }
@@ -311,9 +318,14 @@ fun WardriveScreen(vm: MainViewModel) {
                 // Sightings: everything by default, board-seen in Biscuit view, 5 GHz in
                 // wtBLEep view, sub-GHz pings in the Sub-GHz view. RF is kept out of the
                 // other views so each theme shows only its own band.
+                // Every sighting, painted in a single canvas pass so the whole night's
+                // trail stays on the map — no cap, nothing drops off behind you as you
+                // drive. (A Marker-per-point overlay choked past a few hundred, so the
+                // oldest points were being thrown away; this holds one overlay no matter
+                // how many points there are and only paints the ones on screen.)
                 if (viewMode == MapViewMode.DEFAULT || viewMode == MapViewMode.BISCUITS ||
                     viewMode == MapViewMode.WTBLEEP || viewMode == MapViewMode.RF) {
-                    samples.values.asSequence()
+                    val dots = samples.values.asSequence()
                         .filter {
                             when (viewMode) {
                                 MapViewMode.BISCUITS -> it.kind != SampleKind.RF && it.sources.any { src -> src != PHONE_SOURCE }
@@ -322,23 +334,24 @@ fun WardriveScreen(vm: MainViewModel) {
                                 else -> it.kind != SampleKind.RF
                             }
                         }
-                        .sortedByDescending { it.timeMs }.take(900).forEach { s ->
+                        .map { s ->
                             val shared = s.sources.size > 1
-                            val m = Marker(map)
-                            m.position = GeoPoint(s.lat, s.lon)
                             val color = when (viewMode) {
                                 MapViewMode.BISCUITS -> GINGERBREAD
                                 MapViewMode.WTBLEEP -> WTBLEEP_BLUE
                                 MapViewMode.RF -> RF_AMBER
                                 else -> colorForSample(s)
                             }
-                            m.icon = dot(color, if (shared) 13 else sizeForKind(s.kind))
-                            m.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                            val szDp = if (shared) 13 else sizeForKind(s.kind)
                             val ch = if (s.channel > 0) "  ch${s.channel}" else ""
                             val seenBy = if (shared) "  ·  seen by ${s.sources.size}" else ""
-                            m.title = "${s.label.ifBlank { s.id }}  ${s.rssi} dBm$ch$seenBy"
-                            map.overlays.add(m)
+                            DotsOverlay.Dot(
+                                GeoPoint(s.lat, s.lon), color, szDp * 2.75f / 2f,
+                                "${s.label.ifBlank { s.id }}  ${s.rssi} dBm$ch$seenBy",
+                            )
                         }
+                        .toList()
+                    map.overlays.add(DotsOverlay(dots))
                 }
 
                 // Mesh view: weave a spider web between all located nodes, then dot them.
@@ -401,6 +414,8 @@ fun WardriveScreen(vm: MainViewModel) {
                         m.icon = ring(color, if (viewMode == MapViewMode.FLOCK) 17 else 15)
                         m.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
                         m.title = hazardLabel(hz.kind) + if (hz.name.isNotBlank()) " · ${hz.name}" else ""
+                        // Tap a camera to remove it (confirm first) — clears stray test pins.
+                        m.setOnMarkerClickListener { _, _ -> pendingDeleteCam = hz; true }
                         map.overlays.add(m)
                     }
                 }
@@ -568,6 +583,27 @@ fun WardriveScreen(vm: MainViewModel) {
 
         if (showOffline) {
             OfflineMapDialog(mapView = mapView, styleLabel = mapStyle.label) { showOffline = false }
+        }
+
+        pendingDeleteCam?.let { cam ->
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { pendingDeleteCam = null },
+                title = { Text("Remove this camera?") },
+                text = {
+                    Text(
+                        hazardLabel(cam.kind) + (if (cam.name.isNotBlank()) " · ${cam.name}" else "") +
+                            "\n\nIt won't be shown on the map anymore. Cameras the dongle or OpenStreetMap still report may reappear.",
+                    )
+                },
+                confirmButton = {
+                    androidx.compose.material3.TextButton(onClick = {
+                        vm.removeHazard(cam.id); pendingDeleteCam = null
+                    }) { Text("Remove") }
+                },
+                dismissButton = {
+                    androidx.compose.material3.TextButton(onClick = { pendingDeleteCam = null }) { Text("Cancel") }
+                },
+            )
         }
     }
 }
@@ -1128,4 +1164,61 @@ private fun dot(color: Int, sizeDp: Int): GradientDrawable {
         setStroke(2, AndroidColor.parseColor("#0E1116"))
         setSize(px, px)
     }
+}
+
+/**
+ * Draws every wardrive sighting as a coloured dot in one canvas pass. A
+ * Marker-per-point overlay bogged the map down in the hundreds and forced an
+ * arbitrary cap, so points vanished behind you on a drive. This keeps a single
+ * overlay no matter how many points there are and only paints the ones currently
+ * on screen; tap near a dot to read what it was.
+ */
+private class DotsOverlay(private val dots: List<Dot>) : Overlay() {
+    class Dot(val point: GeoPoint, val color: Int, val radiusPx: Float, val title: String)
+
+    private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 2f
+        color = AndroidColor.parseColor("#0E1116")
+    }
+    private val scratch = Point()
+
+    override fun draw(canvas: Canvas, map: MapView, shadow: Boolean) {
+        if (shadow) return
+        val proj = map.projection
+        val w = map.width
+        val h = map.height
+        for (d in dots) {
+            proj.toPixels(d.point, scratch)
+            val x = scratch.x.toFloat()
+            val y = scratch.y.toFloat()
+            val r = d.radiusPx
+            if (x < -r || y < -r || x > w + r || y > h + r) continue   // off-screen: skip
+            fill.color = d.color
+            canvas.drawCircle(x, y, r, fill)
+            canvas.drawCircle(x, y, r, stroke)
+        }
+    }
+
+    override fun onSingleTapConfirmed(e: MotionEvent, map: MapView): Boolean {
+        val proj = map.projection
+        var best: Dot? = null
+        var bestSq = Float.MAX_VALUE
+        for (d in dots) {
+            proj.toPixels(d.point, scratch)
+            val dx = scratch.x - e.x
+            val dy = scratch.y - e.y
+            val sq = dx * dx + dy * dy
+            if (sq < bestSq) { bestSq = sq; best = d }
+        }
+        val hit = best
+        if (hit != null && bestSq <= TOUCH_SLOP_SQ) {
+            Toast.makeText(map.context, hit.title, Toast.LENGTH_SHORT).show()
+            return true
+        }
+        return false
+    }
+
+    private companion object { const val TOUCH_SLOP_SQ = 44f * 44f }
 }

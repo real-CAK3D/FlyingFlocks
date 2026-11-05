@@ -171,6 +171,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun removePlace(id: String) { viewModelScope.launch { appRef.placesStore.remove(id) } }
 
+    /** Remove one camera (e.g. a stray test pin) tapped on the map. */
+    fun removeHazard(id: String) { viewModelScope.launch { appRef.hazards?.remove(id) } }
+
     /** The active route geometry for the map (set by the navigation manager). */
     val activeRoute: StateFlow<ActiveRoute?> get() = appRef.navigation.route
 

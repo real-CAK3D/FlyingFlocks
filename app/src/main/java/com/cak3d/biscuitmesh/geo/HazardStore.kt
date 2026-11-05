@@ -33,6 +33,13 @@ class HazardStore(private val context: Context) {
         context.hazardDataStore.edit { it[key] = toJson((have + added).takeLast(2000)) }
     }
 
+    /** Drops one camera by id (e.g. a stray test pin the user taps to remove). */
+    suspend fun remove(id: String) {
+        val have = current()
+        if (have.none { it.id == id }) return
+        context.hazardDataStore.edit { p -> p[key] = toJson(have.filterNot { it.id == id }) }
+    }
+
     private fun toJson(list: List<Hazard>): String {
         val arr = JSONArray()
         list.forEach { h ->

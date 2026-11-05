@@ -35,6 +35,9 @@ class HazardManager(
     private val _alert = MutableStateFlow<HazardAlert?>(null)
     val alert: StateFlow<HazardAlert?> = _alert.asStateFlow()
 
+    /** Remove one camera from the map/store (the hazards flow updates automatically). */
+    suspend fun remove(id: String) = store.remove(id)
+
     private var lastCamLat = 0.0
     private var lastCamLon = 0.0
     private var camLoaded = false
