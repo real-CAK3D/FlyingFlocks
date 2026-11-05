@@ -315,9 +315,9 @@ fun WardriveScreen(vm: MainViewModel) {
                     map.overlays.add(line)
                 }
 
-                // Sightings: everything by default, board-seen in Biscuit view, 5 GHz in
-                // wtBLEep view, sub-GHz pings in the Sub-GHz view. RF is kept out of the
-                // other views so each theme shows only its own band.
+                // Sightings: EVERY band in the All view (Wi-Fi + sub-GHz), board-seen in
+                // Biscuit view, 5 GHz in wtBLEep view, sub-GHz pings in the Sub-GHz view.
+                // RF is kept out of the Biscuit/wtBLEep themes so each shows only its band.
                 // Every sighting, painted in a single canvas pass so the whole night's
                 // trail stays on the map — no cap, nothing drops off behind you as you
                 // drive. (A Marker-per-point overlay choked past a few hundred, so the
@@ -331,7 +331,7 @@ fun WardriveScreen(vm: MainViewModel) {
                                 MapViewMode.BISCUITS -> it.kind != SampleKind.RF && it.sources.any { src -> src != PHONE_SOURCE }
                                 MapViewMode.WTBLEEP -> it.is5GHz
                                 MapViewMode.RF -> it.kind == SampleKind.RF
-                                else -> it.kind != SampleKind.RF
+                                else -> true  // All: show every band, sub-GHz included
                             }
                         }
                         .map { s ->
@@ -340,7 +340,7 @@ fun WardriveScreen(vm: MainViewModel) {
                                 MapViewMode.BISCUITS -> GINGERBREAD
                                 MapViewMode.WTBLEEP -> WTBLEEP_BLUE
                                 MapViewMode.RF -> RF_AMBER
-                                else -> colorForSample(s)
+                                else -> if (s.kind == SampleKind.RF) RF_AMBER else colorForSample(s)
                             }
                             val szDp = if (shared) 13 else sizeForKind(s.kind)
                             val ch = if (s.channel > 0) "  ch${s.channel}" else ""
