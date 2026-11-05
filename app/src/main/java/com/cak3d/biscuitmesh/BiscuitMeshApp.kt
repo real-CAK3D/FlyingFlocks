@@ -180,6 +180,8 @@ class BiscuitMeshApp : Application() {
     override fun onCreate() {
         super.onCreate()
         usbDetector.start()
+        // Load the bundled IEEE OUI registry off the main thread for vendor lookups.
+        appScope.launch(Dispatchers.IO) { com.cak3d.biscuitmesh.sensors.OuiDb.ensureLoaded(this@BiscuitMeshApp) }
         // Touch the progress manager so it loads saved XP and starts scoring finds
         // from launch, even before the Field Guide screen is opened.
         progress

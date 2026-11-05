@@ -38,10 +38,16 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import com.cak3d.biscuitmesh.sensors.OuiDb
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -76,6 +82,13 @@ fun WifiScreen(vm: MainViewModel, onOpenTool: (String) -> Unit) {
     val other = nets.filter { it.channel == 0 }
     DisposableEffect(Unit) { onDispose { vm.stopPhoneScan() } }
 
+    val context = LocalContext.current
+    var ouiReady by remember { mutableStateOf(OuiDb.loaded) }
+    LaunchedEffect(Unit) {
+        if (!OuiDb.loaded) withContext(Dispatchers.IO) { OuiDb.ensureLoaded(context) }
+        ouiReady = OuiDb.loaded
+    }
+
     var tab by remember { mutableIntStateOf(0) }
     val tabs = listOf(
         "Sniffing" to ToolCatalog.wifiSniffing,
@@ -99,6 +112,7 @@ fun WifiScreen(vm: MainViewModel, onOpenTool: (String) -> Unit) {
         }
         if (nets.isNotEmpty()) item("spectrum") { SpectrumCard(g24, g5, WIFI_CYAN) }
         if (nets.isNotEmpty()) item("enc") { EncryptionCard(nets, WIFI_CYAN) }
+        if (nets.isNotEmpty()) item("mfg") { ManufacturersCard(nets, ouiReady, WIFI_CYAN) }
         if (g5.isNotEmpty()) {
             item("l5") { SectionLabel("5 GHZ · ${g5.size}", WIFI_CYAN) }
             items(g5, key = { "g5-${it.id}" }) { NetworkRow(it, WIFI_CYAN) }
@@ -413,12 +427,39 @@ private fun PrivacyCard(devs: List<PhoneScanRow>, accent: Color) {
     }
 }
 
+/** Manufacturers from the MAC OUI prefix; randomized/private addresses are grouped out. */
+@Composable
+private fun ManufacturersCard(nets: List<PhoneScanRow>, ouiReady: Boolean, accent: Color) {
+    val counts = remember(nets, ouiReady) {
+        nets.groupingBy { n ->
+            OuiDb.vendor(n.id) ?: if (OuiDb.isRandom(n.id)) "Unknown / random" else "Unknown"
+        }.eachCount()
+    }
+    val total = nets.size.coerceAtLeast(1)
+    val top = counts.entries.sortedByDescending { it.value }.take(8)
+    Card(
+        Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("MANUFACTURERS", style = MaterialTheme.typography.labelMedium, color = accent,
+                fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+            if (!ouiReady) {
+                Text("loading vendor database…", style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), fontFamily = FontFamily.Monospace)
+            }
+            top.forEach { (name, n) -> PctBar(name, n, total, accent) }
+        }
+    }
+}
+
 @Composable
 private fun PctBar(label: String, count: Int, total: Int, color: Color) {
     val frac = (count.toFloat() / total).coerceIn(0f, 1f)
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+            Text(label, style = MaterialTheme.typography.bodyMedium, maxLines = 1, modifier = Modifier.weight(1f))
             Text("$count · ${"%.1f".format(frac * 100)}%", style = MaterialTheme.typography.labelMedium,
                 fontFamily = FontFamily.Monospace, color = color)
         }

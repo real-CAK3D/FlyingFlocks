@@ -74,6 +74,7 @@ fun DrivesScreen(vm: MainViewModel, onBack: () -> Unit) {
                     )
                 }
             }
+            if (drives.isNotEmpty()) item("reach") { RangeReachCard(drives, useMph) }
             items(drives, key = { it.id }) { d ->
                 DriveCard(
                     d, useMph,
@@ -121,6 +122,40 @@ private fun DriveCard(drive: DriveSession, useMph: Boolean, onReupload: () -> Un
         }
     }
 }
+
+/** Range & Reach summary over all drives — ground surveyed, active days, best single day. */
+@Composable
+private fun RangeReachCard(drives: List<DriveSession>, useMph: Boolean) {
+    val accent = Color(0xFF22D3EE)
+    val totalM = drives.sumOf { it.distanceM }
+    val byDay = drives.groupBy { dayKey(it.startMs) }
+    val bestM = byDay.values.maxOfOrNull { day -> day.sumOf { it.distanceM } } ?: 0.0
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("RANGE & REACH", style = MaterialTheme.typography.labelMedium, color = accent, fontWeight = FontWeight.Bold)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                ReachStat(distance(totalM, useMph), "SURVEYED", accent, Modifier.weight(1f))
+                ReachStat("${byDay.size}", "ACTIVE DAYS", accent, Modifier.weight(1f))
+                ReachStat(distance(bestM, useMph), "BEST DAY", accent, Modifier.weight(1f))
+            }
+            Text("${drives.size} drive${if (drives.size == 1) "" else "s"} logged.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+        }
+    }
+}
+
+@Composable
+private fun ReachStat(value: String, label: String, accent: Color, modifier: Modifier) {
+    Column(modifier) {
+        Text(value, style = MaterialTheme.typography.titleLarge, color = accent, fontWeight = FontWeight.Bold)
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+    }
+}
+
+private fun dayKey(ms: Long): String = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(ms))
 
 private fun stamp(ms: Long): String =
     SimpleDateFormat("EEE MMM d, h:mm a", Locale.US).format(Date(ms))
