@@ -45,6 +45,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import com.cak3d.biscuitmesh.sensors.BtCategory
+import com.cak3d.biscuitmesh.sensors.BtTaxonomy
 import com.cak3d.biscuitmesh.sensors.OuiDb
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -147,6 +149,16 @@ fun BluetoothScreen(vm: MainViewModel, onOpenTool: (String) -> Unit) {
     val devs = results.filter { it.kind == SampleKind.BT }
     DisposableEffect(Unit) { onDispose { vm.stopPhoneScan() } }
 
+    val catCounts = remember(devs) {
+        val m = HashMap<String, Int>()
+        devs.forEach { d -> BtTaxonomy.classify(d.label)?.let { m[it.name] = (m[it.name] ?: 0) + 1 } }
+        m
+    }
+    val identified = catCounts.values.sum()
+    val byRoom = remember(catCounts) {
+        BtTaxonomy.categories.filter { catCounts.containsKey(it.name) }.groupBy { it.room }
+    }
+
     var tab by remember { mutableIntStateOf(0) }
     val tabs = listOf(
         "Scanning" to ToolCatalog.btScanning,
@@ -172,6 +184,24 @@ fun BluetoothScreen(vm: MainViewModel, onOpenTool: (String) -> Unit) {
             item("ld") { SectionLabel("DEVICES · ${devs.size}", BT_BLUE) }
             items(devs, key = { "d-${it.id}" }) { DeviceRow(it, BT_BLUE) }
         } else item("empty") { EmptyScanHint(scanning, "BLE devices", BT_BLUE) }
+
+        // BT House — what the named devices actually are, grouped by room.
+        if (devs.isNotEmpty()) {
+            item("bthl") { SectionLabel("BT HOUSE · $identified/${devs.size} identified", BT_BLUE) }
+            BtTaxonomy.roomOrder.forEach { room ->
+                val cats = byRoom[room].orEmpty().sortedByDescending { catCounts[it.name] ?: 0 }
+                if (cats.isNotEmpty()) {
+                    item("room-$room") {
+                        Text(room.uppercase(), style = MaterialTheme.typography.labelSmall,
+                            color = BT_BLUE.copy(alpha = 0.8f), fontFamily = FontFamily.Monospace,
+                            modifier = Modifier.padding(top = 4.dp))
+                    }
+                    items(cats, key = { "bh-${it.name}" }) { cat -> CategoryRow(cat, catCounts[cat.name] ?: 0, BT_BLUE) }
+                }
+            }
+            val unidentified = devs.size - identified
+            if (unidentified > 0) item("unid") { UnidentifiedRow(unidentified) }
+        }
 
         item("tlabel") { SectionLabel("TOOLS", BT_BLUE) }
         item("tabs") { ToolTabRow(tabs.map { it.first }, tab) { tab = it } }
@@ -495,6 +525,47 @@ private fun typeColor(t: String): Color = when (t) {
     "random static" -> Color(0xFFF59E0B)
     "non-resolvable" -> Color(0xFF7C9CFF)
     else -> Color(0xFF34D399) // public / maker
+}
+
+@Composable
+private fun CategoryRow(cat: BtCategory, count: Int, accent: Color) {
+    Card(
+        Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(Modifier.weight(1f)) {
+                Text(cat.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(cat.examples, style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+            }
+            Text("×$count", style = MaterialTheme.typography.titleMedium, color = accent,
+                fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
+private fun UnidentifiedRow(count: Int) {
+    Card(
+        Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(Modifier.weight(1f)) {
+                Text("Unidentified", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text("no name, or a private rotating address — most BLE devices stay quiet",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+            }
+            Text("×$count", style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
