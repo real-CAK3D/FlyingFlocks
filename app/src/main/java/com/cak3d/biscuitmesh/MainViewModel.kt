@@ -259,6 +259,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Start a scan if one isn't already running (the Connect page auto-scans while open). */
+    fun startScan() {
+        val scanner = appRef.scanner ?: return
+        val fleet = appRef.fleet ?: return
+        if (scanner.isScanning) return
+        fleet.onScanStart()
+        scanner.start { found -> fleet.onScanFound(found) }
+        _scanning.value = true
+    }
+
     fun stopScan() {
         appRef.scanner?.stop()
         _scanning.value = false

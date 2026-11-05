@@ -42,6 +42,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -71,6 +72,14 @@ fun FleetScreen(vm: MainViewModel, onOpen: (String) -> Unit = {}) {
     val devices by devicesFlow.collectAsStateWithLifecycle()
     val scanning by vm.scanning.collectAsStateWithLifecycle()
     val usb by vm.usbDevices.collectAsStateWithLifecycle(initialValue = emptyList())
+
+    // Scan the whole time the Connect page is open, so a powered board nearby
+    // moves to "In range" on its own instead of sitting at "out of range" until
+    // you remember to tap Scan. Stops when you leave, to spare the battery.
+    DisposableEffect(Unit) {
+        vm.startScan()
+        onDispose { vm.stopScan() }
+    }
 
     val all = devices.values
     val connected = all.filter { it.isLive }.sortedByDescending { it.rssi }
