@@ -66,6 +66,7 @@ import com.cak3d.biscuitmesh.ui.DrivesScreen
 import com.cak3d.biscuitmesh.ui.FindsScreen
 import com.cak3d.biscuitmesh.ui.FleetScreen
 import com.cak3d.biscuitmesh.ui.LiveScreen
+import com.cak3d.biscuitmesh.ui.ProximityBanner
 import com.cak3d.biscuitmesh.ui.ConstellationBackground
 import com.cak3d.biscuitmesh.ui.MiscScreen
 import com.cak3d.biscuitmesh.ui.PlacesScreen
@@ -288,6 +289,15 @@ private fun MainShell(vm: MainViewModel) {
                         toolKey = entry.arguments?.getString("key"),
                         onBack = { nav.popBackStack() },
                     )
+                }
+            }
+            // Global proximity alert — slides in at the top when near a mapped device
+            // (Meshtastic node or camera). Doubles as a locator; taps jump to the map.
+            ProximityBanner(vm) {
+                if (currentRoute != "wardrive") nav.navigate("wardrive") {
+                    popUpTo("fleet") { saveState = true }
+                    launchSingleTop = true
+                    restoreState = true
                 }
             }
         }

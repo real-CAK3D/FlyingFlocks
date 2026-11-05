@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -96,6 +97,7 @@ fun WifiScreen(vm: MainViewModel, onOpenTool: (String) -> Unit) {
                 onStop = { vm.stopPhoneScan() },
             )
         }
+        if (nets.isNotEmpty()) item("spectrum") { SpectrumCard(g24, g5, WIFI_CYAN) }
         if (g5.isNotEmpty()) {
             item("l5") { SectionLabel("5 GHZ · ${g5.size}", WIFI_CYAN) }
             items(g5, key = { "g5-${it.id}" }) { NetworkRow(it, WIFI_CYAN) }
@@ -295,6 +297,67 @@ private fun ToolTabRow(labels: List<String>, selected: Int, onSelect: (Int) -> U
 // RSSI → 0..1 bar. Wi-Fi: ~ -90 (weak) .. -30 (strong). BLE: ~ -100 .. -40.
 private fun wifiStrength(rssi: Int) = ((rssi + 90f) / 60f).coerceIn(0f, 1f)
 private fun btStrength(rssi: Int) = ((rssi + 100f) / 60f).coerceIn(0f, 1f)
+
+private val BAND_24 = Color(0xFF60A5FA)
+private val BAND_5 = Color(0xFFF59E0B)
+
+/** Spectrum summary: 2.4-vs-5 GHz split and the 2.4 GHz channel-congestion story (1/6/11). */
+@Composable
+private fun SpectrumCard(g24: List<PhoneScanRow>, g5: List<PhoneScanRow>, accent: Color) {
+    val ch1 = g24.count { it.channel == 1 }
+    val ch6 = g24.count { it.channel == 6 }
+    val ch11 = g24.count { it.channel == 11 }
+    val chOther = (g24.size - ch1 - ch6 - ch11).coerceAtLeast(0)
+    val maxCh = maxOf(ch1, ch6, ch11, chOther, 1)
+    Card(
+        Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("SPECTRUM", style = MaterialTheme.typography.labelMedium, color = accent,
+                fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+
+            // Band split bar (2.4 vs 5 GHz).
+            Box(Modifier.fillMaxWidth().height(14.dp).clip(RoundedCornerShape(7.dp))
+                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f))) {
+                Row(Modifier.fillMaxWidth().height(14.dp)) {
+                    if (g24.isNotEmpty()) Box(Modifier.fillMaxHeight().weight(g24.size.toFloat()).background(BAND_24))
+                    if (g5.isNotEmpty()) Box(Modifier.fillMaxHeight().weight(g5.size.toFloat()).background(BAND_5))
+                }
+            }
+            Row(Modifier.fillMaxWidth()) {
+                Text("2.4 GHz · ${g24.size}", style = MaterialTheme.typography.bodySmall, color = BAND_24,
+                    fontFamily = FontFamily.Monospace, modifier = Modifier.weight(1f))
+                Text("5 GHz · ${g5.size}", style = MaterialTheme.typography.bodySmall, color = BAND_5,
+                    fontFamily = FontFamily.Monospace)
+            }
+
+            // 2.4 GHz channel congestion — only 1/6/11 don't overlap, so they dominate.
+            Text("2.4 GHZ CHANNELS", style = MaterialTheme.typography.labelSmall, color = accent,
+                fontFamily = FontFamily.Monospace)
+            ChannelBar("ch 1", ch1, maxCh, accent)
+            ChannelBar("ch 6", ch6, maxCh, accent)
+            ChannelBar("ch 11", ch11, maxCh, accent)
+            ChannelBar("other", chOther, maxCh, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
+        }
+    }
+}
+
+@Composable
+private fun ChannelBar(label: String, count: Int, max: Int, color: Color) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(label, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace,
+            modifier = Modifier.width(48.dp))
+        Box(Modifier.weight(1f).height(10.dp).clip(RoundedCornerShape(5.dp))
+            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f))) {
+            if (count > 0) Box(Modifier.fillMaxWidth(count.toFloat() / max).height(10.dp)
+                .clip(RoundedCornerShape(5.dp)).background(color))
+        }
+        Text("$count", style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
