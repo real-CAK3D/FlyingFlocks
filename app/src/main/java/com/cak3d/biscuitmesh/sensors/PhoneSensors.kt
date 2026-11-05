@@ -26,7 +26,7 @@ class PhoneSensors(context: Context, private val adapter: BluetoothAdapter?) {
     private val appContext = context.applicationContext
     private val wifi = appContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
 
-    data class Hit(val kind: SampleKind, val id: String, val label: String, val rssi: Int, val channel: Int = 0)
+    data class Hit(val kind: SampleKind, val id: String, val label: String, val rssi: Int, val channel: Int = 0, val security: String = "")
 
     private var onHit: ((Hit) -> Unit)? = null
     private var scanningWifi = false
@@ -119,7 +119,20 @@ class PhoneSensors(context: Context, private val adapter: BluetoothAdapter?) {
             val bssid = r.BSSID ?: return@forEach
             @Suppress("DEPRECATION")
             val ssid = r.SSID ?: ""
-            cb(Hit(SampleKind.AP, bssid, ssid, r.level, channelFromFreq(r.frequency)))
+            cb(Hit(SampleKind.AP, bssid, ssid, r.level, channelFromFreq(r.frequency), securityOf(r.capabilities ?: "")))
+        }
+    }
+
+    /** Bucket a Wi-Fi ScanResult.capabilities string into a single security label. */
+    private fun securityOf(caps: String): String {
+        val c = caps.uppercase()
+        return when {
+            "WPA3" in c || "SAE" in c -> "WPA3"
+            "EAP" in c || "802.1X" in c -> "Ent"
+            "WPA2" in c || "RSN" in c -> "WPA2"
+            "WPA" in c -> "WPA"
+            "WEP" in c -> "WEP"
+            else -> "Open"
         }
     }
 

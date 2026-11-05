@@ -98,6 +98,7 @@ fun WifiScreen(vm: MainViewModel, onOpenTool: (String) -> Unit) {
             )
         }
         if (nets.isNotEmpty()) item("spectrum") { SpectrumCard(g24, g5, WIFI_CYAN) }
+        if (nets.isNotEmpty()) item("enc") { EncryptionCard(nets, WIFI_CYAN) }
         if (g5.isNotEmpty()) {
             item("l5") { SectionLabel("5 GHZ · ${g5.size}", WIFI_CYAN) }
             items(g5, key = { "g5-${it.id}" }) { NetworkRow(it, WIFI_CYAN) }
@@ -152,6 +153,7 @@ fun BluetoothScreen(vm: MainViewModel, onOpenTool: (String) -> Unit) {
                 onStop = { vm.stopPhoneScan() },
             )
         }
+        if (devs.isNotEmpty()) item("priv") { PrivacyCard(devs, BT_BLUE) }
         if (devs.isNotEmpty()) {
             item("ld") { SectionLabel("DEVICES · ${devs.size}", BT_BLUE) }
             items(devs, key = { "d-${it.id}" }) { DeviceRow(it, BT_BLUE) }
@@ -251,7 +253,8 @@ private fun NetworkRow(row: PhoneScanRow, accent: Color) {
 /** One BLE device: name, MAC, signal and a strength bar. */
 @Composable
 private fun DeviceRow(row: PhoneScanRow, accent: Color) {
-    SignalCard(accent, row.label.ifBlank { "(unnamed)" }, row.id, "BLE  ·  2.4 GHz", row.rssi, btStrength(row.rssi))
+    SignalCard(accent, row.label.ifBlank { "(unnamed)" }, row.id,
+        "BLE  ·  2.4 GHz  ·  ${bleAddrType(row.id)}", row.rssi, btStrength(row.rssi))
 }
 
 @Composable
@@ -357,6 +360,100 @@ private fun ChannelBar(label: String, count: Int, max: Int, color: Color) {
         Text("$count", style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
     }
+}
+
+/** Encryption Shield: how the nearby networks are locked, weakest flagged. */
+@Composable
+private fun EncryptionCard(nets: List<PhoneScanRow>, accent: Color) {
+    val counts = nets.groupingBy { it.security.ifBlank { "Open" } }.eachCount()
+    val total = nets.size.coerceAtLeast(1)
+    val order = listOf("WPA3", "WPA2", "WPA", "WEP", "Open", "Ent")
+    val openWep = (counts["Open"] ?: 0) + (counts["WEP"] ?: 0)
+    Card(
+        Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("ENCRYPTION", style = MaterialTheme.typography.labelMedium, color = accent,
+                fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+            order.forEach { sec ->
+                val n = counts[sec] ?: 0
+                if (n > 0) PctBar(sec, n, total, secColor(sec))
+            }
+            if (openWep > 0) {
+                Text("$openWep open or WEP — no real lock", style = MaterialTheme.typography.bodySmall,
+                    color = Color(0xFFFF5470), fontWeight = FontWeight.SemiBold)
+            }
+        }
+    }
+}
+
+/** BLE address-privacy breakdown — most devices rotate/randomize, derived from the address bits. */
+@Composable
+private fun PrivacyCard(devs: List<PhoneScanRow>, accent: Color) {
+    val counts = devs.groupingBy { bleAddrType(it.id) }.eachCount()
+    val total = devs.size.coerceAtLeast(1)
+    val order = listOf("private rotating", "random static", "non-resolvable", "public / maker")
+    Card(
+        Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("ADDRESS PRIVACY", style = MaterialTheme.typography.labelMedium, color = accent,
+                fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+            Text("Most BLE devices rotate or randomize their address every few minutes, so one device looks like many.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+            order.forEach { t ->
+                val n = counts[t] ?: 0
+                if (n > 0) PctBar(t, n, total, typeColor(t))
+            }
+        }
+    }
+}
+
+@Composable
+private fun PctBar(label: String, count: Int, total: Int, color: Color) {
+    val frac = (count.toFloat() / total).coerceIn(0f, 1f)
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+            Text("$count · ${"%.1f".format(frac * 100)}%", style = MaterialTheme.typography.labelMedium,
+                fontFamily = FontFamily.Monospace, color = color)
+        }
+        Box(Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp))
+            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f))) {
+            if (frac > 0f) Box(Modifier.fillMaxWidth(frac).height(8.dp)
+                .clip(RoundedCornerShape(4.dp)).background(color))
+        }
+    }
+}
+
+private fun secColor(sec: String): Color = when (sec) {
+    "WPA3" -> Color(0xFF34D399)
+    "WPA2" -> Color(0xFF22D3EE)
+    "Ent" -> Color(0xFF7C9CFF)
+    "WPA", "WEP" -> Color(0xFFF59E0B)
+    else -> Color(0xFFFF5470) // Open
+}
+
+// BLE random-address class from the top two bits of the first address octet.
+private fun bleAddrType(mac: String): String {
+    val first = mac.substringBefore(":").toIntOrNull(16) ?: return "public / maker"
+    return when ((first ushr 6) and 0x3) {
+        0b11 -> "random static"
+        0b01 -> "private rotating"
+        0b00 -> "non-resolvable"
+        else -> "public / maker"
+    }
+}
+
+private fun typeColor(t: String): Color = when (t) {
+    "private rotating" -> Color(0xFFFF5470)
+    "random static" -> Color(0xFFF59E0B)
+    "non-resolvable" -> Color(0xFF7C9CFF)
+    else -> Color(0xFF34D399) // public / maker
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
