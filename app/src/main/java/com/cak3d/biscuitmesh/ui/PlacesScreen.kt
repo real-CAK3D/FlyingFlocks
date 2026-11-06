@@ -138,7 +138,7 @@ fun PlacesScreen(vm: MainViewModel, onBack: () -> Unit, onRouteStarted: () -> Un
 @Composable
 private fun PlaceRow(place: Place, onNavigate: () -> Unit, onDirections: () -> Unit, onRemove: () -> Unit) {
     Card(
-        shape = RoundedCornerShape(14.dp),
+        shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Row(

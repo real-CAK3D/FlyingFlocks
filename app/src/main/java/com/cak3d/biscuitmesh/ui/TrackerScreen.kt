@@ -90,7 +90,7 @@ fun TrackerScreen(vm: MainViewModel, onBack: () -> Unit) {
         ) {
             item("head") {
                 Card(
-                    Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp),
+                    Modifier.fillMaxWidth(), shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 ) {
                     Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically,
@@ -128,7 +128,7 @@ private fun FollowerRow(f: Follower) {
     val accent = if (f.isKnownTracker) ALERT else WARN
     val mins = ((f.lastMs - f.firstMs) / 60000).coerceAtLeast(1)
     Card(
-        Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp),
+        Modifier.fillMaxWidth(), shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {

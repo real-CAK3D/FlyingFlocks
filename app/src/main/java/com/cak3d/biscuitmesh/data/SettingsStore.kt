@@ -31,6 +31,8 @@ class SettingsStore(private val context: Context) {
     private val crewShareKey = booleanPreferencesKey("crew_share_location")
     private val flockEnabledKey = booleanPreferencesKey("flock_enabled")
     private val flockHandleKey = stringPreferencesKey("flock_handle")
+    private val appFeelKey = stringPreferencesKey("app_feel")
+    private val appAccentKey = stringPreferencesKey("app_accent")
 
     /** True once the operator has acknowledged the authorized-use-only terms. */
     val authorizedUse: Flow<Boolean> =
@@ -169,5 +171,21 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setFlockHandle(name: String) {
         context.settingsDataStore.edit { it[flockHandleKey] = name.trim() }
+    }
+
+    /** Chosen UI "feel" (ROUNDED / CIRCUIT / NEON). Defaults to ROUNDED. */
+    val appFeel: Flow<String> =
+        context.settingsDataStore.data.map { it[appFeelKey] ?: "ROUNDED" }
+
+    suspend fun setAppFeel(name: String) {
+        context.settingsDataStore.edit { it[appFeelKey] = name }
+    }
+
+    /** Chosen accent colour (enum name). Defaults to GOLD. */
+    val appAccent: Flow<String> =
+        context.settingsDataStore.data.map { it[appAccentKey] ?: "GOLD" }
+
+    suspend fun setAppAccent(name: String) {
+        context.settingsDataStore.edit { it[appAccentKey] = name }
     }
 }

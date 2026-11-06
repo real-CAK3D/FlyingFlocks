@@ -183,7 +183,7 @@ fun DeviceDetailScreen(vm: MainViewModel, address: String?, onBack: () -> Unit) 
 private fun StatusCard(device: BiscuitDevice) {
     Card(
         modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-        shape = RoundedCornerShape(16.dp),
+        shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {

@@ -636,7 +636,7 @@ private fun MeshPlacePanel(
     onPlace: (com.cak3d.biscuitmesh.mesh.MeshNode) -> Unit,
 ) {
     Card(
-        shape = RoundedCornerShape(16.dp),
+        shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)),
     ) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -704,7 +704,7 @@ private fun MapMenu(
     camCount: Int,
     onOffline: () -> Unit,
 ) {
-    Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+    Card(shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Column(Modifier.padding(14.dp).widthIn(min = 220.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("DISPLAYS", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.secondary)
             MenuToggle("Telemetry HUD", hud, onHud)
@@ -744,7 +744,7 @@ private fun TelemetryHud(
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
         Card(
-            shape = RoundedCornerShape(16.dp),
+            shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)),
         ) {
             Column(Modifier.padding(14.dp).widthIn(min = 160.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
@@ -800,7 +800,7 @@ private fun altText(altM: Double?, useMph: Boolean): String {
 private fun CameraAlert(modifier: Modifier, alert: com.cak3d.biscuitmesh.geo.HazardAlert, useMph: Boolean) {
     Card(
         modifier = modifier.fillMaxWidth(0.92f),
-        shape = RoundedCornerShape(14.dp),
+        shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.error),
     ) {
         Column(Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -958,7 +958,7 @@ private fun BoardsLegend(devices: Map<String, BiscuitDevice>, counts: Map<String
     if (live.isEmpty() && !phoneOn) return
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -984,7 +984,7 @@ private fun BoardsLegend(devices: Map<String, BiscuitDevice>, counts: Map<String
 private fun NavBanner(nav: com.cak3d.biscuitmesh.nav.NavState, modifier: Modifier = Modifier) {
     Card(
         modifier = modifier.widthIn(max = 520.dp),
-        shape = RoundedCornerShape(16.dp),
+        shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
     ) {
         Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
@@ -1014,7 +1014,7 @@ private fun NavBanner(nav: com.cak3d.biscuitmesh.nav.NavState, modifier: Modifie
 private fun NavBar(nav: com.cak3d.biscuitmesh.nav.NavState, useMph: Boolean, onEnd: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Row(
@@ -1046,7 +1046,7 @@ private fun NavCard(route: ActiveRoute, useMph: Boolean, onClear: () -> Unit) {
     val context = LocalContext.current
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

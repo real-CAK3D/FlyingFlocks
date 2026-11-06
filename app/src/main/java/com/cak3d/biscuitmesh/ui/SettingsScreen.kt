@@ -4,9 +4,21 @@ import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -108,6 +120,7 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit, onOpenDeadZones: () ->
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            AppearanceSection(vm)
             DeadZonesSection(
                 zones = zones,
                 onAdd = { openAddZone() },
@@ -151,8 +164,91 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit, onOpenDeadZones: () ->
 }
 
 @Composable
+private fun AppearanceSection(vm: MainViewModel) {
+    val feelName by vm.appFeel.collectAsStateWithLifecycle(initialValue = "ROUNDED")
+    val accentName by vm.appAccent.collectAsStateWithLifecycle(initialValue = "GOLD")
+    val feel = runCatching { com.cak3d.biscuitmesh.ui.theme.AppFeel.valueOf(feelName) }
+        .getOrDefault(com.cak3d.biscuitmesh.ui.theme.AppFeel.ROUNDED)
+    val accent = runCatching { com.cak3d.biscuitmesh.ui.theme.AppAccent.valueOf(accentName) }
+        .getOrDefault(com.cak3d.biscuitmesh.ui.theme.AppAccent.GOLD)
+
+    SectionCard(title = "Appearance", subtitle = "Pick a feel and an accent colour. Changes apply instantly.") {
+        Text("FEEL", style = MaterialTheme.typography.labelMedium, color = accent.color,
+            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, fontWeight = FontWeight.Bold)
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            com.cak3d.biscuitmesh.ui.theme.AppFeel.entries.forEach { f ->
+                FeelRow(f, accent, selected = f == feel) { vm.setAppFeel(f.name) }
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        Text("ACCENT", style = MaterialTheme.typography.labelMedium, color = accent.color,
+            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, fontWeight = FontWeight.Bold)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            com.cak3d.biscuitmesh.ui.theme.AppAccent.entries.forEach { a ->
+                Box(
+                    Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(a.color)
+                        .border(
+                            width = if (a == accent) 3.dp else 0.dp,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            shape = CircleShape,
+                        )
+                        .clickable { vm.setAppAccent(a.name) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FeelRow(
+    feel: com.cak3d.biscuitmesh.ui.theme.AppFeel,
+    accent: com.cak3d.biscuitmesh.ui.theme.AppAccent,
+    selected: Boolean,
+    onPick: () -> Unit,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .border(
+                width = if (selected) 2.dp else 1.dp,
+                color = if (selected) accent.color else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+                shape = RoundedCornerShape(12.dp),
+            )
+            .clickable { onPick() }
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        // Live mini-preview rendered in that feel, so the running light / glow is visible.
+        CompositionLocalProvider(
+            com.cak3d.biscuitmesh.ui.theme.LocalAppFeel provides feel,
+            com.cak3d.biscuitmesh.ui.theme.LocalAppAccent provides accent,
+        ) {
+            com.cak3d.biscuitmesh.ui.theme.ThemedCard(
+                modifier = Modifier.size(54.dp),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
+            ) {}
+        }
+        Column(Modifier.weight(1f)) {
+            Text(feel.label, style = MaterialTheme.typography.titleMedium,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
+            Text(feel.blurb, style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f))
+        }
+        if (selected) Icon(Icons.Default.Check, contentDescription = "Selected", tint = accent.color)
+    }
+}
+
+@Composable
 private fun SectionCard(title: String, subtitle: String? = null, content: @Composable () -> Unit) {
-    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+    Card(
+        shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(title, style = MaterialTheme.typography.titleMedium)
             subtitle?.let {

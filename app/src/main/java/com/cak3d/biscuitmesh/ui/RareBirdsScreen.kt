@@ -217,7 +217,7 @@ private fun RankCard(progress: Progress, onClick: () -> Unit) {
 @Composable
 private fun CameraBoostCard(progress: Progress) {
     Card(
-        shape = RoundedCornerShape(14.dp),
+        shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -252,7 +252,7 @@ private fun TrackRow(t: TrackState, onClick: () -> Unit) {
     val accent = trackColor(t.track)
     Card(
         onClick = onClick,
-        shape = RoundedCornerShape(14.dp),
+        shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Row(
@@ -285,7 +285,7 @@ private fun TrackRow(t: TrackState, onClick: () -> Unit) {
 private fun CameraRow(cam: Hazard, here: LatLon?) {
     val context = LocalContext.current
     Card(
-        shape = RoundedCornerShape(14.dp),
+        shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Row(
@@ -334,7 +334,7 @@ private fun LeadCard(lead: RareBird, here: LatLon?) {
 private fun BirdRow(bird: RareBird, here: LatLon?) {
     val context = LocalContext.current
     Card(
-        shape = RoundedCornerShape(14.dp),
+        shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Row(

@@ -218,9 +218,8 @@ fun CrewScreen(vm: MainViewModel, onBack: () -> Unit) {
 
 @Composable
 private fun FCard(content: @Composable ColumnScope.() -> Unit) {
-    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp), content = content)
+    com.cak3d.biscuitmesh.ui.theme.ThemedCard(Modifier.fillMaxWidth()) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp), content = content)
     }
 }
 
@@ -257,7 +256,7 @@ private fun LeaderRowView(r: LeaderRow) {
 
 @Composable
 private fun WingRow(m: CrewMember) {
-    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp),
+    Card(Modifier.fillMaxWidth(), shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(m.handle?.takeIf { it.isNotBlank() } ?: "Wing ${m.userId.take(8)}",

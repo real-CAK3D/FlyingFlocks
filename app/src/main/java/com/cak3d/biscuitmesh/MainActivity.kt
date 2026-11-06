@@ -97,7 +97,14 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         handleUsbIntent(intent)
         setContent {
-            BiscuitMeshTheme {
+            val app = application as BiscuitMeshApp
+            val feelName by app.settingsStore.appFeel.collectAsStateWithLifecycle(initialValue = "ROUNDED")
+            val accentName by app.settingsStore.appAccent.collectAsStateWithLifecycle(initialValue = "GOLD")
+            val feel = runCatching { com.cak3d.biscuitmesh.ui.theme.AppFeel.valueOf(feelName) }
+                .getOrDefault(com.cak3d.biscuitmesh.ui.theme.AppFeel.ROUNDED)
+            val accent = runCatching { com.cak3d.biscuitmesh.ui.theme.AppAccent.valueOf(accentName) }
+                .getOrDefault(com.cak3d.biscuitmesh.ui.theme.AppAccent.GOLD)
+            BiscuitMeshTheme(feel, accent) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,

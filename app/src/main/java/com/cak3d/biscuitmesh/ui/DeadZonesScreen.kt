@@ -98,7 +98,7 @@ fun DeadZonesScreen(vm: MainViewModel, onBack: () -> Unit) {
             item("badge") { LocalOnlyBadge() }
             item("scan") {
                 Card(
-                    Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp),
+                    Modifier.fillMaxWidth(), shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 ) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -144,7 +144,7 @@ fun DeadZonesScreen(vm: MainViewModel, onBack: () -> Unit) {
 @Composable
 private fun LocalOnlyBadge() {
     Card(
-        Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp),
+        Modifier.fillMaxWidth(), shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
         colors = CardDefaults.cardColors(containerColor = LOCAL.copy(alpha = 0.12f)),
     ) {
         Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically,
@@ -164,7 +164,7 @@ private fun LocalOnlyBadge() {
 private fun ZoneCard(zone: DeadZone, devices: List<DeadZoneDevice>, active: Boolean, onToggle: () -> Unit, onClear: () -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Card(
-        Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp),
+        Modifier.fillMaxWidth(), shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

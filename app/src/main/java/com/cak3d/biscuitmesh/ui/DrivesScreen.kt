@@ -89,7 +89,7 @@ fun DrivesScreen(vm: MainViewModel, onBack: () -> Unit) {
 @Composable
 private fun DriveCard(drive: DriveSession, useMph: Boolean, onReupload: () -> Unit, onDelete: () -> Unit) {
     Card(
-        shape = RoundedCornerShape(14.dp),
+        shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -131,7 +131,7 @@ private fun RangeReachCard(drives: List<DriveSession>, useMph: Boolean) {
     val byDay = drives.groupBy { dayKey(it.startMs) }
     val bestM = byDay.values.maxOfOrNull { day -> day.sumOf { it.distanceM } } ?: 0.0
     Card(
-        shape = RoundedCornerShape(16.dp),
+        shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {

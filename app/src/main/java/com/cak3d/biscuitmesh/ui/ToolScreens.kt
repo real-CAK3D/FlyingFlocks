@@ -245,12 +245,8 @@ private fun ScanHeaderCard(
     onScan: () -> Unit,
     onStop: () -> Unit,
 ) {
-    Card(
-        Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-    ) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    com.cak3d.biscuitmesh.ui.theme.ThemedCard(Modifier.fillMaxWidth()) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(30.dp))
                 Column(Modifier.weight(1f)) {
@@ -278,7 +274,7 @@ private fun SectionLabel(text: String, accent: Color) {
 private fun EmptyScanHint(scanning: Boolean, what: String, accent: Color) {
     Card(
         Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
+        shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
         colors = CardDefaults.cardColors(containerColor = Color(0xFF0A0A0C)),
     ) {
         Text(
@@ -320,7 +316,7 @@ private fun DeviceRow(row: PhoneScanRow, accent: Color) {
 private fun SignalCard(accent: Color, title: String, mono: String, meta: String, rssi: Int, strength: Float) {
     Card(
         Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
+        shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -373,7 +369,7 @@ private fun SpectrumCard(g24: List<PhoneScanRow>, g5: List<PhoneScanRow>, accent
     val maxCh = maxOf(ch1, ch6, ch11, chOther, 1)
     Card(
         Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -426,7 +422,7 @@ private fun ChannelBar(label: String, count: Int, max: Int, color: Color) {
 private fun ArchSpectrumCard(g24: List<PhoneScanRow>, g5: List<PhoneScanRow>, accent: Color) {
     Card(
         Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
         colors = CardDefaults.cardColors(containerColor = Color(0xFF05080A)),
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -496,7 +492,7 @@ private fun RssiHistogramCard(nets: List<PhoneScanRow>, accent: Color) {
     val max = (counts.maxOrNull() ?: 1).coerceAtLeast(1)
     Card(
         Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -533,7 +529,7 @@ private fun EncryptionCard(nets: List<PhoneScanRow>, accent: Color) {
     val openWep = (counts["Open"] ?: 0) + (counts["WEP"] ?: 0)
     Card(
         Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -559,7 +555,7 @@ private fun PrivacyCard(devs: List<PhoneScanRow>, accent: Color) {
     val order = listOf("private rotating", "random static", "non-resolvable", "public / maker")
     Card(
         Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -587,7 +583,7 @@ private fun ManufacturersCard(nets: List<PhoneScanRow>, ouiReady: Boolean, accen
     val top = counts.entries.sortedByDescending { it.value }.take(8)
     Card(
         Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -649,7 +645,7 @@ private fun typeColor(t: String): Color = when (t) {
 private fun CategoryRow(cat: BtCategory, count: Int, accent: Color) {
     Card(
         Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
+        shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically,
@@ -669,7 +665,7 @@ private fun CategoryRow(cat: BtCategory, count: Int, accent: Color) {
 private fun UnidentifiedRow(count: Int) {
     Card(
         Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
+        shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically,
@@ -727,7 +723,7 @@ private fun ToolRow(tool: Tool, leadingIcon: ImageVector, onClick: () -> Unit) {
     Card(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
+        shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Row(

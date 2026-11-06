@@ -108,7 +108,7 @@ fun ProximityBanner(vm: MainViewModel, onOpenMap: () -> Unit) {
         nearby?.let { n ->
             Card(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp).clickable { onOpenMap() },
-                shape = RoundedCornerShape(14.dp),
+                shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             ) {
                 Row(

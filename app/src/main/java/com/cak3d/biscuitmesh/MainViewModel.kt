@@ -493,6 +493,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val flockHandle: Flow<String> = appRef.settingsStore.flockHandleFlow
     fun setFlockHandle(name: String) = viewModelScope.launch { runCatching { appRef.crew.setHandle(name) } }
 
+    // --- Appearance (theme system) -----------------------------------------
+    val appFeel: Flow<String> = appRef.settingsStore.appFeel
+    val appAccent: Flow<String> = appRef.settingsStore.appAccent
+    fun setAppFeel(name: String) = viewModelScope.launch { appRef.settingsStore.setAppFeel(name) }
+    fun setAppAccent(name: String) = viewModelScope.launch { appRef.settingsStore.setAppAccent(name) }
+
     fun setDeadZoneRadius(id: String, radiusM: Double) {
         viewModelScope.launch { appRef.deadZonesStore.setRadius(id, radiusM) }
     }

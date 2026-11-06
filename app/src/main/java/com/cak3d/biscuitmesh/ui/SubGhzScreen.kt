@@ -137,7 +137,7 @@ fun SubGhzScreen(vm: MainViewModel, onOpenMap: () -> Unit) {
         // Header + sweep control.
         Card(
             Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
+            shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         ) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -201,7 +201,7 @@ fun SubGhzScreen(vm: MainViewModel, onOpenMap: () -> Unit) {
             fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
         Card(
             Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(14.dp),
+            shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
             colors = CardDefaults.cardColors(containerColor = Color(0xFF0A0A08)),
         ) {
             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
@@ -226,7 +226,7 @@ private fun BandMeter(band: RfBand, bestRssi: Int?, count: Int) {
     val strength = bestRssi?.let { ((it + 110f) / 80f).coerceIn(0f, 1f) } ?: 0f
     Card(
         Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
+        shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -259,7 +259,7 @@ private fun BandMeter(band: RfBand, bestRssi: Int?, count: Int) {
 private fun TpmsRow(s: TpmsSensor) {
     Card(
         Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
+        shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -281,7 +281,7 @@ private fun TpmsRow(s: TpmsSensor) {
 private fun KeyfobRow(k: KeyfobEvent) {
     Card(
         Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
+        shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -301,7 +301,7 @@ private fun KeyfobRow(k: KeyfobEvent) {
 private fun CapabilityRow(cap: Capability, live: Boolean) {
     Card(
         Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
+        shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Row(

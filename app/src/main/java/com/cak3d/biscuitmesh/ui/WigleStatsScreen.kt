@@ -83,7 +83,7 @@ fun WigleStatsScreen(vm: MainViewModel, onBack: () -> Unit) {
         ) {
             if (auth.isBlank() || editing) {
                 Card(
-                    Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp),
+                    Modifier.fillMaxWidth(), shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 ) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -103,7 +103,7 @@ fun WigleStatsScreen(vm: MainViewModel, onBack: () -> Unit) {
                 }
             } else {
                 Card(
-                    Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp),
+                    Modifier.fillMaxWidth(), shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 ) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -140,7 +140,7 @@ fun WigleStatsScreen(vm: MainViewModel, onBack: () -> Unit) {
 @Composable
 private fun StatTile(label: String, value: String, accent: Color, modifier: Modifier) {
     Card(
-        modifier, shape = RoundedCornerShape(14.dp),
+        modifier, shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(2.dp),

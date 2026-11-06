@@ -87,7 +87,7 @@ fun SatellitesScreen(vm: MainViewModel, onBack: () -> Unit) {
         ) {
             item("head") {
                 Card(
-                    Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp),
+                    Modifier.fillMaxWidth(), shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 ) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -104,7 +104,7 @@ fun SatellitesScreen(vm: MainViewModel, onBack: () -> Unit) {
             if (gnss.sats.isNotEmpty()) {
                 item("sky") {
                     Card(
-                        Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp),
+                        Modifier.fillMaxWidth(), shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
                         colors = CardDefaults.cardColors(containerColor = Color(0xFF05080A)),
                     ) {
                         Box(Modifier.padding(16.dp)) { SkyPlot(gnss.sats, Modifier.fillMaxWidth().aspectRatio(1f)) }
