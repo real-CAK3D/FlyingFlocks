@@ -111,6 +111,10 @@ class WardriveManager(
     }
     private val histories = java.util.concurrent.ConcurrentHashMap<String, Hist>()
 
+    // Watchlist alerting: the app keeps this set current and listens for first-time hits.
+    @Volatile var watchSet: Set<String> = emptySet()
+    var onWatchHit: ((WardriveSample) -> Unit)? = null
+
     private fun recordHistory(s: WardriveSample) {
         val h = histories.getOrPut(s.id) { Hist(s.timeMs) }
         synchronized(h) {
@@ -312,6 +316,11 @@ class WardriveManager(
         recordHistory(s)   // every sighting feeds the detail-screen history (no UI emit)
         val existing = _samples.value[s.id]
         if (existing == null) {
+            // First time we've seen this device this session — alert if it's on the watchlist.
+            if (watchSet.isNotEmpty() &&
+                com.cak3d.biscuitmesh.data.WatchlistStore.matches(watchSet, s.id, s.label) != null) {
+                onWatchHit?.invoke(s)
+            }
             _samples.update { it + (s.id to s) }
             return true
         }

@@ -72,8 +72,9 @@ fun LedgerScreen(vm: MainViewModel, onBack: () -> Unit) {
             regulars = regulars,
             transients = all.count { it.driveIds.size == 1 },
             vendors = all.mapNotNull { OuiDb.vendor(it.id) }.distinct().size,
-            fiveGhz = all.count { it.channel >= 32 },
-            bt = all.count { it.type.equals("BT", true) },
+            // Capture CSVs tag type WIFI / BLE / RF (channel isn't stored), so count by type.
+            fiveGhz = all.count { it.type.equals("WIFI", true) },
+            bt = all.count { it.type.equals("BLE", true) || it.type.equals("BT", true) },
             rf = all.count { it.type.equals("RF", true) },
         )
         loading = false
@@ -115,7 +116,7 @@ fun LedgerScreen(vm: MainViewModel, onBack: () -> Unit) {
                             Stat("${s.vendors}", "VENDORS", Color(0xFF22D3EE), Modifier.weight(1f))
                         }
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Stat("${s.fiveGhz}", "5 GHz", Color(0xFFA78BFA), Modifier.weight(1f))
+                            Stat("${s.fiveGhz}", "Wi-Fi", Color(0xFFA78BFA), Modifier.weight(1f))
                             Stat("${s.bt}", "BT", Color(0xFF7C9CFF), Modifier.weight(1f))
                             Stat("${s.rf}", "SUB-GHZ", Color(0xFFF5A623), Modifier.weight(1f))
                         }

@@ -215,6 +215,15 @@ class BiscuitMeshApp : Application() {
         appScope.launch(Dispatchers.IO) { com.cak3d.biscuitmesh.sensors.OuiDb.ensureLoaded(this@BiscuitMeshApp) }
         // Resume the Flock online layer if the operator has used it before.
         appScope.launch { if (settingsStore.flockEnabled.first()) crew.activate() }
+
+        // Watchlist alerts: keep the wardrive's watch set current, and notify on a first-time hit.
+        wardrive?.let { wd ->
+            appScope.launch { watchlistStore.entries.collect { wd.watchSet = it.toSet() } }
+            wd.onWatchHit = { s ->
+                NotificationHelper.notify(this, 2000 + (s.id.hashCode() and 0xFFF),
+                    "Watchlist hit", "${s.label.ifBlank { s.id }} is in range (${s.rssi} dBm).")
+            }
+        }
         // Touch the progress manager so it loads saved XP and starts scoring finds
         // from launch, even before the Field Guide screen is opened.
         progress
@@ -257,6 +266,8 @@ class BiscuitMeshApp : Application() {
                     val dist = NavigationManager.spokenDist(a.distanceM.toDouble())
                     val over = a.limitMph?.let { " You're over the $it limit." } ?: ""
                     speaker.say("$kind ahead, $dist.$over")
+                    NotificationHelper.notify(this@BiscuitMeshApp, 1001, "$kind ahead",
+                        "${a.distanceM} m away.${a.limitMph?.let { " Over the $it limit." } ?: ""}")
                 }
             }
         }
