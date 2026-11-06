@@ -15,6 +15,8 @@ data class Follower(
     val spanM: Int,
     val isKnownTracker: Boolean,
     val rssi: Int,
+    /** 0–100: how strongly this looks like a follower (more places, more spread, longer, known-tracker). */
+    val threat: Int,
 )
 
 /**
@@ -73,9 +75,13 @@ class TrackerFollowManager {
                 if (res[0] > maxD) maxD = res[0]
             }
             if (maxD < minSpanM) continue
-            out.add(Follower(mac, r.name, r.buckets.size, r.firstMs, r.lastMs, maxD.toInt(), isKnownTracker(r.name), r.rssi))
+            val known = isKnownTracker(r.name)
+            val durMin = (r.lastMs - r.firstMs) / 60000.0
+            val threat = (r.buckets.size * 8 + maxD / 25 + durMin / 4 + (if (known) 40 else 0))
+                .coerceIn(0.0, 100.0).toInt()
+            out.add(Follower(mac, r.name, r.buckets.size, r.firstMs, r.lastMs, maxD.toInt(), known, r.rssi, threat))
         }
-        _followers.value = out.sortedByDescending { it.places }
+        _followers.value = out.sortedByDescending { it.threat }
     }
 
     private fun isKnownTracker(name: String): Boolean {

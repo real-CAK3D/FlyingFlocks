@@ -527,6 +527,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     // --- Appearance (theme system) -----------------------------------------
     val appFeel: Flow<String> = appRef.settingsStore.appFeel
     val appAccent: Flow<String> = appRef.settingsStore.appAccent
+
+    // --- First-run tour ----------------------------------------------------
+    val tourSeen: Flow<Boolean> = appRef.settingsStore.tourSeen
+    fun dismissTour() = viewModelScope.launch { appRef.settingsStore.setTourSeen() }
     fun setAppFeel(name: String) = viewModelScope.launch { appRef.settingsStore.setAppFeel(name) }
     fun setAppAccent(name: String) = viewModelScope.launch { appRef.settingsStore.setAppAccent(name) }
 

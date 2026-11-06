@@ -31,6 +31,7 @@ class SettingsStore(private val context: Context) {
     private val crewShareKey = booleanPreferencesKey("crew_share_location")
     private val flockEnabledKey = booleanPreferencesKey("flock_enabled")
     private val flockHandleKey = stringPreferencesKey("flock_handle")
+    private val tourSeenKey = booleanPreferencesKey("tour_seen")
     private val appFeelKey = stringPreferencesKey("app_feel")
     private val appAccentKey = stringPreferencesKey("app_accent")
 
@@ -171,6 +172,13 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setFlockHandle(name: String) {
         context.settingsDataStore.edit { it[flockHandleKey] = name.trim() }
+    }
+
+    /** False until the first-run welcome tour has been dismissed. */
+    val tourSeen: Flow<Boolean> = context.settingsDataStore.data.map { it[tourSeenKey] ?: false }
+
+    suspend fun setTourSeen() {
+        context.settingsDataStore.edit { it[tourSeenKey] = true }
     }
 
     /** Chosen UI "feel" (ROUNDED / CIRCUIT / NEON). Defaults to ROUNDED. */

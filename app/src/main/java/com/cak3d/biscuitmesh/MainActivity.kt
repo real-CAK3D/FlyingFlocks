@@ -123,6 +123,10 @@ class MainActivity : ComponentActivity() {
                         onDispose { }
                     }
                     PermissionGate { MainShell(vm) }
+                    val tourSeen by vm.tourSeen.collectAsStateWithLifecycle(initialValue = true)
+                    if (!tourSeen) {
+                        com.cak3d.biscuitmesh.ui.WelcomeDialog(onDismiss = { vm.dismissTour() })
+                    }
                 }
             }
         }

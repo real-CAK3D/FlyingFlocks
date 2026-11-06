@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -36,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.cak3d.biscuitmesh.MainViewModel
 import com.cak3d.biscuitmesh.wardrive.DriveSession
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -46,6 +48,8 @@ fun DrivesScreen(vm: MainViewModel, onBack: () -> Unit, onOpenReplay: (String) -
     val drives by vm.drives.collectAsStateWithLifecycle(initialValue = emptyList())
     val useMph by vm.useMph.collectAsStateWithLifecycle()
     val anyCapture = drives.any { it.hasCapture }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
 
     Scaffold(
         containerColor = Color.Transparent,
@@ -86,6 +90,12 @@ fun DrivesScreen(vm: MainViewModel, onBack: () -> Unit, onOpenReplay: (String) -
                 DriveCard(
                     d, useMph,
                     onOpen = { if (d.hasCapture) onOpenReplay(d.id) },
+                    onShare = {
+                        scope.launch {
+                            val pts = vm.captureSamples(d.id)
+                            ShareCard.share(context, d, useMph, pts)
+                        }
+                    },
                     onReupload = { vm.reuploadDrive(d.id) },
                     onDelete = { vm.deleteDrive(d.id) },
                 )
@@ -95,7 +105,7 @@ fun DrivesScreen(vm: MainViewModel, onBack: () -> Unit, onOpenReplay: (String) -
 }
 
 @Composable
-private fun DriveCard(drive: DriveSession, useMph: Boolean, onOpen: () -> Unit, onReupload: () -> Unit, onDelete: () -> Unit) {
+private fun DriveCard(drive: DriveSession, useMph: Boolean, onOpen: () -> Unit, onShare: () -> Unit, onReupload: () -> Unit, onDelete: () -> Unit) {
     Card(
         modifier = if (drive.hasCapture) Modifier.clickable { onOpen() } else Modifier,
         shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
@@ -124,6 +134,11 @@ private fun DriveCard(drive: DriveSession, useMph: Boolean, onOpen: () -> Unit, 
                         color = MaterialTheme.colorScheme.primary)
                 }
                 Column(Modifier.weight(1f)) {}
+                if (drive.hasCapture) {
+                    IconButton(onClick = onShare) {
+                        Icon(Icons.Default.Share, contentDescription = "Share", tint = MaterialTheme.colorScheme.primary)
+                    }
+                }
                 IconButton(onClick = onDelete) {
                     Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
                 }
