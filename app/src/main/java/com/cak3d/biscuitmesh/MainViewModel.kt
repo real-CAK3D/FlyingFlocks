@@ -130,6 +130,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     fun connectMesh() { appRef.mesh.scanAndConnect() }
     fun disconnectMesh() { appRef.mesh.disconnect() }
+    val meshMessages: StateFlow<List<com.cak3d.biscuitmesh.mesh.MeshMessage>> = appRef.mesh.messages
+    fun sendMeshText(text: String) = appRef.mesh.sendText(text)
 
     /** Manual map locations for GPS-less mesh nodes. */
     val meshPlacements: StateFlow<Map<Long, Pair<Double, Double>>> =
@@ -282,6 +284,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** Tell connected boards to start a full sweep — WiFi + sub-GHz — which drives DATA:RF. */
     fun startSubGhzSweep() { fleet?.broadcast(command("scanall")) }
     fun stopSubGhzSweep() { fleet?.broadcast(command("stopscan")) }
+    /** Transmit a captured OOK burst (your OWN devices only). Firmware gates this behind its own flag. */
+    fun transmitSubGhz(freqMhz: String, bits: String) { fleet?.broadcast(command("tx", "$freqMhz,$bits")) }
     fun connectAll() = fleet?.connectAll()
     fun disconnectAll() = fleet?.disconnectAll()
     fun forget(address: String) = fleet?.forget(address)

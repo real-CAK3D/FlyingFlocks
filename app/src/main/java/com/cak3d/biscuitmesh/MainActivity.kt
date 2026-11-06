@@ -75,6 +75,7 @@ import com.cak3d.biscuitmesh.ui.DriveReplayScreen
 import com.cak3d.biscuitmesh.ui.HuntsScreen
 import com.cak3d.biscuitmesh.ui.LedgerScreen
 import com.cak3d.biscuitmesh.ui.LiveScreen
+import com.cak3d.biscuitmesh.ui.MeshChatScreen
 import com.cak3d.biscuitmesh.ui.SignalDetailScreen
 import com.cak3d.biscuitmesh.ui.TpmsScreen
 import com.cak3d.biscuitmesh.ui.WatchlistScreen
@@ -345,6 +346,7 @@ private fun MainShell(vm: MainViewModel) {
                 composable("hunts") { HuntsScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("tiredash") { TpmsScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("ledger") { LedgerScreen(vm = vm, onBack = { nav.popBackStack() }) }
+                composable("meshchat") { MeshChatScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("watchlist") { WatchlistScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("signaldetail/{id}") { entry ->
                     val id = java.net.URLDecoder.decode(entry.arguments?.getString("id") ?: "", "UTF-8")

@@ -35,6 +35,9 @@ data class MeshNode(
 
 enum class MeshLinkState { DISCONNECTED, SCANNING, CONNECTING, CONNECTED }
 
+/** A mesh text message — received from the mesh, or one you sent. */
+data class MeshMessage(val text: String, val mine: Boolean, val timeMs: Long)
+
 /**
  * Connects to a Meshtastic node over BLE and reads its mesh NodeDB so the whole mesh
  * (your nodes and anyone you can hear) can be shown on the Flying Flocks map.
@@ -53,6 +56,8 @@ class MeshtasticManager(private val context: Context, private val adapter: Bluet
     private val _link = MutableStateFlow(MeshLinkState.DISCONNECTED)
     val link: StateFlow<MeshLinkState> = _link.asStateFlow()
 
+    private val _messages = MutableStateFlow<List<MeshMessage>>(emptyList())
+    val messages: StateFlow<List<MeshMessage>> = _messages.asStateFlow()
     private val _nodes = MutableStateFlow<Map<Long, MeshNode>>(emptyMap())
     /** Live mesh node database, keyed by node number. */
     val nodes: StateFlow<Map<Long, MeshNode>> = _nodes.asStateFlow()
@@ -68,27 +73,53 @@ class MeshtasticManager(private val context: Context, private val adapter: Bluet
     // A low-latency scan is power-hungry; stop it if no node turns up instead of running forever.
     private val scanWatchdog = Handler(Looper.getMainLooper())
     private val scanTimeout = Runnable { if (_link.value == MeshLinkState.SCANNING) disconnect() }
+    // Collect candidates briefly, then connect to the strongest — so we pick the nearest
+    // (usually Home Base) when several mesh nodes are in range.
+    private val candidates = HashMap<android.bluetooth.BluetoothDevice, Int>()
+    private val picker = Runnable { connectBest() }
 
-    /** Scan for any Meshtastic node and connect to the first/strongest one. */
+    /** Scan for any Meshtastic node and connect to the strongest one in range. */
     fun scanAndConnect() {
         if (_link.value != MeshLinkState.DISCONNECTED) return
         val s = scanner ?: return
         _link.value = MeshLinkState.SCANNING
         scanning = true
-        val filter = ScanFilter.Builder().setServiceUuid(ParcelUuid(SERVICE)).build()
+        candidates.clear()
+        // NOTE: we deliberately scan UNFILTERED and match in code. Depending on the node's
+        // firmware/hardware the 128-bit Meshtastic service UUID is carried in the scan
+        // response (or lives only in the GATT table), so a hard ScanFilter.setServiceUuid
+        // silently misses real nodes. We accept a device by advertised service UUID OR by a
+        // "Meshtastic*" advertised name, which matches every stock node.
         val settings = ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build()
-        runCatching { s.startScan(listOf(filter), settings, scanCb) }
+        runCatching { s.startScan(emptyList(), settings, scanCb) }
             .onSuccess { scanWatchdog.postDelayed(scanTimeout, 20_000) }
             .onFailure { _link.value = MeshLinkState.DISCONNECTED; scanning = false }
+    }
+
+    private fun looksLikeMesh(result: ScanResult): Boolean {
+        val rec = result.scanRecord
+        if (rec?.serviceUuids?.any { it.uuid == SERVICE } == true) return true
+        val name = rec?.deviceName ?: return false
+        return name.startsWith("Meshtastic", ignoreCase = true)
+    }
+
+    private fun connectBest() {
+        val best = candidates.maxByOrNull { it.value }?.key ?: return
+        stopScan()
+        _link.value = MeshLinkState.CONNECTING
+        Log.d(TAG, "connecting to mesh node ${best.address} (${candidates.size} candidate(s))")
+        gatt = best.connectGatt(context, false, callback, android.bluetooth.BluetoothDevice.TRANSPORT_LE)
     }
 
     private val scanCb = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult) {
             val dev = result.device ?: return
-            Log.d(TAG, "found mesh node ${dev.address} rssi=${result.rssi}")
-            stopScan()
-            _link.value = MeshLinkState.CONNECTING
-            gatt = dev.connectGatt(context, false, callback, android.bluetooth.BluetoothDevice.TRANSPORT_LE)
+            if (!looksLikeMesh(result)) return
+            Log.d(TAG, "candidate mesh node ${dev.address} rssi=${result.rssi} name=${result.scanRecord?.deviceName}")
+            candidates[dev] = result.rssi
+            // Give nearby nodes ~2s to show up, then connect to the strongest.
+            scanWatchdog.removeCallbacks(picker)
+            scanWatchdog.postDelayed(picker, 2_000)
         }
         override fun onScanFailed(errorCode: Int) {
             Log.w(TAG, "mesh scan failed $errorCode")
@@ -98,6 +129,7 @@ class MeshtasticManager(private val context: Context, private val adapter: Bluet
 
     private fun stopScan() {
         scanWatchdog.removeCallbacks(scanTimeout)
+        scanWatchdog.removeCallbacks(picker)
         if (scanning) { runCatching { scanner?.stopScan(scanCb) }; scanning = false }
     }
 
@@ -210,9 +242,74 @@ class MeshtasticManager(private val context: Context, private val adapter: Bluet
             val (field, wire) = r.tag()
             when {
                 field == 4 && wire == 2 -> parseNodeInfo(r.lenBytes())  // node_info
+                field == 11 && wire == 2 -> parsePacket(r.lenBytes())    // packet (MeshPacket)
                 else -> r.skip(wire)
             }
         }
+    }
+
+    // A received text message: MeshPacket.decoded (Data) with portnum == TEXT_MESSAGE_APP (1).
+    private fun parsePacket(buf: ByteArray) {
+        val r = Pb(buf)
+        var text: String? = null
+        while (r.has()) {
+            val (field, wire) = r.tag()
+            when {
+                field == 4 && wire == 2 -> text = parseData(r.lenBytes())  // decoded
+                else -> r.skip(wire)
+            }
+        }
+        text?.takeIf { it.isNotBlank() }?.let { t ->
+            _messages.value = (_messages.value + MeshMessage(t, false, System.currentTimeMillis())).takeLast(100)
+        }
+    }
+
+    private fun parseData(buf: ByteArray): String? {
+        val r = Pb(buf)
+        var portnum = -1L; var payload = ByteArray(0)
+        while (r.has()) {
+            val (field, wire) = r.tag()
+            when {
+                field == 1 && wire == 0 -> portnum = r.varint()  // portnum
+                field == 2 && wire == 2 -> payload = r.lenBytes() // payload
+                else -> r.skip(wire)
+            }
+        }
+        return if (portnum == 1L && payload.isNotEmpty()) String(payload, Charsets.UTF_8) else null
+    }
+
+    /** Send a broadcast text message over the mesh. */
+    fun sendText(text: String) {
+        val t = text.trim()
+        if (t.isEmpty() || _link.value != MeshLinkState.CONNECTED) return
+        val payload = t.toByteArray(Charsets.UTF_8)
+        // Data { portnum=1 (TEXT_MESSAGE_APP), payload }
+        val data = java.io.ByteArrayOutputStream().apply {
+            pbVarint(this, 1, 1)            // portnum
+            pbBytes(this, 2, payload)       // payload
+        }.toByteArray()
+        // MeshPacket { to=0xffffffff (broadcast), decoded=data }
+        val packet = java.io.ByteArrayOutputStream().apply {
+            pbFixed32(this, 2, 0xFFFFFFFFL) // to = broadcast
+            pbBytes(this, 4, data)          // decoded
+        }.toByteArray()
+        // ToRadio { packet }
+        val toRadioMsg = java.io.ByteArrayOutputStream().apply { pbBytes(this, 1, packet) }.toByteArray()
+        writeToRadio(toRadioMsg)
+        _messages.value = (_messages.value + MeshMessage(t, true, System.currentTimeMillis())).takeLast(100)
+    }
+
+    private fun pbTag(o: java.io.ByteArrayOutputStream, field: Int, wire: Int) = pbRawVarint(o, ((field shl 3) or wire).toLong())
+    private fun pbRawVarint(o: java.io.ByteArrayOutputStream, value: Long) {
+        var x = value
+        while (true) { val b = (x and 0x7F); x = x ushr 7; if (x != 0L) o.write((b or 0x80).toInt()) else { o.write(b.toInt()); break } }
+    }
+    private fun pbVarint(o: java.io.ByteArrayOutputStream, field: Int, value: Long) { pbTag(o, field, 0); pbRawVarint(o, value) }
+    private fun pbBytes(o: java.io.ByteArrayOutputStream, field: Int, bytes: ByteArray) { pbTag(o, field, 2); pbRawVarint(o, bytes.size.toLong()); o.write(bytes) }
+    private fun pbFixed32(o: java.io.ByteArrayOutputStream, field: Int, value: Long) {
+        pbTag(o, field, 5)
+        o.write((value and 0xFF).toInt()); o.write(((value ushr 8) and 0xFF).toInt())
+        o.write(((value ushr 16) and 0xFF).toInt()); o.write(((value ushr 24) and 0xFF).toInt())
     }
 
     private fun parseNodeInfo(buf: ByteArray) {

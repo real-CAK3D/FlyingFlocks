@@ -76,6 +76,9 @@ private data class TpmsSensor(val id: String, val freq: Double, val kpa: Int, va
 /** A keyfob/remote OOK burst the node caught. */
 private data class KeyfobEvent(val freq: Double, val pulses: Int, val bits: String, val timeMs: Long)
 
+/** A 433/868 MHz weather / environment sensor reading. */
+private data class WeatherStation(val id: String, val tempC: Double?, val humidity: Int?, val timeMs: Long)
+
 /**
  * The sub-GHz hub for the wtBLEep node's CC1101 antenna. Shows live 315/433/868/915 MHz
  * band activity parsed from the node's DATA:RF stream, a sweep control, the capability
@@ -86,6 +89,7 @@ fun SubGhzScreen(vm: MainViewModel, onOpenMap: () -> Unit) {
     val logFlow = vm.log ?: remember { MutableStateFlow(emptyList<LogEntry>()) }
     val log by logFlow.collectAsStateWithLifecycle(initialValue = emptyList())
     var sweeping by remember { mutableStateOf(false) }
+    var txConfirm by remember { mutableStateOf<KeyfobEvent?>(null) }
 
     val hits = remember(log) {
         log.asSequence()
@@ -121,12 +125,23 @@ fun SubGhzScreen(vm: MainViewModel, onOpenMap: () -> Unit) {
             }
             .toList()
     }
+    // Weather / 433 sensors: DATA:WEATHER:<mhz>,<id>,<tempC>,<humidity%>[,<rain>] — latest per station.
+    val weather = remember(log) {
+        log.asSequence()
+            .filter { it.message.type == BiscuitMessage.Type.DATA && it.message.subtype == "WEATHER" }
+            .mapNotNull { e ->
+                val f = e.message.payload.split(",")
+                val id = f.getOrNull(1) ?: return@mapNotNull null
+                WeatherStation(id, f.getOrNull(2)?.toDoubleOrNull(), f.getOrNull(3)?.toIntOrNull(), e.timeMs)
+            }
+            .associateBy { it.id }.values.sortedByDescending { it.timeMs }
+    }
     val now = System.currentTimeMillis()
     // Capability cards go LIVE as real decodes arrive; weather has no decoder yet.
     val capabilities = listOf(
         Capability("Band activity monitor", "Which sub-GHz bands are busy and how strong — live from the node's CC1101.", Icons.Default.GraphicEq) to true,
         Capability("TPMS reader", "Decode tire-pressure sensors as cars pass: sensor ID, pressure, temperature.", Icons.Default.DirectionsCar) to tpms.isNotEmpty(),
-        Capability("Weather & 433 sensors", "433/868 MHz temperature, humidity and rain stations in range.", Icons.Default.Thermostat) to false,
+        Capability("Weather & 433 sensors", "433/868 MHz temperature, humidity and rain stations in range.", Icons.Default.Thermostat) to weather.isNotEmpty(),
         Capability("Keyfobs · remotes · garage", "OOK 433 remotes, doorbells and garage openers — activity and device IDs.", Icons.Default.SettingsRemote) to keyfobs.isNotEmpty(),
     )
 
@@ -198,6 +213,47 @@ fun SubGhzScreen(vm: MainViewModel, onOpenMap: () -> Unit) {
             keyfobs.takeLast(6).reversed().forEach { KeyfobRow(it) }
         }
 
+        // Weather / 433 sensors.
+        if (weather.isNotEmpty()) {
+            Text("WEATHER & SENSORS", style = MaterialTheme.typography.labelMedium, color = RF_AMBER,
+                fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+            Card(Modifier.fillMaxWidth(), shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    weather.take(8).forEach { ws ->
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("sensor ${ws.id}", fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodyMedium)
+                            Text(buildString {
+                                ws.tempC?.let { append("%.1f°C".format(it)) }
+                                ws.humidity?.let { if (isNotEmpty()) append("  ·  "); append("$it%") }
+                            }, fontFamily = FontFamily.Monospace, color = RF_AMBER, style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                }
+            }
+        }
+
+        // Gated transmit: replay a captured OOK burst onto YOUR OWN device only.
+        if (keyfobs.isNotEmpty()) {
+            Text("TRANSMIT", style = MaterialTheme.typography.labelMedium, color = Color(0xFFFF5470),
+                fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+            Card(Modifier.fillMaxWidth(), shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Replay a captured burst back out the CC1101. Only ever transmit on devices you own and are authorised to operate.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                    keyfobs.takeLast(4).reversed().forEach { k ->
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("${"%.2f".format(k.freq)} MHz · ${k.pulses}p", fontFamily = FontFamily.Monospace,
+                                style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                            OutlinedButton(onClick = { txConfirm = k }) { Text("Replay") }
+                        }
+                    }
+                }
+            }
+        }
+
         // Capability roadmap.
         Text("CAPABILITIES", style = MaterialTheme.typography.labelMedium, color = RF_AMBER,
             fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
@@ -224,6 +280,23 @@ fun SubGhzScreen(vm: MainViewModel, onOpenMap: () -> Unit) {
             }
         }
         Spacer(Modifier.height(8.dp))
+    }
+
+    txConfirm?.let { k ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { txConfirm = null },
+            title = { Text("Transmit on your own device?") },
+            text = {
+                Text("This re-transmits the captured ${"%.2f".format(k.freq)} MHz burst. Only do this on a device you " +
+                    "own and are authorised to operate — never on anyone else's vehicle, gate or property.")
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    vm.transmitSubGhz("%.2f".format(k.freq), k.bits); txConfirm = null
+                }) { Text("I own this — transmit") }
+            },
+            dismissButton = { androidx.compose.material3.TextButton(onClick = { txConfirm = null }) { Text("Cancel") } },
+        )
     }
 }
 
