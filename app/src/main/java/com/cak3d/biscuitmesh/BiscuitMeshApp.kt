@@ -58,6 +58,11 @@ class BiscuitMeshApp : Application() {
         com.cak3d.biscuitmesh.data.DeadZoneLogStore(this)
     }
 
+    /** Live GNSS satellite status (which sats the GPS fix is using). */
+    val gnss: com.cak3d.biscuitmesh.sensors.GnssManager by lazy {
+        com.cak3d.biscuitmesh.sensors.GnssManager(this)
+    }
+
     val fleet: FleetManager? by lazy {
         val adapter = bluetoothManager?.adapter ?: return@lazy null
         FleetManager(this, adapter, appScope, knownStore)

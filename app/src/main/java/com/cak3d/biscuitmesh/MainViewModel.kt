@@ -461,6 +461,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { appRef.deadZoneLogStore.clear(zoneId) }
     }
 
+    // --- GNSS satellites ---------------------------------------------------
+    val gnssState: StateFlow<com.cak3d.biscuitmesh.sensors.GnssSnapshot> = appRef.gnss.state
+    fun startGnss() = appRef.gnss.start()
+    fun stopGnss() = appRef.gnss.stop()
+
+    // --- Location passthrough (for the live aircraft view) -----------------
+    fun locationUpdates() = appRef.locationProvider.locationUpdates()
+
     fun setDeadZoneRadius(id: String, radiusM: Double) {
         viewModelScope.launch { appRef.deadZonesStore.setRadius(id, radiusM) }
     }

@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.BluetoothSearching
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Insights
+import androidx.compose.material.icons.filled.SatelliteAlt
 import androidx.compose.material.icons.filled.Science
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Map
@@ -66,10 +67,14 @@ import com.cak3d.biscuitmesh.ui.DeviceDetailScreen
 import com.cak3d.biscuitmesh.ui.DrivesScreen
 import com.cak3d.biscuitmesh.ui.FindsScreen
 import com.cak3d.biscuitmesh.ui.FleetScreen
+import com.cak3d.biscuitmesh.ui.AircraftScreen
 import com.cak3d.biscuitmesh.ui.DeadZonesScreen
 import com.cak3d.biscuitmesh.ui.LabBenchScreen
 import com.cak3d.biscuitmesh.ui.LiveScreen
+import com.cak3d.biscuitmesh.ui.LocatorScreen
 import com.cak3d.biscuitmesh.ui.ProximityBanner
+import com.cak3d.biscuitmesh.ui.SatellitesScreen
+import com.cak3d.biscuitmesh.ui.SensorsHubScreen
 import com.cak3d.biscuitmesh.ui.ConstellationBackground
 import com.cak3d.biscuitmesh.ui.MiscScreen
 import com.cak3d.biscuitmesh.ui.PlacesScreen
@@ -164,8 +169,8 @@ private fun MainShell(vm: MainViewModel) {
                         IconButton(onClick = { nav.navigate("stats") }) {
                             Icon(Icons.Default.Insights, contentDescription = "Stats & Data")
                         }
-                        IconButton(onClick = { nav.navigate("labbench") }) {
-                            Icon(Icons.Default.Science, contentDescription = "Lab Bench")
+                        IconButton(onClick = { nav.navigate("sensors") }) {
+                            Icon(Icons.Default.SatelliteAlt, contentDescription = "Sensors & Sky")
                         }
                         IconButton(onClick = { nav.navigate("live") }) {
                             Icon(Icons.Default.Terminal, contentDescription = "Live data")
@@ -287,6 +292,10 @@ private fun MainShell(vm: MainViewModel) {
                 }
                 composable("deadzones") { DeadZonesScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("labbench") { LabBenchScreen(onBack = { nav.popBackStack() }) }
+                composable("sensors") { SensorsHubScreen(onBack = { nav.popBackStack() }, onOpen = { nav.navigate(it) }) }
+                composable("satellites") { SatellitesScreen(vm = vm, onBack = { nav.popBackStack() }) }
+                composable("aircraft") { AircraftScreen(vm = vm, onBack = { nav.popBackStack() }) }
+                composable("locator") { LocatorScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("drives") { DrivesScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("stats") { StatsScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("live") { LiveScreen(vm = vm, onBack = { nav.popBackStack() }) }
