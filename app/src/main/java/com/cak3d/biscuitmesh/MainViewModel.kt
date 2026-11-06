@@ -493,6 +493,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val flockHandle: Flow<String> = appRef.settingsStore.flockHandleFlow
     fun setFlockHandle(name: String) = viewModelScope.launch { runCatching { appRef.crew.setHandle(name) } }
 
+    // --- Device detail -----------------------------------------------------
+    fun deviceHistory(id: String): com.cak3d.biscuitmesh.wardrive.DeviceHistory? = appRef.wardrive?.history(id)
+
+    // --- Watchlist ---------------------------------------------------------
+    val watchlist: Flow<List<String>> = appRef.watchlistStore.entries
+    fun addWatch(entry: String) = viewModelScope.launch { appRef.watchlistStore.add(entry) }
+    fun removeWatch(entry: String) = viewModelScope.launch { appRef.watchlistStore.remove(entry) }
+
     // --- Appearance (theme system) -----------------------------------------
     val appFeel: Flow<String> = appRef.settingsStore.appFeel
     val appAccent: Flow<String> = appRef.settingsStore.appAccent

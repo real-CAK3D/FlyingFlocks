@@ -78,7 +78,7 @@ private data class Blip(val x: Float, val y: Float, val color: Color, val live: 
 
 /** Maxed-out single-screen mission control: matrix rain, a reactive radar, live gauges and a log. */
 @Composable
-fun LiveScreen(vm: MainViewModel, onBack: () -> Unit) {
+fun LiveScreen(vm: MainViewModel, onBack: () -> Unit, onOpenSignal: (String) -> Unit = {}) {
     val context = LocalContext.current
     val progress by vm.progress.collectAsStateWithLifecycle()
     val mph by vm.useMph.collectAsStateWithLifecycle()
@@ -290,7 +290,7 @@ fun LiveScreen(vm: MainViewModel, onBack: () -> Unit) {
                             color = GREEN.copy(alpha = 0.4f), fontFamily = FontFamily.Monospace, fontSize = 9.sp)
                     } else {
                         LazyColumn(Modifier.fillMaxSize()) {
-                            items(topSignals, key = { it.id }) { SignalLine(it) }
+                            items(topSignals, key = { it.id }) { SignalLine(it, onOpenSignal) }
                         }
                     }
                 }
@@ -304,7 +304,7 @@ private class Ripple(val x: Float, val y: Float, var age: Float = 0f)
 
 /** One live signal row: a band/kind tag, its label, and signal strength. */
 @Composable
-private fun SignalLine(s: WardriveSample) {
+private fun SignalLine(s: WardriveSample, onOpenSignal: (String) -> Unit = {}) {
     val (tag, color) = when {
         s.kind == SampleKind.RF -> "RF  " to AMBER
         s.kind == SampleKind.BT -> "BT  " to CYAN
@@ -317,7 +317,8 @@ private fun SignalLine(s: WardriveSample) {
         com.cak3d.biscuitmesh.sensors.OuiDb.vendor(s.id)?.let { append(it).append(' ') }
         if (s.sources.size > 1) append("×${s.sources.size}")
     }.trim()
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().clickable { onOpenSignal(s.id) },
+        horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(tag, color = color, fontFamily = FontFamily.Monospace, fontSize = 9.sp, fontWeight = FontWeight.Bold)
         Text(
             s.label.ifBlank { s.id }, color = Color.White.copy(alpha = 0.82f),

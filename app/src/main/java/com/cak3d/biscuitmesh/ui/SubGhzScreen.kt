@@ -174,6 +174,13 @@ fun SubGhzScreen(vm: MainViewModel, onOpenMap: () -> Unit) {
             }
         }
 
+        // Waterfall spectrogram — the last 60s of RF across 300–950 MHz.
+        if (hits.isNotEmpty()) {
+            Text("WATERFALL", style = MaterialTheme.typography.labelMedium, color = RF_AMBER,
+                fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+            WaterfallCard(hits, now)
+        }
+
         // Live band meters.
         Text("BANDS", style = MaterialTheme.typography.labelMedium, color = RF_AMBER,
             fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
@@ -217,6 +224,48 @@ fun SubGhzScreen(vm: MainViewModel, onOpenMap: () -> Unit) {
             }
         }
         Spacer(Modifier.height(8.dp))
+    }
+}
+
+@Composable
+private fun WaterfallCard(hits: List<RfHit>, now: Long) {
+    val windowMs = 60_000L
+    Card(
+        Modifier.fillMaxWidth(),
+        shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("300–950 MHz · last 60s · newest on top · brighter = stronger",
+                style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f))
+            androidx.compose.foundation.Canvas(Modifier.fillMaxWidth().height(150.dp)) {
+                val w = size.width; val h = size.height
+                fun fx(f: Double) = (((f - 300.0) / 650.0).coerceIn(0.0, 1.0) * w).toFloat()
+                // band gridlines
+                listOf(315.0, 433.92, 868.0, 915.0).forEach { b ->
+                    val x = fx(b)
+                    drawLine(RF_AMBER.copy(alpha = 0.16f), androidx.compose.ui.geometry.Offset(x, 0f),
+                        androidx.compose.ui.geometry.Offset(x, h), 1f)
+                }
+                hits.forEach { hit ->
+                    val age = now - hit.timeMs
+                    if (age < 0 || age > windowMs) return@forEach
+                    val y = (age.toFloat() / windowMs) * h
+                    val x = fx(hit.freq)
+                    val strength = ((hit.rssi + 100).coerceIn(0, 70)) / 70f
+                    val col = androidx.compose.ui.graphics.lerp(Color(0xFF5A1E00), Color(0xFFFFE08A), strength)
+                        .copy(alpha = 0.3f + strength * 0.6f)
+                    drawCircle(col, 2.5f + strength * 3.5f, androidx.compose.ui.geometry.Offset(x, y))
+                }
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                listOf("300", "433", "600", "750", "950").forEach {
+                    Text(it, style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
+                }
+            }
+        }
     }
 }
 

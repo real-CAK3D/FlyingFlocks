@@ -356,6 +356,11 @@ fun WardriveScreen(vm: MainViewModel) {
                     map.overlays.add(DotsOverlay(dots))
                 }
 
+                // Heat view: a density heatmap of every sighting — busy air glows warm.
+                if (viewMode == MapViewMode.HEAT) {
+                    map.overlays.add(HeatOverlay(samples.values.map { GeoPoint(it.lat, it.lon) }))
+                }
+
                 // Mesh view: weave a spider web between all located nodes, then dot them.
                 if (viewMode == MapViewMode.MESH) {
                     for (a in placedMesh.indices) {
@@ -624,7 +629,35 @@ enum class MapStyle(val label: String) { DARK("Dark"), LIGHT("Light"), TOPO("Top
 
 /** Themed map views: each shows only its own world. Default = the full map. */
 enum class MapViewMode(val label: String) {
-    DEFAULT("All"), FLOCK("Flock"), BISCUITS("Biscuits"), MESH("Mesh"), WTBLEEP("wtBLEep"), RF("Sub-GHz")
+    DEFAULT("All"), FLOCK("Flock"), BISCUITS("Biscuits"), MESH("Mesh"), WTBLEEP("wtBLEep"), RF("Sub-GHz"), HEAT("Heat")
+}
+
+/**
+ * A signal-density heatmap: every sample paints a soft warm blob, and where many
+ * overlap the colour stacks toward white-hot — so busy air glows and dead patches stay dark.
+ * Only points in the current view are drawn.
+ */
+private class HeatOverlay(private val points: List<GeoPoint>) : Overlay() {
+    private val paint = android.graphics.Paint().apply { isAntiAlias = true }
+    private val pt = android.graphics.Point()
+    override fun draw(canvas: android.graphics.Canvas, mapView: MapView, shadow: Boolean) {
+        if (shadow) return
+        val proj = mapView.projection
+        val bb = mapView.boundingBox
+        val r = 42f
+        points.forEach { gp ->
+            if (gp.latitude > bb.latNorth || gp.latitude < bb.latSouth ||
+                gp.longitude > bb.lonEast || gp.longitude < bb.lonWest) return@forEach
+            proj.toPixels(gp, pt)
+            val x = pt.x.toFloat(); val y = pt.y.toFloat()
+            paint.shader = android.graphics.RadialGradient(
+                x, y, r,
+                intArrayOf(android.graphics.Color.argb(70, 255, 150, 40), android.graphics.Color.argb(0, 255, 150, 40)),
+                null, android.graphics.Shader.TileMode.CLAMP,
+            )
+            canvas.drawCircle(x, y, r, paint)
+        }
+    }
 }
 
 /** Mesh-view helper: place GPS-less nodes (a home node) by panning the map and tapping. */
@@ -671,6 +704,7 @@ private fun viewTint(mode: MapViewMode): androidx.compose.ui.graphics.Color = wh
     MapViewMode.FLOCK -> androidx.compose.ui.graphics.Color(0x33001E4D)     // deep blue
     MapViewMode.WTBLEEP -> androidx.compose.ui.graphics.Color(0x2600333D)   // electric teal
     MapViewMode.RF -> androidx.compose.ui.graphics.Color(0x26331A00)        // warm amber — sub-GHz
+    MapViewMode.HEAT -> androidx.compose.ui.graphics.Color(0x26200800)      // warm heat wash
 }
 
 private val TOPO_SOURCE = org.osmdroid.tileprovider.tilesource.XYTileSource(

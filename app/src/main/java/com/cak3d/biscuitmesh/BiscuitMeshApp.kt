@@ -54,6 +54,11 @@ class BiscuitMeshApp : Application() {
 
     val deadZonesStore: DeadZonesStore by lazy { DeadZonesStore(this) }
 
+    /** Local-only watchlist of MACs/names to flag when seen. */
+    val watchlistStore: com.cak3d.biscuitmesh.data.WatchlistStore by lazy {
+        com.cak3d.biscuitmesh.data.WatchlistStore(this)
+    }
+
     /** Local-only log of devices seen inside dead zones — never uploaded. */
     val deadZoneLogStore: com.cak3d.biscuitmesh.data.DeadZoneLogStore by lazy {
         com.cak3d.biscuitmesh.data.DeadZoneLogStore(this)

@@ -50,6 +50,18 @@ data class WardriveSample(
     val is5GHz: Boolean get() = channel >= 32
 }
 
+/** A device's accumulated sighting history — for the detail screen. Capped, local-only. */
+data class DeviceHistory(
+    val id: String,
+    val firstMs: Long,
+    val lastMs: Long,
+    val hits: Int,
+    val best: Int,
+    val last: Int,
+    val rssiTrail: List<Int>,
+    val path: List<LatLon>,
+)
+
 data class WardriveState(
     val active: Boolean = false,
     val mode: WardriveMode = WardriveMode.ALL,
@@ -87,6 +99,46 @@ class WardriveManager(
 
     private val _samples = MutableStateFlow<Map<String, WardriveSample>>(emptyMap())
     val samples: StateFlow<Map<String, WardriveSample>> = _samples.asStateFlow()
+
+    // Per-device sighting history for the detail screen. A plain map (not a flow) so
+    // recording every re-sighting here never triggers a UI/map recomposition.
+    private class Hist(val firstMs: Long) {
+        var lastMs = firstMs
+        var hits = 0
+        var best = -200
+        val rssi = ArrayDeque<Int>()
+        val path = ArrayDeque<LatLon>()
+    }
+    private val histories = java.util.concurrent.ConcurrentHashMap<String, Hist>()
+
+    private fun recordHistory(s: WardriveSample) {
+        val h = histories.getOrPut(s.id) { Hist(s.timeMs) }
+        synchronized(h) {
+            h.lastMs = s.timeMs
+            h.hits++
+            if (s.rssi > h.best) h.best = s.rssi
+            h.rssi.addLast(s.rssi); while (h.rssi.size > 60) h.rssi.removeFirst()
+            val p = h.path.lastOrNull()
+            if (p == null || hypotM(p.lat, p.lon, s.lat, s.lon) > 15.0) {
+                h.path.addLast(LatLon(s.lat, s.lon)); while (h.path.size > 40) h.path.removeFirst()
+            }
+        }
+    }
+
+    /** Snapshot of a device's sighting history, or null if never seen. */
+    fun history(id: String): DeviceHistory? {
+        val h = histories[id] ?: return null
+        return synchronized(h) {
+            DeviceHistory(id, h.firstMs, h.lastMs, h.hits, h.best, h.rssi.lastOrNull() ?: -200,
+                h.rssi.toList(), h.path.toList())
+        }
+    }
+
+    private fun hypotM(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+        val out = FloatArray(1)
+        Location.distanceBetween(lat1, lon1, lat2, lon2, out)
+        return out[0].toDouble()
+    }
 
     private val _track = MutableStateFlow<List<LatLon>>(emptyList())
     val track: StateFlow<List<LatLon>> = _track.asStateFlow()
@@ -257,6 +309,7 @@ class WardriveManager(
 
     /** Adds a sample, or merges a new source into an existing one. Returns true if anything changed. */
     private fun mergeSample(s: WardriveSample): Boolean {
+        recordHistory(s)   // every sighting feeds the detail-screen history (no UI emit)
         val existing = _samples.value[s.id]
         if (existing == null) {
             _samples.update { it + (s.id to s) }
