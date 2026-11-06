@@ -64,7 +64,7 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit, onOpenDeadZones: () -> Unit = {}) {
+fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit, onOpenDeadZones: () -> Unit = {}, onOpenWigle: () -> Unit = {}) {
     val zones by vm.deadZones.collectAsStateWithLifecycle(initialValue = emptyList())
     val authorized by vm.authorizedUse.collectAsStateWithLifecycle()
     var showAdd by remember { mutableStateOf(false) }
@@ -118,6 +118,10 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit, onOpenDeadZones: () ->
                 onClick = onOpenDeadZones,
                 modifier = Modifier.fillMaxWidth(),
             ) { Text("View dead-zone devices (local only)") }
+            androidx.compose.material3.OutlinedButton(
+                onClick = onOpenWigle,
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("WiGLE account stats") }
             HudSection(vm)
             AlertsScreenSection(vm)
             MeshSection(vm)

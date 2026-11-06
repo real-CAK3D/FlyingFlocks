@@ -75,6 +75,7 @@ import com.cak3d.biscuitmesh.ui.LocatorScreen
 import com.cak3d.biscuitmesh.ui.ProximityBanner
 import com.cak3d.biscuitmesh.ui.SatellitesScreen
 import com.cak3d.biscuitmesh.ui.SensorsHubScreen
+import com.cak3d.biscuitmesh.ui.WigleStatsScreen
 import com.cak3d.biscuitmesh.ui.ConstellationBackground
 import com.cak3d.biscuitmesh.ui.MiscScreen
 import com.cak3d.biscuitmesh.ui.PlacesScreen
@@ -288,8 +289,10 @@ private fun MainShell(vm: MainViewModel) {
                 }
                 composable("settings") {
                     SettingsScreen(vm = vm, onBack = { nav.popBackStack() },
-                        onOpenDeadZones = { nav.navigate("deadzones") })
+                        onOpenDeadZones = { nav.navigate("deadzones") },
+                        onOpenWigle = { nav.navigate("wiglestats") })
                 }
+                composable("wiglestats") { WigleStatsScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("deadzones") { DeadZonesScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("labbench") { LabBenchScreen(onBack = { nav.popBackStack() }) }
                 composable("sensors") { SensorsHubScreen(onBack = { nav.popBackStack() }, onOpen = { nav.navigate(it) }) }

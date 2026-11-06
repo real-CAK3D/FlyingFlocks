@@ -25,6 +25,7 @@ class SettingsStore(private val context: Context) {
     private val wtfSourceEnabledKey = booleanPreferencesKey("wtf_source_enabled")
     private val keepAwakeKey = booleanPreferencesKey("keep_awake")
     private val vibrateAlertsKey = booleanPreferencesKey("vibrate_alerts")
+    private val wigleAuthKey = stringPreferencesKey("wigle_auth")
 
     /** True once the operator has acknowledged the authorized-use-only terms. */
     val authorizedUse: Flow<Boolean> =
@@ -120,5 +121,13 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setVibrateAlerts(enabled: Boolean) {
         context.settingsDataStore.edit { it[vibrateAlertsKey] = enabled }
+    }
+
+    /** WiGLE API credential — the "Encoded for use" string from your WiGLE account. */
+    val wigleAuth: Flow<String> =
+        context.settingsDataStore.data.map { it[wigleAuthKey] ?: "" }
+
+    suspend fun setWigleAuth(auth: String) {
+        context.settingsDataStore.edit { it[wigleAuthKey] = auth.trim() }
     }
 }

@@ -469,6 +469,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     // --- Location passthrough (for the live aircraft view) -----------------
     fun locationUpdates() = appRef.locationProvider.locationUpdates()
 
+    // --- WiGLE account stats -----------------------------------------------
+    val wigleAuth: Flow<String> = appRef.settingsStore.wigleAuth
+    fun setWigleAuth(auth: String) { viewModelScope.launch { appRef.settingsStore.setWigleAuth(auth) } }
+
     fun setDeadZoneRadius(id: String, radiusM: Double) {
         viewModelScope.launch { appRef.deadZonesStore.setRadius(id, radiusM) }
     }
