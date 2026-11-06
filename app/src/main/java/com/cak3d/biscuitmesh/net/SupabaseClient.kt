@@ -7,6 +7,9 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 
+/** A non-2xx HTTP response from Supabase. `code` lets callers tell auth failures (4xx) from server errors. */
+class SbHttpException(val code: Int, message: String) : RuntimeException(message)
+
 /** A signed-in (anonymous) Supabase session. */
 data class SbSession(
     val accessToken: String,
@@ -76,7 +79,7 @@ object SupabaseClient {
         val stream = if (code in 200..299) c.inputStream else c.errorStream
         val text = stream?.bufferedReader()?.use { it.readText() } ?: ""
         c.disconnect()
-        if (code !in 200..299) throw RuntimeException("Supabase HTTP $code: ${text.take(200)}")
+        if (code !in 200..299) throw SbHttpException(code, "Supabase HTTP $code: ${text.take(200)}")
         return text
     }
 

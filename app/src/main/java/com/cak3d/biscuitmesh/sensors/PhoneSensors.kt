@@ -136,11 +136,17 @@ class PhoneSensors(context: Context, private val adapter: BluetoothAdapter?) {
         }
     }
 
-    /** Wi-Fi channel number from a centre frequency in MHz (2.4 GHz and 5 GHz). */
+    /**
+     * Wi-Fi channel number from a centre frequency in MHz (2.4 / 5 / 6 GHz).
+     * 6 GHz (Wi-Fi 6E) channels are offset by +1000 so they stay out of the 2.4 GHz
+     * range and the 5 GHz spectrum plot while still being counted and banded as high.
+     * The display subtracts the offset to show the true 6E channel.
+     */
     private fun channelFromFreq(mhz: Int): Int = when {
         mhz == 2484 -> 14
-        mhz in 2412..2472 -> (mhz - 2407) / 5      // 2.4 GHz: ch 1-13
-        mhz in 5000..5900 -> (mhz - 5000) / 5       // 5 GHz: ch 32+
+        mhz in 2412..2472 -> (mhz - 2407) / 5           // 2.4 GHz: ch 1-13
+        mhz in 5000..5895 -> (mhz - 5000) / 5           // 5 GHz: ch 32-179
+        mhz in 5925..7125 -> (mhz - 5950) / 5 + 1000    // 6 GHz (Wi-Fi 6E): real ch + 1000 marker
         else -> 0
     }
 }

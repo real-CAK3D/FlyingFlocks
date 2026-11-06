@@ -64,7 +64,11 @@ fun CrewScreen(vm: MainViewModel, onBack: () -> Unit) {
     var band by remember { mutableStateOf<String?>(null) }
     var codeField by remember { mutableStateOf("") }
     var claimMsg by remember { mutableStateOf<String?>(null) }
-    var handleField by remember(savedHandle) { mutableStateOf(savedHandle) }
+    // Don't re-key on savedHandle (it starts "" then arrives async and would wipe a mid-edit).
+    // Sync from the stored value only until the user starts typing.
+    var handleField by remember { mutableStateOf(savedHandle) }
+    var handleTouched by remember { mutableStateOf(false) }
+    LaunchedEffect(savedHandle) { if (!handleTouched && savedHandle.isNotBlank()) handleField = savedHandle }
 
     // Turn the online layer on, and report my lifetime totals to the flock.
     LaunchedEffect(Unit) { vm.enableFlock() }
@@ -111,7 +115,7 @@ fun CrewScreen(vm: MainViewModel, onBack: () -> Unit) {
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f))
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically) {
-                        OutlinedTextField(value = handleField, onValueChange = { handleField = it.take(24) },
+                        OutlinedTextField(value = handleField, onValueChange = { handleField = it.take(24); handleTouched = true },
                             singleLine = true, label = { Text("Handle") }, modifier = Modifier.weight(1f))
                         Button(onClick = { vm.setFlockHandle(handleField) },
                             enabled = handleField.isNotBlank() && handleField != savedHandle) { Text("Save") }
@@ -142,7 +146,12 @@ fun CrewScreen(vm: MainViewModel, onBack: () -> Unit) {
                     OutlinedTextField(value = codeField, onValueChange = { codeField = it.uppercase() },
                         singleLine = true, label = { Text("Band") }, modifier = Modifier.fillMaxWidth())
                     Button(onClick = {
-                        scope.launch { claimMsg = vm.crew.claim(codeField) ?: "On their tail ✓"; if (claimMsg?.contains("✓") == true) codeField = "" }
+                        scope.launch {
+                            // claim() hits the network and can throw (bad code / offline) — never let it crash the app.
+                            claimMsg = runCatching { vm.crew.claim(codeField) }
+                                .fold({ it ?: "On their tail ✓" }, { "Couldn't reach the flock — try again." })
+                            if (claimMsg?.contains("✓") == true) codeField = ""
+                        }
                     }, enabled = codeField.length >= 4, modifier = Modifier.fillMaxWidth()) { Text("Tail them") }
                     claimMsg?.let {
                         Text(it, style = MaterialTheme.typography.bodyMedium,

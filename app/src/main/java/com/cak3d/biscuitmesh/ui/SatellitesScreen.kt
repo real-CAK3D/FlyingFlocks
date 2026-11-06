@@ -118,7 +118,9 @@ fun SatellitesScreen(vm: MainViewModel, onBack: () -> Unit) {
                             style = MaterialTheme.typography.labelMedium, color = constColor(name),
                             fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
                     }
-                    items(sats, key = { "${name}-${it.svid}" }) { SatRow(it) }
+                    // Dual-band receivers report the same svid on two carriers (L1+L5), so
+                    // svid alone is not a unique key — index within the group guarantees it is.
+                    items(sats.size, key = { "$name-$it" }) { SatRow(sats[it]) }
                 }
             } else if (gnss.supported) {
                 item("wait") {

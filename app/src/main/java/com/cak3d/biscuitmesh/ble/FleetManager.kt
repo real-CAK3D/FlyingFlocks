@@ -34,7 +34,9 @@ class FleetManager(
     val maxConnections: Int = 7,
 ) : DeviceConnection.Listener {
 
-    private val connections = mutableMapOf<String, DeviceConnection>()
+    // Mutated from the main thread (connect/disconnect) and the GATT binder thread
+    // (onStateChanged → remove), so it must be concurrent to avoid HashMap corruption.
+    private val connections = java.util.concurrent.ConcurrentHashMap<String, DeviceConnection>()
 
     private val _devices = MutableStateFlow<Map<String, BiscuitDevice>>(emptyMap())
     val devices: StateFlow<Map<String, BiscuitDevice>> = _devices.asStateFlow()

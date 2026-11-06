@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.launch
 
 /**
@@ -45,7 +46,10 @@ class ProgressManager(
             _state.value = rebuild()
 
             wardrive?.let { wd ->
-                launch { wd.samples.collect { map -> awardSamples(map.values) } }
+                // Samples emit on every merge; awardSamples re-scans the whole set, so
+                // sample() at ~2s caps that to one pass per window instead of per ping
+                // (turns an O(n²)-over-a-drive scan into a bounded, periodic one).
+                launch { wd.samples.sample(2000).collect { map -> awardSamples(map.values) } }
             }
             hazards?.let { hz ->
                 launch { hz.hazards.collect { list -> awardHazards(list) } }

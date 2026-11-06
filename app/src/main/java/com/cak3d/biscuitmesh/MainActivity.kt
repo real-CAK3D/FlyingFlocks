@@ -157,7 +157,16 @@ private fun MainShell(vm: MainViewModel) {
         topBar = {
             if (isTopLevel) {
                 TopAppBar(
-                    title = { Text(currentTab!!.label.uppercase()) },
+                    // Single line, sized to clear the 7 action icons so long tabs
+                    // ("BLUETOOTH", "SUB-GHZ") don't wrap to two lines.
+                    title = {
+                        Text(
+                            currentTab!!.label.uppercase(),
+                            maxLines = 1,
+                            softWrap = false,
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                    },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                     actions = {
                         IconButton(onClick = { nav.navigate("places") }) {

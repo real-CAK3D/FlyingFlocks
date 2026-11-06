@@ -255,7 +255,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         } else {
             fleet.onScanStart()
             scanner.start { found -> fleet.onScanFound(found) }
-            _scanning.value = true
+            // Reflect whether a scan actually started — start() no-ops when BT is off,
+            // so hardcoding true left the UI stuck on "Scanning…" with nothing running.
+            _scanning.value = scanner.isScanning
         }
     }
 
@@ -266,7 +268,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (scanner.isScanning) return
         fleet.onScanStart()
         scanner.start { found -> fleet.onScanFound(found) }
-        _scanning.value = true
+        _scanning.value = scanner.isScanning
     }
 
     fun stopScan() {

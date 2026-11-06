@@ -9,6 +9,8 @@ import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.BluetoothProfile
 import android.content.Context
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import com.cak3d.biscuitmesh.model.ConnectionState
 import com.cak3d.biscuitmesh.model.DeviceStatus
 import com.cak3d.biscuitmesh.protocol.BiscuitGatt
@@ -50,14 +52,31 @@ class DeviceConnection(
     private val opQueue = ArrayDeque<() -> Unit>()
     private val opRunning = AtomicBoolean(false)
     private val lineBuffer = StringBuilder()
+    private val closed = AtomicBoolean(false)
+
+    // A stalled connect (e.g. a spurious CONNECTED with status 133) must not sit forever
+    // holding an open GATT client interface — Android caps those per app, and leaking them
+    // is what makes every later connect fail with 133 ("out of range"). This watchdog
+    // force-fails a connect that never reaches READY.
+    private val watchdog = Handler(Looper.getMainLooper())
+    private val timeoutRunnable = Runnable { fail("Connection timed out") }
 
     fun connect() {
+        closed.set(false)
         emit(ConnectionState.CONNECTING)
+        watchdog.postDelayed(timeoutRunnable, CONNECT_TIMEOUT_MS)
         gatt = device.connectGatt(context, false, callback, BluetoothDevice.TRANSPORT_LE)
     }
 
     fun disconnect() {
         gatt?.disconnect()
+    }
+
+    /** Close the GATT and report FAILED exactly once, so no failure path leaks the client interface. */
+    private fun fail(error: String) {
+        if (!closed.compareAndSet(false, true)) return
+        cleanup()
+        emit(ConnectionState.FAILED, error)
     }
 
     /** Sends a raw `CMD:...` line (already framed with a trailing `\n`). */
@@ -120,10 +139,17 @@ class DeviceConnection(
         override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) {
             when (newState) {
                 BluetoothProfile.STATE_CONNECTED -> {
+                    // A CONNECTED event with a non-success status is a failed link (commonly 133);
+                    // proceeding would hang in PROVISIONING with the GATT held open. Fail cleanly.
+                    if (status != BluetoothGatt.GATT_SUCCESS) {
+                        fail("Connect failed (status $status)")
+                        return
+                    }
                     emit(ConnectionState.PROVISIONING)
                     g.requestMtu(BiscuitGatt.PREFERRED_MTU)
                 }
                 BluetoothProfile.STATE_DISCONNECTED -> {
+                    if (!closed.compareAndSet(false, true)) return
                     cleanup()
                     emit(ConnectionState.DISCONNECTED, if (status != 0) "GATT status $status" else null)
                 }
@@ -137,12 +163,12 @@ class DeviceConnection(
 
         override fun onServicesDiscovered(g: BluetoothGatt, status: Int) {
             if (status != BluetoothGatt.GATT_SUCCESS) {
-                emit(ConnectionState.FAILED, "Service discovery failed ($status)")
+                fail("Service discovery failed ($status)")
                 return
             }
             val svc = g.getService(BiscuitGatt.SERVICE)
             if (svc == null) {
-                emit(ConnectionState.FAILED, "Biscuit service not found")
+                fail("Biscuit service not found")
                 return
             }
             cmdChar = svc.getCharacteristic(BiscuitGatt.CMD)
@@ -151,7 +177,8 @@ class DeviceConnection(
         }
 
         override fun onDescriptorWrite(g: BluetoothGatt, descriptor: BluetoothGattDescriptor, status: Int) {
-            // Notifications are now live; the device will answer commands.
+            // Notifications are now live; the device will answer commands. Connected for real.
+            watchdog.removeCallbacks(timeoutRunnable)
             emit(ConnectionState.READY)
             requestStatus()
             opComplete()
@@ -201,12 +228,12 @@ class DeviceConnection(
 
     private fun enableResponseNotifications(g: BluetoothGatt, svc: android.bluetooth.BluetoothGattService) {
         val response = svc.getCharacteristic(BiscuitGatt.RESPONSE) ?: run {
-            emit(ConnectionState.FAILED, "Response characteristic missing")
+            fail("Response characteristic missing")
             return
         }
         g.setCharacteristicNotification(response, true)
         val cccd = response.getDescriptor(BiscuitGatt.CCCD) ?: run {
-            emit(ConnectionState.FAILED, "CCCD missing")
+            fail("CCCD missing")
             return
         }
         enqueue {
@@ -277,6 +304,7 @@ class DeviceConnection(
     }
 
     private fun cleanup() {
+        watchdog.removeCallbacks(timeoutRunnable)
         synchronized(opQueue) { opQueue.clear() }
         opRunning.set(false)
         cmdChar = null
@@ -286,4 +314,8 @@ class DeviceConnection(
 
     private fun emit(state: ConnectionState, error: String? = null) =
         listener.onStateChanged(address, state, error)
+
+    private companion object {
+        const val CONNECT_TIMEOUT_MS = 15_000L
+    }
 }

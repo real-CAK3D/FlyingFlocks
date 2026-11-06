@@ -58,15 +58,18 @@ fun AircraftScreen(vm: MainViewModel, onBack: () -> Unit) {
     androidx.compose.runtime.LaunchedEffect(Unit) {
         runCatching { vm.locationUpdates().collect { lat = it.latitude; lon = it.longitude } }
     }
-    // Poll ADS-B around the fix.
-    androidx.compose.runtime.LaunchedEffect(lat != null, lon != null) {
+    // Poll ADS-B around the *current* fix. Keyed on the rounded position so the loop
+    // re-centres as you drive instead of querying the first fix forever.
+    val fixKey = (lat?.let { Math.round(it * 100) } ?: Long.MIN_VALUE) to
+        (lon?.let { Math.round(it * 100) } ?: Long.MIN_VALUE)
+    androidx.compose.runtime.LaunchedEffect(fixKey) {
         val la = lat; val lo = lon
         if (la == null || lo == null) return@LaunchedEffect
         while (true) {
             loading = true
             val list = runCatching { client.nearby(la, lo, radiusNm = 150) }
             loading = false
-            list.onSuccess { aircraft = it; error = if (it.isEmpty()) null else null }
+            list.onSuccess { aircraft = it; error = null }
                 .onFailure { error = "Couldn't reach the ADS-B feed. Retrying…" }
             delay(15_000)
         }
@@ -112,7 +115,8 @@ fun AircraftScreen(vm: MainViewModel, onBack: () -> Unit) {
                     }
                 }
             }
-            items(aircraft, key = { it.hex }) { AircraftRow(it) }
+            // hex can be blank/shared for TIS-B/MLAT targets, so index guarantees a unique key.
+            items(aircraft.size, key = { "${aircraft[it].hex}-$it" }) { AircraftRow(aircraft[it]) }
         }
     }
 }

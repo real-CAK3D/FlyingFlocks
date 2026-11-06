@@ -2,10 +2,13 @@ package com.cak3d.biscuitmesh.crew
 
 import com.cak3d.biscuitmesh.data.SettingsStore
 import com.cak3d.biscuitmesh.location.LocationProvider
+import com.cak3d.biscuitmesh.net.SbHttpException
 import com.cak3d.biscuitmesh.net.SbSession
 import com.cak3d.biscuitmesh.net.SupabaseClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -39,9 +42,12 @@ class CrewManager(
     private val scope: CoroutineScope,
     private val settings: SettingsStore,
     private val location: LocationProvider,
+    private val deadZones: com.cak3d.biscuitmesh.data.DeadZonesStore,
 ) {
     @Volatile private var session: SbSession? = null
     @Volatile private var activated = false
+    @Volatile private var zones: List<com.cak3d.biscuitmesh.data.DeadZone> = emptyList()
+    private val authMutex = Mutex()
 
     private val _flock = MutableStateFlow<List<CrewMember>>(emptyList())
     val flock: StateFlow<List<CrewMember>> = _flock.asStateFlow()
@@ -62,29 +68,58 @@ class CrewManager(
     @Synchronized fun activate() {
         if (activated) return
         activated = true
+        scope.launch { deadZones.zones.collect { zones = it } }
         scope.launch { pollLoop() }
         scope.launch { shareLoop() }
     }
 
+    /** True if a point sits inside any dead zone — used to keep your live pin out of home/work. */
+    private fun inDeadZone(lat: Double, lon: Double): Boolean {
+        val zs = zones
+        if (zs.isEmpty()) return false
+        val out = FloatArray(1)
+        return zs.any {
+            android.location.Location.distanceBetween(lat, lon, it.lat, it.lon, out)
+            out[0] <= it.radiusM
+        }
+    }
+
     private suspend fun pollLoop() {
+        var failures = 0
         while (true) {
-            runCatching {
+            val ok = runCatching {
                 ensure(); _online.value = true
                 touch()
                 _live.value = liveCount()
                 _flock.value = tracked()
                 _totals.value = globalTotals()
                 _board.value = leaderboard()
-            }.onFailure { _online.value = false }
-            delay(6000)
+            }.isSuccess
+            if (ok) {
+                failures = 0
+                delay(6000)
+            } else {
+                _online.value = false
+                // Back off on sustained failure (offline) instead of hammering every 6s.
+                failures = (failures + 1).coerceAtMost(5)
+                delay(6000L * (1 shl (failures - 1)))  // 6s,12s,24s,48s,96s cap
+            }
         }
     }
 
     private suspend fun shareLoop() {
         settings.crewShare.collectLatest { on ->
             if (on) {
+                var hiddenForZone = false
                 runCatching {
                     location.locationUpdates(5000).collect { loc ->
+                        // Never broadcast your position from inside a dead zone (home/work).
+                        // Drop the published row once on entry so tails can't see you there.
+                        if (inDeadZone(loc.latitude, loc.longitude)) {
+                            if (!hiddenForZone) { runCatching { stopSharing() }; hiddenForZone = true }
+                            return@collect
+                        }
+                        hiddenForZone = false
                         runCatching {
                             publishLocation(loc.latitude, loc.longitude,
                                 if (loc.hasBearing()) loc.bearing else null, if (loc.hasSpeed()) loc.speed else null)
@@ -95,23 +130,36 @@ class CrewManager(
         }
     }
 
-    suspend fun ensure(): SbSession {
-        var s = session ?: settings.sbSession().takeIf { it.isNotEmpty() }?.let { runCatching { fromJson(it) }.getOrNull() }
-        s = when {
-            s == null -> SupabaseClient.signUpAnonymous()
-            s.expiresAtMs - System.currentTimeMillis() < 60_000 ->
-                runCatching { SupabaseClient.refresh(s!!.refreshToken) }.getOrElse { SupabaseClient.signUpAnonymous() }
-            else -> s
+    suspend fun ensure(): SbSession = authMutex.withLock {
+        if (_handle.value == null) runCatching { settings.flockHandle() }.getOrNull()
+            ?.takeIf { it.isNotBlank() }?.let { _handle.value = it }
+
+        val cur = session ?: settings.sbSession().takeIf { it.isNotEmpty() }?.let { runCatching { fromJson(it) }.getOrNull() }
+        // A still-valid session needs no network — this short-circuit stops the ~5-6 redundant
+        // refresh/upsert/DataStore writes that otherwise fired every poll cycle.
+        if (cur != null && cur.expiresAtMs - System.currentTimeMillis() >= 60_000) {
+            if (session == null) session = cur
+            return@withLock cur
         }
-        session = s
-        settings.setSbSession(toJson(s))
-        if (_handle.value == null) settings.flockHandle().takeIf { it.isNotBlank() }?.let { _handle.value = it }
+
+        val fresh = when {
+            cur == null -> SupabaseClient.signUpAnonymous()
+            else -> try {
+                SupabaseClient.refresh(cur.refreshToken)
+            } catch (e: SbHttpException) {
+                // The refresh token is genuinely dead (4xx) → a new identity is the only option.
+                // A 5xx/network error is transient, so rethrow and keep the identity for next time.
+                if (e.code in 400..403) SupabaseClient.signUpAnonymous() else throw e
+            }
+        }
+        session = fresh
+        settings.setSbSession(toJson(fresh))
         runCatching {
-            val prof = JSONObject().put("id", s.userId)
+            val prof = JSONObject().put("id", fresh.userId)
             _handle.value?.let { prof.put("handle", it) }
-            SupabaseClient.upsert("ff_profiles", prof.toString(), s.accessToken, onConflict = "id")
+            SupabaseClient.upsert("ff_profiles", prof.toString(), fresh.accessToken, onConflict = "id")
         }
-        return s
+        fresh
     }
 
     suspend fun newCode(): String {

@@ -71,7 +71,7 @@ class BiscuitMeshApp : Application() {
 
     /** Online "Flock" layer (theGarden Supabase): anon identity, band codes, live locations. */
     val crew: com.cak3d.biscuitmesh.crew.CrewManager by lazy {
-        com.cak3d.biscuitmesh.crew.CrewManager(appScope, settingsStore, locationProvider)
+        com.cak3d.biscuitmesh.crew.CrewManager(appScope, settingsStore, locationProvider, deadZonesStore)
     }
 
     val fleet: FleetManager? by lazy {

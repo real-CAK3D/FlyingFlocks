@@ -13,6 +13,8 @@ import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.content.Context
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.ParcelUuid
 import android.util.Log
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -63,6 +65,9 @@ class MeshtasticManager(private val context: Context, private val adapter: Bluet
 
     private var scanning = false
     private val scanner get() = adapter?.bluetoothLeScanner
+    // A low-latency scan is power-hungry; stop it if no node turns up instead of running forever.
+    private val scanWatchdog = Handler(Looper.getMainLooper())
+    private val scanTimeout = Runnable { if (_link.value == MeshLinkState.SCANNING) disconnect() }
 
     /** Scan for any Meshtastic node and connect to the first/strongest one. */
     fun scanAndConnect() {
@@ -73,6 +78,7 @@ class MeshtasticManager(private val context: Context, private val adapter: Bluet
         val filter = ScanFilter.Builder().setServiceUuid(ParcelUuid(SERVICE)).build()
         val settings = ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build()
         runCatching { s.startScan(listOf(filter), settings, scanCb) }
+            .onSuccess { scanWatchdog.postDelayed(scanTimeout, 20_000) }
             .onFailure { _link.value = MeshLinkState.DISCONNECTED; scanning = false }
     }
 
@@ -91,6 +97,7 @@ class MeshtasticManager(private val context: Context, private val adapter: Bluet
     }
 
     private fun stopScan() {
+        scanWatchdog.removeCallbacks(scanTimeout)
         if (scanning) { runCatching { scanner?.stopScan(scanCb) }; scanning = false }
     }
 
@@ -132,13 +139,12 @@ class MeshtasticManager(private val context: Context, private val adapter: Bluet
             }
             g.setCharacteristicNotification(fromNum, true)
             val cccd = fromNum.getDescriptor(CCCD)
-            if (cccd != null) {
-                enqueue {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        g.writeDescriptor(cccd, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
-                    } else {
-                        @Suppress("DEPRECATION") run { cccd.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE; g.writeDescriptor(cccd) }
-                    }
+            if (cccd == null) { Log.w(TAG, "mesh CCCD missing"); disconnect(); return }
+            enqueue {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    g.writeDescriptor(cccd, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
+                } else {
+                    @Suppress("DEPRECATION") run { cccd.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE; g.writeDescriptor(cccd) }
                 }
             }
         }

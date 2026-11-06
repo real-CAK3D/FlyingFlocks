@@ -1146,15 +1146,22 @@ private fun hazardLabel(kind: HazardKind): String = when (kind) {
 }
 
 /** A camera marker: a filled circle with a white ring, to stand apart from pings. */
-private fun ring(color: Int, sizeDp: Int): GradientDrawable {
-    val px = (sizeDp * 2.75).toInt()
-    return GradientDrawable().apply {
-        shape = GradientDrawable.OVAL
-        setColor(color)
-        setStroke(4, AndroidColor.WHITE)
-        setSize(px, px)
+// The map rebuilds its marker overlays on every GPS fix / sample merge. Building a fresh
+// GradientDrawable per marker each pass was the bulk of the per-frame allocation; one shared
+// instance per (shape,colour,size) is safe here (osmdroid reuses a single Drawable across
+// many Markers) and turns thousands of allocations per fix into a handful of cache hits.
+private val iconCache = java.util.concurrent.ConcurrentHashMap<String, GradientDrawable>()
+
+private fun ring(color: Int, sizeDp: Int): GradientDrawable =
+    iconCache.getOrPut("r:$color:$sizeDp") {
+        val px = (sizeDp * 2.75).toInt()
+        GradientDrawable().apply {
+            shape = GradientDrawable.OVAL
+            setColor(color)
+            setStroke(4, AndroidColor.WHITE)
+            setSize(px, px)
+        }
     }
-}
 
 private fun vibrate(context: Context) {
     runCatching {
@@ -1168,15 +1175,16 @@ private fun vibrate(context: Context) {
 }
 
 /** A small filled circle Drawable used as a map marker icon. */
-private fun dot(color: Int, sizeDp: Int): GradientDrawable {
-    val px = (sizeDp * 2.75).toInt()
-    return GradientDrawable().apply {
-        shape = GradientDrawable.OVAL
-        setColor(color)
-        setStroke(2, AndroidColor.parseColor("#0E1116"))
-        setSize(px, px)
+private fun dot(color: Int, sizeDp: Int): GradientDrawable =
+    iconCache.getOrPut("d:$color:$sizeDp") {
+        val px = (sizeDp * 2.75).toInt()
+        GradientDrawable().apply {
+            shape = GradientDrawable.OVAL
+            setColor(color)
+            setStroke(2, AndroidColor.parseColor("#0E1116"))
+            setSize(px, px)
+        }
     }
-}
 
 /**
  * Draws every wardrive sighting as a coloured dot in one canvas pass. A

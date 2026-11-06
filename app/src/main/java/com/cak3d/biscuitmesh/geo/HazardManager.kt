@@ -71,8 +71,11 @@ class HazardManager(
             limitInFlight = true
             lastLimitLat = lat; lastLimitLon = lon
             scope.launch {
-                val sl = runCatching { overpass.nearestSpeedLimit(lat, lon) }.getOrNull()
-                if (sl != null) _speedLimit.value = sl
+                // On a successful query, adopt the result even when it's null — that clears a
+                // stale limit once we've driven past the road it belonged to. On a network
+                // failure, keep whatever we had rather than blanking the HUD.
+                val res = runCatching { overpass.nearestSpeedLimit(lat, lon) }
+                if (res.isSuccess) _speedLimit.value = res.getOrNull()
                 limitInFlight = false
             }
         }
@@ -85,7 +88,10 @@ class HazardManager(
         val limit = _speedLimit.value?.mph
         val nearest = hazards.value.minByOrNull { dist(lat, lon, it.lat, it.lon) } ?: run { _alert.value = null; return }
         val d = dist(lat, lon, nearest.lat, nearest.lon)
-        val over = if (limit != null) speedMph > limit else speedMph > 30
+        // Only warn when actually over a *known* posted limit. Without a limit there's no
+        // honest "over" to report, so don't fire a generic alert (the old 30 mph default
+        // buzzed on every highway). The feature is documented as an over-the-limit warning.
+        val over = limit != null && speedMph > limit
         _alert.value = if (d <= 300 && over) HazardAlert(nearest, d.toInt(), speedMph, limit) else null
     }
 

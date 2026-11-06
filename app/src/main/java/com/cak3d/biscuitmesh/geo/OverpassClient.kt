@@ -34,8 +34,11 @@ class OverpassClient(private val endpoint: String = "https://overpass-api.de/api
             way(around:$radiusM,$lat,$lon)["highway"]["maxspeed"];
             out tags 25;
         """.trimIndent()
+        // Let a network error propagate (so the caller can tell "query failed" from
+        // "query succeeded, no posted limit here" and only clear the HUD on the latter).
+        val body = post(q)
         runCatching {
-            val json = JSONObject(post(q))
+            val json = JSONObject(body)
             val els = json.optJSONArray("elements") ?: return@runCatching null
             for (i in 0 until els.length()) {
                 val tags = els.optJSONObject(i)?.optJSONObject("tags") ?: continue

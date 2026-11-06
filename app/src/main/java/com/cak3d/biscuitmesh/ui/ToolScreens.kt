@@ -82,7 +82,8 @@ fun WifiScreen(vm: MainViewModel, onOpenTool: (String) -> Unit) {
     val scanning by vm.phoneScanning.collectAsStateWithLifecycle(initialValue = false)
     val results by vm.phoneScanResults.collectAsStateWithLifecycle(initialValue = emptyList())
     val nets = results.filter { it.kind == SampleKind.AP || it.kind == SampleKind.STATION }
-    val g5 = nets.filter { it.channel >= 32 }
+    val g6 = nets.filter { it.channel >= 1000 }            // Wi-Fi 6E (offset-marked)
+    val g5 = nets.filter { it.channel in 32..999 }
     val g24 = nets.filter { it.channel in 1..14 }
     val other = nets.filter { it.channel == 0 }
     DisposableEffect(Unit) { onDispose { vm.stopPhoneScan() } }
@@ -120,6 +121,10 @@ fun WifiScreen(vm: MainViewModel, onOpenTool: (String) -> Unit) {
         if (nets.isNotEmpty()) item("enc") { EncryptionCard(nets, WIFI_CYAN) }
         if (nets.isNotEmpty()) item("mfg") { ManufacturersCard(nets, ouiReady, WIFI_CYAN) }
         if (nets.isNotEmpty()) item("rssi") { RssiHistogramCard(nets, WIFI_CYAN) }
+        if (g6.isNotEmpty()) {
+            item("l6") { SectionLabel("6 GHZ · ${g6.size}", WIFI_CYAN) }
+            items(g6, key = { "g6-${it.id}" }) { NetworkRow(it, WIFI_CYAN) }
+        }
         if (g5.isNotEmpty()) {
             item("l5") { SectionLabel("5 GHZ · ${g5.size}", WIFI_CYAN) }
             items(g5, key = { "g5-${it.id}" }) { NetworkRow(it, WIFI_CYAN) }
@@ -288,12 +293,15 @@ private fun EmptyScanHint(scanning: Boolean, what: String, accent: Color) {
 @Composable
 private fun NetworkRow(row: PhoneScanRow, accent: Color) {
     val band = when {
+        row.channel >= 1000 -> "6 GHz"
         row.channel >= 32 -> "5 GHz"
         row.channel in 1..14 -> "2.4 GHz"
         else -> "band ?"
     }
+    // 6 GHz channels carry a +1000 marker offset; show the true channel number.
+    val shownChannel = if (row.channel >= 1000) row.channel - 1000 else row.channel
     val meta = buildString {
-        if (row.channel > 0) { append("ch ${row.channel}"); append("  ·  ") }
+        if (row.channel > 0) { append("ch $shownChannel"); append("  ·  ") }
         append(band)
         OuiDb.vendor(row.id)?.let { append("  ·  "); append(it) }
     }
