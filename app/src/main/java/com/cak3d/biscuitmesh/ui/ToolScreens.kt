@@ -291,6 +291,7 @@ private fun NetworkRow(row: PhoneScanRow, accent: Color) {
     val meta = buildString {
         if (row.channel > 0) { append("ch ${row.channel}"); append("  ·  ") }
         append(band)
+        OuiDb.vendor(row.id)?.let { append("  ·  "); append(it) }
     }
     SignalCard(accent, row.label.ifBlank { "(hidden network)" }, row.id, meta, row.rssi, wifiStrength(row.rssi))
 }
@@ -298,8 +299,9 @@ private fun NetworkRow(row: PhoneScanRow, accent: Color) {
 /** One BLE device: name, MAC, signal and a strength bar. */
 @Composable
 private fun DeviceRow(row: PhoneScanRow, accent: Color) {
-    SignalCard(accent, row.label.ifBlank { "(unnamed)" }, row.id,
-        "BLE  ·  2.4 GHz  ·  ${bleAddrType(row.id)}", row.rssi, btStrength(row.rssi))
+    val meta = "BLE  ·  2.4 GHz  ·  ${bleAddrType(row.id)}" +
+        (OuiDb.vendor(row.id)?.let { "  ·  $it" } ?: "")
+    SignalCard(accent, row.label.ifBlank { "(unnamed)" }, row.id, meta, row.rssi, btStrength(row.rssi))
 }
 
 @Composable

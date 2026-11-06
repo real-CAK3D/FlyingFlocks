@@ -241,6 +241,7 @@ private fun SignalLine(s: WardriveSample) {
     }
     val detail = buildString {
         if (s.channel > 0) append("ch${s.channel} ")
+        com.cak3d.biscuitmesh.sensors.OuiDb.vendor(s.id)?.let { append(it).append(' ') }
         if (s.sources.size > 1) append("×${s.sources.size}")
     }.trim()
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
