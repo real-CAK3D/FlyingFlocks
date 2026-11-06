@@ -63,6 +63,11 @@ class BiscuitMeshApp : Application() {
         com.cak3d.biscuitmesh.sensors.GnssManager(this)
     }
 
+    /** Best-effort "is a BLE tracker following me" detector. */
+    val trackerFollow: com.cak3d.biscuitmesh.sensors.TrackerFollowManager by lazy {
+        com.cak3d.biscuitmesh.sensors.TrackerFollowManager()
+    }
+
     val fleet: FleetManager? by lazy {
         val adapter = bluetoothManager?.adapter ?: return@lazy null
         FleetManager(this, adapter, appScope, knownStore)

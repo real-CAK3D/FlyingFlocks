@@ -473,6 +473,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val wigleAuth: Flow<String> = appRef.settingsStore.wigleAuth
     fun setWigleAuth(auth: String) { viewModelScope.launch { appRef.settingsStore.setWigleAuth(auth) } }
 
+    // --- Tracker-following detector ----------------------------------------
+    val trackerFollowers: StateFlow<List<com.cak3d.biscuitmesh.sensors.Follower>> = appRef.trackerFollow.followers
+    fun recordTrackerSighting(mac: String, name: String, rssi: Int, lat: Double, lon: Double, timeMs: Long) =
+        appRef.trackerFollow.record(mac, name, rssi, lat, lon, timeMs)
+    fun clearTrackers() = appRef.trackerFollow.clear()
+
     fun setDeadZoneRadius(id: String, radiusM: Double) {
         viewModelScope.launch { appRef.deadZonesStore.setRadius(id, radiusM) }
     }

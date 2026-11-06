@@ -16,6 +16,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Flight
 import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.Radar
 import androidx.compose.material.icons.filled.SatelliteAlt
 import androidx.compose.material.icons.filled.Science
 import androidx.compose.material3.Card
@@ -45,6 +46,7 @@ fun SensorsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
         HubEntry("GPS Satellites", "Which satellites your GPS is locked onto", Icons.Default.SatelliteAlt, "satellites", Color(0xFF22D3EE)),
         HubEntry("Aircraft Overhead", "Live ADS-B — planes in the air near you", Icons.Default.Flight, "aircraft", Color(0xFF38BDF8)),
         HubEntry("Locator", "Home in on a device by signal — hot/cold + buzz", Icons.Default.MyLocation, "locator", Color(0xFF34D399)),
+        HubEntry("Tracker Check", "Is a BLE tracker following you? Best-effort anti-stalking", Icons.Default.Radar, "trackers", Color(0xFFFF5470)),
         HubEntry("Lab Bench", "MAC decoder, signal→distance, crack-time, quiz", Icons.Default.Science, "labbench", Color(0xFFF59E0B)),
     )
     Scaffold(

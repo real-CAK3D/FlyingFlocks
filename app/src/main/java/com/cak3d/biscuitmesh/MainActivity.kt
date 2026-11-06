@@ -75,6 +75,7 @@ import com.cak3d.biscuitmesh.ui.LocatorScreen
 import com.cak3d.biscuitmesh.ui.ProximityBanner
 import com.cak3d.biscuitmesh.ui.SatellitesScreen
 import com.cak3d.biscuitmesh.ui.SensorsHubScreen
+import com.cak3d.biscuitmesh.ui.TrackerScreen
 import com.cak3d.biscuitmesh.ui.WigleStatsScreen
 import com.cak3d.biscuitmesh.ui.ConstellationBackground
 import com.cak3d.biscuitmesh.ui.MiscScreen
@@ -299,6 +300,7 @@ private fun MainShell(vm: MainViewModel) {
                 composable("satellites") { SatellitesScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("aircraft") { AircraftScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("locator") { LocatorScreen(vm = vm, onBack = { nav.popBackStack() }) }
+                composable("trackers") { TrackerScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("drives") { DrivesScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("stats") { StatsScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("live") { LiveScreen(vm = vm, onBack = { nav.popBackStack() }) }
