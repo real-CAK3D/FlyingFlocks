@@ -24,6 +24,12 @@ data class CrewMember(val userId: String, val lat: Double, val lon: Double, val 
 /** Everyone's all-time totals across the whole flock. */
 data class FlockTotals(val wings: Int, val wifi: Long, val bt: Long, val cameras: Long, val drives: Long, val km: Double)
 
+/** A claimed map cell: who owns it, how strongly, and whether it's yours. */
+data class TerritoryCell(val cellId: String, val lat: Double, val lon: Double, val owner: String?, val strength: Int, val mine: Boolean)
+
+/** Your territory standing across the whole flock. */
+data class TerritoryStanding(val owned: Int, val total: Int, val strength: Int)
+
 /** One wing's standing on the flock leaderboard. */
 data class LeaderRow(val rank: Int, val handle: String, val score: Long, val wifi: Long, val km: Double, val me: Boolean)
 
@@ -173,6 +179,42 @@ class CrewManager(
         val r = SupabaseClient.rpc("ff_claim_code", JSONObject().put("p_code", code.trim()).toString(), s.accessToken)
         val o = JSONObject(r)
         return if (o.optBoolean("ok")) null else o.optString("error", "Couldn't claim that band")
+    }
+
+    // --- Territory ---------------------------------------------------------
+    private val cellDeg = 0.004  // ~400m grid cells
+    private fun cellId(lat: Double, lon: Double) =
+        "${kotlin.math.floor(lat / cellDeg).toInt()}_${kotlin.math.floor(lon / cellDeg).toInt()}"
+    private fun cellCenter(lat: Double, lon: Double) =
+        (kotlin.math.floor(lat / cellDeg) * cellDeg + cellDeg / 2) to (kotlin.math.floor(lon / cellDeg) * cellDeg + cellDeg / 2)
+
+    /** Claim the cell at this location for your flock. Skips dead zones. Returns true if it's now yours. */
+    suspend fun claimCell(lat: Double, lon: Double): Boolean {
+        if (inDeadZone(lat, lon)) return false
+        val s = ensure()
+        val (cl, co) = cellCenter(lat, lon)
+        val body = JSONObject().put("p_cell", cellId(lat, lon)).put("p_lat", cl).put("p_lon", co)
+        val r = JSONObject(SupabaseClient.rpc("ff_claim_cell", body.toString(), s.accessToken))
+        return r.optBoolean("mine")
+    }
+
+    suspend fun cellsNear(lat: Double, lon: Double): List<TerritoryCell> {
+        val s = ensure()
+        val body = JSONObject().put("p_lat", lat).put("p_lon", lon)
+        val arr = JSONArray(SupabaseClient.rpc("ff_cells_near", body.toString(), s.accessToken))
+        val out = ArrayList<TerritoryCell>()
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            out.add(TerritoryCell(o.optString("cell"), o.optDouble("lat"), o.optDouble("lon"),
+                o.optString("owner").takeIf { it.isNotEmpty() && it != "null" }, o.optInt("strength"), o.optBoolean("mine")))
+        }
+        return out
+    }
+
+    suspend fun territoryMine(): TerritoryStanding {
+        val s = ensure()
+        val o = JSONObject(SupabaseClient.rpc("ff_territory_mine", "{}", s.accessToken))
+        return TerritoryStanding(o.optInt("owned"), o.optInt("total"), o.optInt("strength"))
     }
 
     suspend fun pushStats(wifi: Long, bt: Long, cameras: Long, drives: Long, km: Double) {

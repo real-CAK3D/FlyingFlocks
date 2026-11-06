@@ -135,6 +135,8 @@ fun WardriveScreen(vm: MainViewModel) {
     val meshPlacements by vm.meshPlacements.collectAsStateWithLifecycle()
     // Live Flock: wings you're tailing (people who gave you their band), shown on the map.
     val flockPins by vm.crew.flock.collectAsStateWithLifecycle()
+    // Territory: claimed cells near you, refreshed while the Territory view is open.
+    val territoryCells = remember { androidx.compose.runtime.mutableStateListOf<com.cak3d.biscuitmesh.crew.TerritoryCell>() }
 
     val context = LocalContext.current
 
@@ -230,6 +232,22 @@ fun WardriveScreen(vm: MainViewModel) {
     var menuOpen by remember { mutableStateOf(false) }
     var showOffline by remember { mutableStateOf(false) }
     var viewMode by remember { mutableStateOf(MapViewMode.DEFAULT) }
+    // While Territory is open: claim the cell you're in and pull nearby claims every 12s.
+    LaunchedEffect(viewMode) {
+        if (viewMode != MapViewMode.TERRITORY) return@LaunchedEffect
+        vm.enableFlock()
+        while (true) {
+            val st = stateFlow.value
+            val lat = st.lastLat; val lon = st.lastLon
+            if (lat != null && lon != null) {
+                runCatching { vm.crew.claimCell(lat, lon) }
+                runCatching { vm.crew.cellsNear(lat, lon) }.getOrNull()?.let {
+                    territoryCells.clear(); territoryCells.addAll(it)
+                }
+            }
+            kotlinx.coroutines.delay(12_000)
+        }
+    }
     // Mesh nodes with an effective location: their own GPS, or a manual placement.
     val placedMesh = remember(meshNodes, meshPlacements) {
         meshNodes.mapNotNull { n ->
@@ -359,6 +377,21 @@ fun WardriveScreen(vm: MainViewModel) {
                 // Heat view: a density heatmap of every sighting — busy air glows warm.
                 if (viewMode == MapViewMode.HEAT) {
                     map.overlays.add(HeatOverlay(samples.values.map { GeoPoint(it.lat, it.lon) }))
+                }
+
+                // Territory view: each claimed cell as a coloured disc — green for yours, amber for rivals.
+                if (viewMode == MapViewMode.TERRITORY) {
+                    territoryCells.forEach { cell ->
+                        val poly = Polygon(map)
+                        poly.points = Polygon.pointsAsCircle(GeoPoint(cell.lat, cell.lon), 185.0)
+                        val a = (0x22 + (cell.strength.coerceIn(1, 20) * 6)).coerceAtMost(0xBB)
+                        val hex = if (cell.mine) "%02X34D399".format(a) else "%02XF59E0B".format(a)
+                        poly.fillPaint.color = AndroidColor.parseColor("#$hex")
+                        poly.outlinePaint.color = AndroidColor.parseColor(if (cell.mine) "#34D399" else "#F59E0B")
+                        poly.outlinePaint.strokeWidth = 2f
+                        poly.setOnClickListener { _, _, _ -> false }
+                        map.overlays.add(poly)
+                    }
                 }
 
                 // Mesh view: weave a spider web between all located nodes, then dot them.
@@ -629,7 +662,7 @@ enum class MapStyle(val label: String) { DARK("Dark"), LIGHT("Light"), TOPO("Top
 
 /** Themed map views: each shows only its own world. Default = the full map. */
 enum class MapViewMode(val label: String) {
-    DEFAULT("All"), FLOCK("Flock"), BISCUITS("Biscuits"), MESH("Mesh"), WTBLEEP("wtBLEep"), RF("Sub-GHz"), HEAT("Heat")
+    DEFAULT("All"), FLOCK("Flock"), BISCUITS("Biscuits"), MESH("Mesh"), WTBLEEP("wtBLEep"), RF("Sub-GHz"), HEAT("Heat"), TERRITORY("Territory")
 }
 
 /**
@@ -705,6 +738,7 @@ private fun viewTint(mode: MapViewMode): androidx.compose.ui.graphics.Color = wh
     MapViewMode.WTBLEEP -> androidx.compose.ui.graphics.Color(0x2600333D)   // electric teal
     MapViewMode.RF -> androidx.compose.ui.graphics.Color(0x26331A00)        // warm amber — sub-GHz
     MapViewMode.HEAT -> androidx.compose.ui.graphics.Color(0x26200800)      // warm heat wash
+    MapViewMode.TERRITORY -> androidx.compose.ui.graphics.Color(0x2600260D) // deep green claim wash
 }
 
 private val TOPO_SOURCE = org.osmdroid.tileprovider.tilesource.XYTileSource(
