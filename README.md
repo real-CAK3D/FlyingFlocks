@@ -5,6 +5,10 @@ built in your own vision. Where the stock Biscuit Manager app pairs with **one**
 board at a time, Biscuit Mesh keeps a whole **fleet** connected at once from a
 single screen.
 
+**▸ Download & showcase — [cak3dcreations.vercel.app](https://cak3dcreations.vercel.app)**
+CAK3D_Creations is the hub for this and the rest of the builds; grab the latest
+signed Android APK from [Releases](https://github.com/real-CAK3D/FlyingFlocks/releases).
+
 > Biscuit is a portable Wi-Fi / Bluetooth security-research platform intended for
 > **authorized** testing on systems you own or have permission to assess. This app
 > is a remote control for that hardware — the firmware performs all radio
