@@ -169,6 +169,32 @@ class FleetManager(
         connections[address]?.requestStatus()
     }
 
+    // --- External transport (USB-serial board) -----------------------------
+
+    /** Append a protocol line from a non-BLE transport (a USB-attached board) to the fleet log. */
+    fun ingestLine(address: String, raw: String) {
+        val msg = BiscuitMessage.parse(raw)
+        _log.update { (it + LogEntry(address, msg, System.currentTimeMillis())).takeLast(500) }
+    }
+
+    /** Show/hide a USB-attached board in the fleet registry (it has no BLE GATT connection). */
+    fun setUsbBoardPresent(present: Boolean, name: String?) {
+        val addr = USB_BOARD_ADDR
+        _devices.update { cur ->
+            if (present) {
+                val existing = cur[addr] ?: BiscuitDevice(addr, name ?: "Biscuit board (USB)")
+                cur + (addr to existing.copy(
+                    displayName = name ?: existing.displayName,
+                    state = ConnectionState.READY,
+                    inRange = true,
+                    lastSeenMs = System.currentTimeMillis(),
+                ))
+            } else {
+                cur - addr
+            }
+        }
+    }
+
     // --- DeviceConnection.Listener ----------------------------------------
 
     override fun onStateChanged(address: String, state: ConnectionState, error: String?) {
@@ -220,4 +246,9 @@ class FleetManager(
 
     private fun shortName(address: String): String =
         "Biscuit " + address.takeLast(5).replace(":", "")
+
+    companion object {
+        /** Registry key for a board attached over USB-serial rather than BLE. */
+        const val USB_BOARD_ADDR = "usb:biscuit"
+    }
 }

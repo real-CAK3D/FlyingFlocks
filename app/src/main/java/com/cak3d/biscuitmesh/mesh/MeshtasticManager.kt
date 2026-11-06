@@ -62,6 +62,18 @@ class MeshtasticManager(private val context: Context, private val adapter: Bluet
     /** Live mesh node database, keyed by node number. */
     val nodes: StateFlow<Map<Long, MeshNode>> = _nodes.asStateFlow()
 
+    // A human-readable account of what the last connect attempt did, so the chat screen
+    // can explain a no-connect instead of just sitting on "Not connected".
+    private val _diag = MutableStateFlow<String?>(null)
+    val diag: StateFlow<String?> = _diag.asStateFlow()
+
+    private fun failScan(msg: String) {
+        _diag.value = msg
+        stopScan()
+        cleanup()
+        _link.value = MeshLinkState.DISCONNECTED
+    }
+
     private var gatt: BluetoothGatt? = null
     private var toRadio: BluetoothGattCharacteristic? = null
     private var fromRadio: BluetoothGattCharacteristic? = null
@@ -72,7 +84,14 @@ class MeshtasticManager(private val context: Context, private val adapter: Bluet
     private val scanner get() = adapter?.bluetoothLeScanner
     // A low-latency scan is power-hungry; stop it if no node turns up instead of running forever.
     private val scanWatchdog = Handler(Looper.getMainLooper())
-    private val scanTimeout = Runnable { if (_link.value == MeshLinkState.SCANNING) disconnect() }
+    private val scanTimeout = Runnable {
+        if (_link.value == MeshLinkState.SCANNING) failScan(
+            "No Meshtastic node found nearby. Caw talks to a Meshtastic device (Heltec / T-Beam / RAK) " +
+                "over BLE — check it's powered, in range, has Bluetooth enabled, and isn't already " +
+                "connected in the official Meshtastic app (it allows only one BLE client). " +
+                "Note: the wtBLEep board is not a Meshtastic node, so Caw can't connect to it.",
+        )
+    }
     // Collect candidates briefly, then connect to the strongest — so we pick the nearest
     // (usually Home Base) when several mesh nodes are in range.
     private val candidates = HashMap<android.bluetooth.BluetoothDevice, Int>()
@@ -81,7 +100,11 @@ class MeshtasticManager(private val context: Context, private val adapter: Bluet
     /** Scan for any Meshtastic node and connect to the strongest one in range. */
     fun scanAndConnect() {
         if (_link.value != MeshLinkState.DISCONNECTED) return
-        val s = scanner ?: return
+        val s = scanner ?: run {
+            _diag.value = "No Bluetooth adapter available — Caw needs BLE."
+            return
+        }
+        _diag.value = "Scanning for a Meshtastic node…"
         _link.value = MeshLinkState.SCANNING
         scanning = true
         candidates.clear()
@@ -93,7 +116,7 @@ class MeshtasticManager(private val context: Context, private val adapter: Bluet
         val settings = ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build()
         runCatching { s.startScan(emptyList(), settings, scanCb) }
             .onSuccess { scanWatchdog.postDelayed(scanTimeout, 20_000) }
-            .onFailure { _link.value = MeshLinkState.DISCONNECTED; scanning = false }
+            .onFailure { failScan("Couldn't start a BLE scan — is Bluetooth on and the scan permission granted?") }
     }
 
     private fun looksLikeMesh(result: ScanResult): Boolean {
@@ -106,6 +129,7 @@ class MeshtasticManager(private val context: Context, private val adapter: Bluet
     private fun connectBest() {
         val best = candidates.maxByOrNull { it.value }?.key ?: return
         stopScan()
+        _diag.value = "Found ${candidates.size} node${if (candidates.size == 1) "" else "s"} — connecting to the strongest…"
         _link.value = MeshLinkState.CONNECTING
         Log.d(TAG, "connecting to mesh node ${best.address} (${candidates.size} candidate(s))")
         gatt = best.connectGatt(context, false, callback, android.bluetooth.BluetoothDevice.TRANSPORT_LE)
@@ -123,7 +147,7 @@ class MeshtasticManager(private val context: Context, private val adapter: Bluet
         }
         override fun onScanFailed(errorCode: Int) {
             Log.w(TAG, "mesh scan failed $errorCode")
-            _link.value = MeshLinkState.DISCONNECTED; scanning = false
+            failScan("BLE scan failed (error $errorCode). Try toggling Bluetooth off and on.")
         }
     }
 
@@ -162,7 +186,11 @@ class MeshtasticManager(private val context: Context, private val adapter: Bluet
 
         override fun onServicesDiscovered(g: BluetoothGatt, status: Int) {
             val svc = g.getService(SERVICE)
-            if (svc == null) { Log.w(TAG, "no mesh service"); disconnect(); return }
+            if (svc == null) {
+                Log.w(TAG, "no mesh service")
+                _diag.value = "Connected, but that device isn't a Meshtastic node (no mesh service)."
+                disconnect(); return
+            }
             toRadio = svc.getCharacteristic(TO_RADIO)
             fromRadio = svc.getCharacteristic(FROM_RADIO)
             val fromNum = svc.getCharacteristic(FROM_NUM)
@@ -182,6 +210,7 @@ class MeshtasticManager(private val context: Context, private val adapter: Bluet
         }
 
         override fun onDescriptorWrite(g: BluetoothGatt, d: BluetoothGattDescriptor, status: Int) {
+            _diag.value = null
             _link.value = MeshLinkState.CONNECTED
             opComplete()
             // Ask the node to stream its config + node database.

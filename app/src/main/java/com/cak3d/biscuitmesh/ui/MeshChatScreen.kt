@@ -50,6 +50,7 @@ import java.util.Locale
 @Composable
 fun MeshChatScreen(vm: MainViewModel, onBack: () -> Unit) {
     val link by vm.meshLink.collectAsStateWithLifecycle()
+    val diag by vm.meshDiag.collectAsStateWithLifecycle()
     val messages by vm.meshMessages.collectAsStateWithLifecycle()
     val nodes by vm.meshNodes.collectAsStateWithLifecycle()
     var field by remember { mutableStateOf("") }
@@ -81,8 +82,13 @@ fun MeshChatScreen(vm: MainViewModel, onBack: () -> Unit) {
                             else -> "○ Not connected"
                         }, color = if (link == MeshLinkState.CONNECTED) Color(0xFF34D399) else MaterialTheme.colorScheme.onSurface,
                             fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
-                        Text("Broadcast text over your Meshtastic mesh — no internet needed.",
-                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                        Text(
+                            diag ?: "Broadcast text over your Meshtastic mesh — no internet needed.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(
+                                alpha = if (diag != null && link != MeshLinkState.CONNECTED) 0.85f else 0.6f,
+                            ),
+                        )
                     }
                     if (link == MeshLinkState.CONNECTED) TextButton(onClick = { vm.disconnectMesh() }) { Text("Disconnect") }
                     else TextButton(onClick = { vm.connectMesh() }) { Text("Connect") }

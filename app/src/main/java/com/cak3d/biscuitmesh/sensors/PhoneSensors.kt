@@ -26,7 +26,7 @@ class PhoneSensors(context: Context, private val adapter: BluetoothAdapter?) {
     private val appContext = context.applicationContext
     private val wifi = appContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
 
-    data class Hit(val kind: SampleKind, val id: String, val label: String, val rssi: Int, val channel: Int = 0, val security: String = "")
+    data class Hit(val kind: SampleKind, val id: String, val label: String, val rssi: Int, val channel: Int = 0, val security: String = "", val standard: String = "")
 
     private var onHit: ((Hit) -> Unit)? = null
     private var scanningWifi = false
@@ -119,7 +119,25 @@ class PhoneSensors(context: Context, private val adapter: BluetoothAdapter?) {
             val bssid = r.BSSID ?: return@forEach
             @Suppress("DEPRECATION")
             val ssid = r.SSID ?: ""
-            cb(Hit(SampleKind.AP, bssid, ssid, r.level, channelFromFreq(r.frequency), securityOf(r.capabilities ?: "")))
+            cb(Hit(SampleKind.AP, bssid, ssid, r.level, channelFromFreq(r.frequency), securityOf(r.capabilities ?: ""), standardOf(r)))
+        }
+    }
+
+    /**
+     * The 802.11 generation the AP reports, as a friendly "Wi-Fi 6" label. Needs
+     * ScanResult.getWifiStandard() (Android 11 / API 30); blank on older phones or
+     * when the driver doesn't report it. 11ax on the 6 GHz band is Wi-Fi 6E.
+     */
+    private fun standardOf(r: android.net.wifi.ScanResult): String {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return ""
+        return when (r.wifiStandard) {
+            android.net.wifi.ScanResult.WIFI_STANDARD_11BE -> "Wi-Fi 7"
+            android.net.wifi.ScanResult.WIFI_STANDARD_11AX -> if (r.frequency in 5925..7125) "Wi-Fi 6E" else "Wi-Fi 6"
+            android.net.wifi.ScanResult.WIFI_STANDARD_11AC -> "Wi-Fi 5"
+            android.net.wifi.ScanResult.WIFI_STANDARD_11N -> "Wi-Fi 4"
+            android.net.wifi.ScanResult.WIFI_STANDARD_11AD -> "WiGig"
+            android.net.wifi.ScanResult.WIFI_STANDARD_LEGACY -> "Wi-Fi a/b/g"
+            else -> ""
         }
     }
 

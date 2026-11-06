@@ -17,6 +17,8 @@ data class PhoneScanRow(
     val channel: Int = 0,
     /** Wi-Fi security bucket (WPA2/WPA3/WPA/WEP/Open/Ent); blank for non-Wi-Fi. */
     val security: String = "",
+    /** 802.11 generation label (Wi-Fi 4/5/6/6E/7); blank if unknown or non-Wi-Fi. */
+    val standard: String = "",
 ) {
     val is5GHz: Boolean get() = channel >= 32
 }
@@ -42,7 +44,7 @@ class PhoneScanManager(
         if (_scanning.value) return
         _scanning.value = true
         sensors.start(wifi, ble) { hit ->
-            rows[hit.id] = PhoneScanRow(hit.kind, hit.id, hit.label, hit.rssi, System.currentTimeMillis(), hit.channel, hit.security)
+            rows[hit.id] = PhoneScanRow(hit.kind, hit.id, hit.label, hit.rssi, System.currentTimeMillis(), hit.channel, hit.security, hit.standard)
             _results.value = rows.values.sortedByDescending { it.rssi }
             progress?.recordPhoneHit(hit.kind, hit.id, hit.label, hit.channel)
         }

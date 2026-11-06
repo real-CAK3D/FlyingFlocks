@@ -24,8 +24,10 @@ import com.cak3d.biscuitmesh.progress.ProgressStore
 import com.cak3d.biscuitmesh.sensors.PhoneScanManager
 import com.cak3d.biscuitmesh.sensors.PhoneSensors
 import com.cak3d.biscuitmesh.geo.Hazard
+import com.cak3d.biscuitmesh.usb.BiscuitSerialSource
 import com.cak3d.biscuitmesh.usb.UsbDetector
 import com.cak3d.biscuitmesh.usb.WtfCamera
+import com.cak3d.biscuitmesh.usb.WtfLinkState
 import com.cak3d.biscuitmesh.usb.WtfSerialSource
 import com.cak3d.biscuitmesh.wardrive.DriveStore
 import com.cak3d.biscuitmesh.wardrive.WardriveManager
@@ -110,6 +112,9 @@ class BiscuitMeshApp : Application() {
 
     /** The plugged-in What the Flock dongle (USB-serial), when connected. */
     val wtfSerial: WtfSerialSource by lazy { WtfSerialSource(this, appScope) }
+
+    /** A Biscuit board attached over USB-serial (speaks the same CMD:/DATA: protocol as BLE). */
+    val biscuitSerial: BiscuitSerialSource by lazy { BiscuitSerialSource(this, appScope) }
 
     /** Meshtastic mesh — connects to a node over BLE and reads its node database. */
     val mesh: com.cak3d.biscuitmesh.mesh.MeshtasticManager by lazy {
@@ -247,6 +252,15 @@ class BiscuitMeshApp : Application() {
                     Hazard("wtf:${d.mac}", HazardKind.FLOCK, lat, lon, d.ssid.ifBlank { d.mac })
                 ))
             }
+        }
+
+        // A Biscuit board on USB feeds the fleet log and registry exactly like a BLE board,
+        // so its Wi-Fi / sub-GHz results flow onto the map and the Sub-GHz page.
+        appScope.launch {
+            fleet?.let { f -> biscuitSerial.lines.collect { line -> f.ingestLine(FleetManager.USB_BOARD_ADDR, line) } }
+        }
+        appScope.launch {
+            fleet?.let { f -> biscuitSerial.link.collect { st -> f.setUsbBoardPresent(st == WtfLinkState.CONNECTED, biscuitSerial.deviceName.value) } }
         }
 
         hazards?.let { hz ->

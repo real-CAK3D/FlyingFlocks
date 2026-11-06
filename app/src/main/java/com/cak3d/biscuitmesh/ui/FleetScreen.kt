@@ -93,7 +93,7 @@ fun FleetScreen(vm: MainViewModel, onOpen: (String) -> Unit = {}) {
 
     Box(Modifier.fillMaxSize()) {
         if (all.isEmpty()) {
-            EmptyState(Modifier.fillMaxSize(), scanning, usb)
+            EmptyState(Modifier.fillMaxSize(), scanning, usb, vm)
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
@@ -108,7 +108,7 @@ fun FleetScreen(vm: MainViewModel, onOpen: (String) -> Unit = {}) {
                         color = MaterialTheme.colorScheme.primary,
                     )
                 }
-                if (usb.isNotEmpty()) item("usb") { UsbBanner(usb) }
+                if (usb.isNotEmpty()) item("usb") { UsbBanner(usb, vm) }
                 if (connectableInRange > 0 || connected.isNotEmpty()) {
                     item {
                         BroadcastBar(
@@ -329,7 +329,7 @@ private fun RenameDialog(device: BiscuitDevice, vm: MainViewModel, onDismiss: ()
 }
 
 @Composable
-private fun EmptyState(modifier: Modifier, scanning: Boolean, usb: List<UsbDeviceInfo>) {
+private fun EmptyState(modifier: Modifier, scanning: Boolean, usb: List<UsbDeviceInfo>, vm: MainViewModel) {
     Column(
         modifier = modifier.fillMaxSize().padding(32.dp),
         verticalArrangement = Arrangement.Center,
@@ -352,36 +352,56 @@ private fun EmptyState(modifier: Modifier, scanning: Boolean, usb: List<UsbDevic
         )
         if (usb.isNotEmpty()) {
             Spacer(Modifier.height(16.dp))
-            UsbBanner(usb)
+            UsbBanner(usb, vm)
         }
     }
 }
 
 @Composable
-private fun UsbBanner(usb: List<UsbDeviceInfo>) {
+private fun UsbBanner(usb: List<UsbDeviceInfo>, vm: MainViewModel) {
+    val link by vm.usbBoardLink.collectAsStateWithLifecycle()
+    val first = usb.first()
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
-        Row(
-            Modifier.padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Icon(Icons.Default.Usb, contentDescription = null, tint = MaterialTheme.colorScheme.secondary)
-            val first = usb.first()
-            Column(Modifier.weight(1f)) {
-                Text(
-                    if (usb.size == 1) first.name else "${usb.size} USB devices",
-                    style = MaterialTheme.typography.bodyLarge,
-                )
-                Text(
-                    if (first.serialCapable) "${first.kind} — board-over-USB transport coming soon"
-                    else "${first.kind} detected",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                )
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Icon(Icons.Default.Usb, contentDescription = null, tint = MaterialTheme.colorScheme.secondary)
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        if (usb.size == 1) first.name else "${usb.size} USB devices",
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                    Text(
+                        when {
+                            link == com.cak3d.biscuitmesh.usb.WtfLinkState.CONNECTED -> "Connected over USB — results flow to the map and Sub-GHz"
+                            first.serialCapable -> "${first.kind} — connect to drive it over USB (no BLE needed)"
+                            else -> "${first.kind} detected"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    )
+                }
+            }
+            if (first.serialCapable) {
+                when (link) {
+                    com.cak3d.biscuitmesh.usb.WtfLinkState.CONNECTED ->
+                        OutlinedButton(onClick = { vm.disconnectUsbBoard() }, modifier = Modifier.fillMaxWidth()) {
+                            Text("Disconnect USB board")
+                        }
+                    com.cak3d.biscuitmesh.usb.WtfLinkState.CONNECTING ->
+                        Text("Connecting over USB…", style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.secondary)
+                    else ->
+                        OutlinedButton(onClick = { vm.connectUsbBoard() }, modifier = Modifier.fillMaxWidth()) {
+                            Text("Connect over USB")
+                        }
+                }
             }
         }
     }

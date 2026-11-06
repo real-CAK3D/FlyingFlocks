@@ -68,6 +68,7 @@ import com.cak3d.biscuitmesh.ui.DrivesScreen
 import com.cak3d.biscuitmesh.ui.FindsScreen
 import com.cak3d.biscuitmesh.ui.FleetScreen
 import com.cak3d.biscuitmesh.ui.AircraftScreen
+import com.cak3d.biscuitmesh.ui.AuroraScreen
 import com.cak3d.biscuitmesh.ui.CrewScreen
 import com.cak3d.biscuitmesh.ui.DeadZonesScreen
 import com.cak3d.biscuitmesh.ui.LabBenchScreen
@@ -327,6 +328,7 @@ private fun MainShell(vm: MainViewModel) {
                 composable("sensors") { SensorsHubScreen(onBack = { nav.popBackStack() }, onOpen = { nav.navigate(it) }) }
                 composable("satellites") { SatellitesScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("aircraft") { AircraftScreen(vm = vm, onBack = { nav.popBackStack() }) }
+                composable("aurora") { AuroraScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("locator") { LocatorScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("trackers") { TrackerScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("crew") { CrewScreen(vm = vm, onBack = { nav.popBackStack() }) }

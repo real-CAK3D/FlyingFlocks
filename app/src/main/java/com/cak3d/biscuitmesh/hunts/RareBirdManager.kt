@@ -46,12 +46,19 @@ class RareBirdManager(
 
     private fun promoteIfRare(s: WardriveSample) {
         if (!promoted.add(s.id)) return
+        // A "rare bird" must stay actually rare. Hidden networks and lone beacons are
+        // everywhere, so a blanket promotion floods the guide with hundreds of them. We
+        // gate each category behind a hash so only a sparse sample ever takes wing, and
+        // cap the number of uncaught finds in flight so a long drive can't swamp the list.
+        val h = s.id.hashCode()
         val label = when {
-            s.kind == SampleKind.AP && s.label.isBlank() -> "Hidden Network"
-            s.kind == SampleKind.BT && s.label.isBlank() && (s.id.hashCode() and 0x1F) == 0 -> "Unknown Beacon"
-            (s.id.hashCode() and 0x3F) == 0 -> "Rare Signal"
+            s.kind == SampleKind.AP && s.label.isBlank() && (h and 0x3F) == 0 -> "Hidden Network"  // ~1 in 64
+            s.kind == SampleKind.BT && s.label.isBlank() && (h and 0x3F) == 0 -> "Unknown Beacon"   // ~1 in 64
+            (h and 0xFF) == 0 -> "Rare Signal"                                                      // ~1 in 256
             else -> null
         } ?: return
+        val activeFinds = birds.value.count { it.kind == BirdKind.RARE_FIND && !it.captured }
+        if (activeFinds >= MAX_ACTIVE_FINDS) return
         scope.launch {
             store.addIfNew(
                 RareBird("find-${s.id}", label, BirdKind.RARE_FIND, s.lat, s.lon, note = s.label.ifBlank { s.id }),
@@ -88,6 +95,9 @@ class RareBirdManager(
     }
 
     companion object {
+        /** Most uncaught RARE_FIND birds to keep in flight at once, so the guide can't flood. */
+        private const val MAX_ACTIVE_FINDS = 15
+
         fun distanceM(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
             val out = FloatArray(2)
             Location.distanceBetween(lat1, lon1, lat2, lon2, out)

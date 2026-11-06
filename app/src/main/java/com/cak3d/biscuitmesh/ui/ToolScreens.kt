@@ -118,6 +118,7 @@ fun WifiScreen(vm: MainViewModel, onOpenTool: (String) -> Unit) {
         }
         if (nets.isNotEmpty()) item("spectrum") { SpectrumCard(g24, g5, WIFI_CYAN) }
         if (nets.isNotEmpty()) item("arch") { ArchSpectrumCard(g24, g5, WIFI_CYAN) }
+        if (nets.isNotEmpty()) item("gen") { WifiGenerationsCard(nets, WIFI_CYAN) }
         if (nets.isNotEmpty()) item("enc") { EncryptionCard(nets, WIFI_CYAN) }
         if (nets.isNotEmpty()) item("mfg") { ManufacturersCard(nets, ouiReady, WIFI_CYAN) }
         if (nets.isNotEmpty()) item("rssi") { RssiHistogramCard(nets, WIFI_CYAN) }
@@ -299,6 +300,7 @@ private fun NetworkRow(row: PhoneScanRow, accent: Color) {
     val meta = buildString {
         if (row.channel > 0) { append("ch $shownChannel"); append("  ·  ") }
         append(band)
+        if (row.standard.isNotBlank()) { append("  ·  "); append(row.standard) }
         OuiDb.vendor(row.id)?.let { append("  ·  "); append(it) }
     }
     SignalCard(accent, row.label.ifBlank { "(hidden network)" }, row.id, meta, row.rssi, wifiStrength(row.rssi))
@@ -518,6 +520,50 @@ private fun HistRow(label: String, count: Int, max: Int, color: Color) {
         Text("$count", style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f), modifier = Modifier.width(40.dp))
     }
+}
+
+/** Wi-Fi generations: how many nearby networks are Wi-Fi 6/6E vs older gear. */
+@Composable
+private fun WifiGenerationsCard(nets: List<PhoneScanRow>, accent: Color) {
+    val counts = nets.groupingBy { it.standard.ifBlank { "unknown" } }.eachCount()
+    val total = nets.size.coerceAtLeast(1)
+    val order = listOf("Wi-Fi 7", "Wi-Fi 6E", "Wi-Fi 6", "Wi-Fi 5", "Wi-Fi 4", "Wi-Fi a/b/g", "WiGig", "unknown")
+    val modern = (counts["Wi-Fi 6"] ?: 0) + (counts["Wi-Fi 6E"] ?: 0) + (counts["Wi-Fi 7"] ?: 0)
+    val allUnknown = (counts["unknown"] ?: 0) == nets.size
+    Card(
+        Modifier.fillMaxWidth(),
+        shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("WI-FI GENERATION", style = MaterialTheme.typography.labelMedium, color = accent,
+                fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+            if (allUnknown) {
+                Text("This phone's radio doesn't report the 802.11 standard (needs Android 11+). Band is still shown per network.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+            } else {
+                order.forEach { gen ->
+                    val n = counts[gen] ?: 0
+                    if (n > 0) PctBar(gen, n, total, genColor(gen))
+                }
+                if (modern > 0) {
+                    Text("$modern of $total are Wi-Fi 6 or newer.", style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFF34D399), fontWeight = FontWeight.SemiBold)
+                }
+            }
+        }
+    }
+}
+
+private fun genColor(gen: String): Color = when (gen) {
+    "Wi-Fi 7" -> Color(0xFFA855F7)
+    "Wi-Fi 6E" -> Color(0xFF34D399)
+    "Wi-Fi 6" -> Color(0xFF22D3EE)
+    "Wi-Fi 5" -> Color(0xFF7C9CFF)
+    "Wi-Fi 4" -> Color(0xFFF59E0B)
+    "WiGig" -> Color(0xFFF87171)
+    "Wi-Fi a/b/g" -> Color(0xFFFBBF24)
+    else -> Color(0xFF64748B) // unknown
 }
 
 /** Encryption Shield: how the nearby networks are locked, weakest flagged. */

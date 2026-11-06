@@ -122,8 +122,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val wtfGps: StateFlow<com.cak3d.biscuitmesh.usb.WtfGps?> = appRef.wtfSerial.gps
     fun refreshWtfGps() { appRef.wtfSerial.requestGpsStatus() }
 
+    // --- Biscuit board over USB-serial -----------------------------------
+    /** Link state of a Biscuit board attached over USB-serial (the same protocol as BLE). */
+    val usbBoardLink: StateFlow<com.cak3d.biscuitmesh.usb.WtfLinkState> = appRef.biscuitSerial.link
+    val usbBoardName: StateFlow<String?> = appRef.biscuitSerial.deviceName
+    fun connectUsbBoard() { appRef.biscuitSerial.connect() }
+    fun disconnectUsbBoard() { appRef.biscuitSerial.disconnect() }
+
     // --- Meshtastic ------------------------------------------------------
     val meshLink: StateFlow<com.cak3d.biscuitmesh.mesh.MeshLinkState> = appRef.mesh.link
+    /** Human-readable status of the last Caw connect attempt (why it did/didn't connect). */
+    val meshDiag: StateFlow<String?> = appRef.mesh.diag
     val meshNodes: StateFlow<List<com.cak3d.biscuitmesh.mesh.MeshNode>> =
         appRef.mesh.nodes
             .map { it.values.sortedBy { n -> n.name } }
@@ -282,10 +291,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun disconnect(address: String) = fleet?.disconnect(address)
 
     /** Tell connected boards to start a full sweep — WiFi + sub-GHz — which drives DATA:RF. */
-    fun startSubGhzSweep() { fleet?.broadcast(command("scanall")) }
-    fun stopSubGhzSweep() { fleet?.broadcast(command("stopscan")) }
+    fun startSubGhzSweep() { fleet?.broadcast(command("scanall")); appRef.biscuitSerial.send(command("scanall")) }
+    fun stopSubGhzSweep() { fleet?.broadcast(command("stopscan")); appRef.biscuitSerial.send(command("stopscan")) }
     /** Transmit a captured OOK burst (your OWN devices only). Firmware gates this behind its own flag. */
-    fun transmitSubGhz(freqMhz: String, bits: String) { fleet?.broadcast(command("tx", "$freqMhz,$bits")) }
+    fun transmitSubGhz(freqMhz: String, bits: String) {
+        fleet?.broadcast(command("tx", "$freqMhz,$bits"))
+        appRef.biscuitSerial.send(command("tx", "$freqMhz,$bits"))
+    }
     fun connectAll() = fleet?.connectAll()
     fun disconnectAll() = fleet?.disconnectAll()
     fun forget(address: String) = fleet?.forget(address)

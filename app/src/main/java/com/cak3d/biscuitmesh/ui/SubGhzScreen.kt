@@ -137,12 +137,13 @@ fun SubGhzScreen(vm: MainViewModel, onOpenMap: () -> Unit) {
             .associateBy { it.id }.values.sortedByDescending { it.timeMs }
     }
     val now = System.currentTimeMillis()
-    // Capability cards go LIVE as real decodes arrive; weather has no decoder yet.
+    // Capability cards go LIVE as real decodes arrive from the node (TPMS/weather/keyfob
+    // decoders all live in the firmware now); a card stays "SOON" only until its first hit.
     val capabilities = listOf(
         Capability("Band activity monitor", "Which sub-GHz bands are busy and how strong — live from the node's CC1101.", Icons.Default.GraphicEq) to true,
-        Capability("TPMS reader", "Decode tire-pressure sensors as cars pass: sensor ID, pressure, temperature.", Icons.Default.DirectionsCar) to tpms.isNotEmpty(),
+        Capability("TPMS reader", "FSK tire-pressure sensors, positively identified as cars pass: sensor ID, pressure, temperature.", Icons.Default.DirectionsCar) to tpms.isNotEmpty(),
         Capability("Weather & 433 sensors", "433/868 MHz temperature, humidity and rain stations in range.", Icons.Default.Thermostat) to weather.isNotEmpty(),
-        Capability("Keyfobs · remotes · garage", "OOK 433 remotes, doorbells and garage openers — activity and device IDs.", Icons.Default.SettingsRemote) to keyfobs.isNotEmpty(),
+        Capability("OOK bursts · keyfobs · remotes", "433 OOK bursts — keyfobs, doorbells, garage openers (and OOK TPMS, which read the same).", Icons.Default.SettingsRemote) to keyfobs.isNotEmpty(),
     )
 
     Column(
@@ -209,6 +210,13 @@ fun SubGhzScreen(vm: MainViewModel, onOpenMap: () -> Unit) {
         if (tpms.isNotEmpty() || keyfobs.isNotEmpty()) {
             Text("DECODED", style = MaterialTheme.typography.labelMedium, color = RF_AMBER,
                 fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+            Text(
+                "TPMS rows are positively identified (FSK, decoded sensor ID + pressure). " +
+                    "Raw OOK bursts below could be a keyfob, a remote or an OOK-based TPMS — the node " +
+                    "can't tell them apart without a per-protocol decode.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+            )
             tpms.take(8).forEach { TpmsRow(it) }
             keyfobs.takeLast(6).reversed().forEach { KeyfobRow(it) }
         }
@@ -410,9 +418,9 @@ private fun KeyfobRow(k: KeyfobEvent) {
             Icon(Icons.Default.SettingsRemote, contentDescription = null, tint = RF_AMBER, modifier = Modifier.size(24.dp))
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text("Remote · ${"%.2f".format(k.freq)} MHz", style = MaterialTheme.typography.titleMedium,
+                Text("OOK burst · ${"%.2f".format(k.freq)} MHz", style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold)
-                Text("${k.pulses} pulses", style = MaterialTheme.typography.bodySmall,
+                Text("${k.pulses} pulses · keyfob / remote / maybe TPMS", style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
             }
         }
