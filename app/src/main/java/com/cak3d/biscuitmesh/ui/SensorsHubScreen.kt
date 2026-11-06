@@ -53,7 +53,7 @@ fun SensorsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
         HubEntry("Watchlist", "Flag MACs or names and spot them in range", Icons.Default.Visibility, "watchlist", Color(0xFF34D399)),
         HubEntry("Tire Pressure", "Learn your car's TPMS sensors, watch live pressure", Icons.Default.DirectionsCar, "tiredash", Color(0xFF38BDF8)),
         HubEntry("Device Ledger", "Regulars vs transients across all your drives", Icons.Default.Insights, "ledger", Color(0xFF22D3EE)),
-        HubEntry("Mesh Chat", "Broadcast text over your Meshtastic mesh — no internet", Icons.Default.Forum, "meshchat", Color(0xFF00E5A0)),
+        HubEntry("Caw", "Broadcast text over your Meshtastic mesh — no internet", Icons.Default.Forum, "meshchat", Color(0xFF00E5A0)),
         HubEntry("Flock", "Ring a band, see the wings you tail live on the map", Icons.Default.Groups, "crew", Color(0xFF34D399)),
         HubEntry("GPS Satellites", "Which satellites your GPS is locked onto", Icons.Default.SatelliteAlt, "satellites", Color(0xFF22D3EE)),
         HubEntry("Aircraft Overhead", "Live ADS-B — planes in the air near you", Icons.Default.Flight, "aircraft", Color(0xFF38BDF8)),

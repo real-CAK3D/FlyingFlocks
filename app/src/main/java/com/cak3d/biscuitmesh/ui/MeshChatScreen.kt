@@ -60,7 +60,7 @@ fun MeshChatScreen(vm: MainViewModel, onBack: () -> Unit) {
         containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
-                title = { Text("Mesh Chat") },
+                title = { Text("Caw") },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
