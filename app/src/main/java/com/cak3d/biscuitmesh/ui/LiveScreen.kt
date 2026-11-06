@@ -1,7 +1,5 @@
 package com.cak3d.biscuitmesh.ui
 
-import android.graphics.Paint
-import android.graphics.Typeface
 import android.os.BatteryManager
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.LinearEasing
@@ -46,14 +44,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -212,7 +205,6 @@ fun LiveScreen(vm: MainViewModel, onBack: () -> Unit) {
     val dongleOn = wtfLink == WtfLinkState.CONNECTED
 
     Box(Modifier.fillMaxSize().background(BG)) {
-        MatrixRain(Modifier.fillMaxSize(), GREEN)
         Column(Modifier.fillMaxSize().padding(horizontal = 6.dp)) {
             Row(Modifier.fillMaxWidth().height(36.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = GREEN) }
@@ -349,62 +341,6 @@ private fun addBlip(lat0: Double, lon0: Double, lat: Double, lon: Double, color:
     val r = (dist / RADAR_RANGE_M).toFloat()
     val ang = atan2(dE, dN)
     return Blip((sin(ang) * r).toFloat(), (-cos(ang) * r).toFloat(), color, false)
-}
-
-/**
- * Falling "data rain" backdrop — columns of glyphs streaming down, brightest at the head.
- * Runs its own ~16fps loop so it animates without re-laying-out the dashboard.
- */
-@Composable
-private fun MatrixRain(modifier: Modifier, color: Color) {
-    val glyphs = remember { "01010ｱｶｻﾀﾅﾊﾏﾔﾗ日ﾝ七二四九".toCharArray() }
-    var size by remember { mutableStateOf(IntSize.Zero) }
-    val cellPx = with(LocalDensity.current) { 13.dp.toPx() }
-    val drops = remember(size) {
-        val cols = if (size.width > 0) (size.width / cellPx).toInt().coerceAtLeast(1) else 0
-        FloatArray(cols) { (Math.random() * -40).toFloat() }
-    }
-    val speeds = remember(size) { FloatArray(drops.size) { (0.3f + Math.random().toFloat() * 0.9f) } }
-    var frame by remember { mutableIntStateOf(0) }
-    LaunchedEffect(size) {
-        if (size.width == 0) return@LaunchedEffect
-        val rows = size.height / cellPx
-        while (true) {
-            for (i in drops.indices) {
-                drops[i] += speeds[i]
-                if (drops[i] > rows + 6 && Math.random() > 0.975) drops[i] = (Math.random() * -12).toFloat()
-            }
-            frame++
-            delay(60)
-        }
-    }
-    val paint = remember {
-        Paint().apply { textSize = cellPx * 0.92f; typeface = Typeface.MONOSPACE; isAntiAlias = true }
-    }
-    Canvas(modifier.onSizeChanged { size = it }) {
-        frame  // read so the draw re-runs each tick
-        if (size.width == 0) return@Canvas
-        val rows = (size.height / cellPx).toInt() + 2
-        drawIntoCanvasSafe { cv ->
-            for (i in drops.indices) {
-                val headRow = drops[i].toInt()
-                val x = i * cellPx
-                for (tr in 0 until 11) {
-                    val row = headRow - tr
-                    if (row < 0 || row > rows) continue
-                    val a = if (tr == 0) 0.9f else (1f - tr / 11f) * 0.22f
-                    paint.color = color.copy(alpha = a).toArgb()
-                    val idx = ((i * 31 + row * 17 + frame / 3) % glyphs.size + glyphs.size) % glyphs.size
-                    cv.drawText(glyphs[idx].toString(), x, row * cellPx, paint)
-                }
-            }
-        }
-    }
-}
-
-/** Small shim so the matrix rain can paint text through the native canvas. */
-private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawIntoCanvasSafe(block: (android.graphics.Canvas) -> Unit) {
-    drawContext.canvas.nativeCanvas.let(block)
 }
 
 @Composable
