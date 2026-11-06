@@ -428,7 +428,7 @@ fun WardriveScreen(vm: MainViewModel) {
                     m.position = GeoPoint(w.lat, w.lon)
                     m.icon = dot(AndroidColor.parseColor("#34D399"), 19)
                     m.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
-                    m.title = "Wing ${w.userId.take(8)}"
+                    m.title = w.handle?.takeIf { it.isNotBlank() } ?: "Wing ${w.userId.take(8)}"
                     map.overlays.add(m)
                 }
 

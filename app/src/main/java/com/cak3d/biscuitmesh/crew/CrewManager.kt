@@ -16,10 +16,16 @@ import org.json.JSONObject
 import java.time.Instant
 
 /** A wing (another bird) whose live position you're allowed to see. */
-data class CrewMember(val userId: String, val lat: Double, val lon: Double, val updatedAt: String)
+data class CrewMember(val userId: String, val lat: Double, val lon: Double, val updatedAt: String, val handle: String? = null)
 
 /** Everyone's all-time totals across the whole flock. */
 data class FlockTotals(val wings: Int, val wifi: Long, val bt: Long, val cameras: Long, val drives: Long, val km: Double)
+
+/** One wing's standing on the flock leaderboard. */
+data class LeaderRow(val rank: Int, val handle: String, val score: Long, val wifi: Long, val km: Double, val me: Boolean)
+
+/** The flock leaderboard: the top wings, plus where you sit. */
+data class Leaderboard(val total: Int, val top: List<LeaderRow>, val me: LeaderRow?)
 
 /**
  * The "Flock" online layer on theGarden Supabase: an anonymous identity per install, one-time
@@ -45,6 +51,10 @@ class CrewManager(
     val online: StateFlow<Boolean> = _online.asStateFlow()
     private val _totals = MutableStateFlow<FlockTotals?>(null)
     val totals: StateFlow<FlockTotals?> = _totals.asStateFlow()
+    private val _board = MutableStateFlow<Leaderboard?>(null)
+    val board: StateFlow<Leaderboard?> = _board.asStateFlow()
+    private val _handle = MutableStateFlow<String?>(null)
+    val handle: StateFlow<String?> = _handle.asStateFlow()
 
     val myUserId: String? get() = session?.userId
 
@@ -64,6 +74,7 @@ class CrewManager(
                 _live.value = liveCount()
                 _flock.value = tracked()
                 _totals.value = globalTotals()
+                _board.value = leaderboard()
             }.onFailure { _online.value = false }
             delay(6000)
         }
@@ -94,8 +105,11 @@ class CrewManager(
         }
         session = s
         settings.setSbSession(toJson(s))
+        if (_handle.value == null) settings.flockHandle().takeIf { it.isNotBlank() }?.let { _handle.value = it }
         runCatching {
-            SupabaseClient.upsert("ff_profiles", JSONObject().put("id", s.userId).toString(), s.accessToken, onConflict = "id")
+            val prof = JSONObject().put("id", s.userId)
+            _handle.value?.let { prof.put("handle", it) }
+            SupabaseClient.upsert("ff_profiles", prof.toString(), s.accessToken, onConflict = "id")
         }
         return s
     }
@@ -118,6 +132,28 @@ class CrewManager(
         val body = JSONObject().put("p_wifi", wifi).put("p_bt", bt).put("p_cameras", cameras)
             .put("p_drives", drives).put("p_km", km)
         runCatching { SupabaseClient.rpc("ff_push_stats", body.toString(), s.accessToken) }
+    }
+
+    /** Set this wing's public handle (what other wings and the leaderboard show). */
+    suspend fun setHandle(name: String) {
+        val h = name.trim().take(24)
+        val s = ensure()
+        SupabaseClient.upsert("ff_profiles", JSONObject().put("id", s.userId).put("handle", h).toString(),
+            s.accessToken, onConflict = "id")
+        settings.setFlockHandle(h)
+        _handle.value = h
+    }
+
+    private suspend fun leaderboard(): Leaderboard {
+        val s = ensure()
+        val o = JSONObject(SupabaseClient.rpc("ff_leaderboard", "{}", s.accessToken))
+        fun row(j: JSONObject) = LeaderRow(j.optInt("rank"), j.optString("handle"), j.optLong("score"),
+            j.optLong("wifi"), j.optDouble("km"), j.optBoolean("me"))
+        val top = ArrayList<LeaderRow>()
+        val arr = o.optJSONArray("top")
+        if (arr != null) for (i in 0 until arr.length()) arr.optJSONObject(i)?.let { top.add(row(it)) }
+        val me = o.optJSONObject("me")?.let { row(it) }
+        return Leaderboard(o.optInt("total"), top, me)
     }
 
     private suspend fun liveCount(): Int {
@@ -161,7 +197,20 @@ class CrewManager(
             if (dev == s.userId || dev.isEmpty()) continue
             out.add(CrewMember(dev, o.optDouble("lat"), o.optDouble("lon"), o.optString("updated_at")))
         }
-        return out
+        if (out.isEmpty()) return out
+        // Fold in each wing's public handle, so the map/list name them instead of showing a device id.
+        val handles = runCatching {
+            val ids = out.joinToString(",") { it.userId }
+            val pr = JSONArray(SupabaseClient.select("ff_profiles", "select=id,handle&id=in.($ids)", s.accessToken))
+            HashMap<String, String>().apply {
+                for (i in 0 until pr.length()) {
+                    val o = pr.optJSONObject(i) ?: continue
+                    val h = o.optString("handle")
+                    if (h.isNotBlank()) put(o.optString("id"), h)
+                }
+            }
+        }.getOrNull() ?: return out
+        return out.map { it.copy(handle = handles[it.userId]) }
     }
 
     private fun toJson(s: SbSession): String = JSONObject()

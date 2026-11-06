@@ -30,6 +30,7 @@ class SettingsStore(private val context: Context) {
     private val sbSessionKey = stringPreferencesKey("sb_session_json")
     private val crewShareKey = booleanPreferencesKey("crew_share_location")
     private val flockEnabledKey = booleanPreferencesKey("flock_enabled")
+    private val flockHandleKey = stringPreferencesKey("flock_handle")
 
     /** True once the operator has acknowledged the authorized-use-only terms. */
     val authorizedUse: Flow<Boolean> =
@@ -157,5 +158,16 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setFlockEnabled(on: Boolean) {
         context.settingsDataStore.edit { it[flockEnabledKey] = on }
+    }
+
+    /** This wing's chosen public handle for the Flock, or empty. */
+    val flockHandleFlow: Flow<String> =
+        context.settingsDataStore.data.map { it[flockHandleKey] ?: "" }
+
+    suspend fun flockHandle(): String =
+        context.settingsDataStore.data.first()[flockHandleKey] ?: ""
+
+    suspend fun setFlockHandle(name: String) {
+        context.settingsDataStore.edit { it[flockHandleKey] = name.trim() }
     }
 }

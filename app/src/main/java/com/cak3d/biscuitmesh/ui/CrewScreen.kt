@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -40,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.cak3d.biscuitmesh.MainViewModel
 import com.cak3d.biscuitmesh.crew.CrewMember
+import com.cak3d.biscuitmesh.crew.LeaderRow
 import kotlinx.coroutines.launch
 
 private val FLOCK = Color(0xFF34D399)
@@ -55,11 +57,14 @@ fun CrewScreen(vm: MainViewModel, onBack: () -> Unit) {
     val online by vm.crew.online.collectAsStateWithLifecycle()
     val tail by vm.crew.flock.collectAsStateWithLifecycle()
     val totals by vm.crew.totals.collectAsStateWithLifecycle()
+    val board by vm.crew.board.collectAsStateWithLifecycle()
+    val savedHandle by vm.flockHandle.collectAsStateWithLifecycle(initialValue = "")
     val drives by vm.drives.collectAsStateWithLifecycle(initialValue = emptyList())
 
     var band by remember { mutableStateOf<String?>(null) }
     var codeField by remember { mutableStateOf("") }
     var claimMsg by remember { mutableStateOf<String?>(null) }
+    var handleField by remember(savedHandle) { mutableStateOf(savedHandle) }
 
     // Turn the online layer on, and report my lifetime totals to the flock.
     LaunchedEffect(Unit) { vm.enableFlock() }
@@ -96,6 +101,21 @@ fun CrewScreen(vm: MainViewModel, onBack: () -> Unit) {
                         color = if (online) FLOCK else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                         fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
                     Text("$live wing${if (live == 1) "" else "s"} in the air now", style = MaterialTheme.typography.titleMedium)
+                }
+            }
+            item("handle") {
+                FCard {
+                    Text("MY HANDLE", style = MaterialTheme.typography.labelMedium, color = ACCENT,
+                        fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                    Text("The name other wings see on the map and the leaderboard.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f))
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        OutlinedTextField(value = handleField, onValueChange = { handleField = it.take(24) },
+                            singleLine = true, label = { Text("Handle") }, modifier = Modifier.weight(1f))
+                        Button(onClick = { vm.setFlockHandle(handleField) },
+                            enabled = handleField.isNotBlank() && handleField != savedHandle) { Text("Save") }
+                    }
                 }
             }
             item("mycode") {
@@ -162,6 +182,20 @@ fun CrewScreen(vm: MainViewModel, onBack: () -> Unit) {
                     }
                 }
             }
+            board?.let { b ->
+                if (b.top.isNotEmpty()) item("board") {
+                    FCard {
+                        Text("FLOCK LEADERBOARD · ${b.total} WING${if (b.total == 1) "" else "S"}",
+                            style = MaterialTheme.typography.labelMedium, color = Color(0xFFF59E0B),
+                            fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                        Text("Score = WiFi + BT + cams×5 + flights×25 + km×8.",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                        b.top.forEach { LeaderRowView(it) }
+                        // If you're ranked below the shown top, pin your own standing at the bottom.
+                        b.me?.let { me -> if (b.top.none { it.me }) { HDivider(); LeaderRowView(me) } }
+                    }
+                }
+            }
             if (tail.isNotEmpty()) {
                 item("tlabel") {
                     Text("ON YOUR TAIL · ${tail.size}", style = MaterialTheme.typography.labelMedium, color = FLOCK,
@@ -191,11 +225,34 @@ private fun Stat(value: String, label: String, accent: Color, modifier: Modifier
 }
 
 @Composable
+private fun HDivider() {
+    androidx.compose.material3.HorizontalDivider(
+        Modifier.padding(vertical = 2.dp),
+        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
+}
+
+@Composable
+private fun LeaderRowView(r: LeaderRow) {
+    val rankColor = when (r.rank) { 1 -> Color(0xFFFFD166); 2 -> Color(0xFFC0C7D0); 3 -> Color(0xFFCD7F32); else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f) }
+    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("#${r.rank}", style = MaterialTheme.typography.titleMedium, color = rankColor,
+            fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, modifier = Modifier.width(44.dp))
+        Text(if (r.me) "${r.handle}  (you)" else r.handle, style = MaterialTheme.typography.bodyLarge,
+            color = if (r.me) FLOCK else MaterialTheme.colorScheme.onSurface,
+            fontWeight = if (r.me) FontWeight.Bold else FontWeight.Normal, modifier = Modifier.weight(1f))
+        Text(fmt(r.score), style = MaterialTheme.typography.titleMedium, color = ACCENT,
+            fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
 private fun WingRow(m: CrewMember) {
     Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text("Wing ${m.userId.take(8)}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(m.handle?.takeIf { it.isNotBlank() } ?: "Wing ${m.userId.take(8)}",
+                style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Text("%.5f, %.5f".format(m.lat, m.lon), style = MaterialTheme.typography.bodySmall,
                 fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
             Text("updated ${m.updatedAt.take(19).replace('T', ' ')}", style = MaterialTheme.typography.labelSmall,

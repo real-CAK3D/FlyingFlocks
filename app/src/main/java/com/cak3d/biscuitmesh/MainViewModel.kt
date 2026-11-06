@@ -488,6 +488,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         appRef.crew.activate()
         viewModelScope.launch { appRef.settingsStore.setFlockEnabled(true) }
     }
+    val flockHandle: Flow<String> = appRef.settingsStore.flockHandleFlow
+    fun setFlockHandle(name: String) = viewModelScope.launch { runCatching { appRef.crew.setHandle(name) } }
 
     fun setDeadZoneRadius(id: String, radiusM: Double) {
         viewModelScope.launch { appRef.deadZonesStore.setRadius(id, radiusM) }
