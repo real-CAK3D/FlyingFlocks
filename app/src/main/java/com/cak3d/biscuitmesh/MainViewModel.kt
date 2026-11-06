@@ -479,12 +479,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         appRef.trackerFollow.record(mac, name, rssi, lat, lon, timeMs)
     fun clearTrackers() = appRef.trackerFollow.clear()
 
-    // --- Crew (online) -----------------------------------------------------
+    // --- Flock (online) ----------------------------------------------------
     val crew: com.cak3d.biscuitmesh.crew.CrewManager get() = appRef.crew
     val crewShare: Flow<Boolean> = appRef.settingsStore.crewShare
-    fun setCrewShare(on: Boolean) = viewModelScope.launch {
-        appRef.settingsStore.setCrewShare(on)
-        if (!on) runCatching { appRef.crew.stopSharing() }
+    val flockEnabled: Flow<Boolean> = appRef.settingsStore.flockEnabled
+    fun setCrewShare(on: Boolean) = viewModelScope.launch { appRef.settingsStore.setCrewShare(on) }
+    fun enableFlock() {
+        appRef.crew.activate()
+        viewModelScope.launch { appRef.settingsStore.setFlockEnabled(true) }
     }
 
     fun setDeadZoneRadius(id: String, radiusM: Double) {

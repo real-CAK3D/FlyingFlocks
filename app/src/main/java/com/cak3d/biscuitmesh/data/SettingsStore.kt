@@ -29,6 +29,7 @@ class SettingsStore(private val context: Context) {
     private val wigleAuthKey = stringPreferencesKey("wigle_auth")
     private val sbSessionKey = stringPreferencesKey("sb_session_json")
     private val crewShareKey = booleanPreferencesKey("crew_share_location")
+    private val flockEnabledKey = booleanPreferencesKey("flock_enabled")
 
     /** True once the operator has acknowledged the authorized-use-only terms. */
     val authorizedUse: Flow<Boolean> =
@@ -148,5 +149,13 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setCrewShare(on: Boolean) {
         context.settingsDataStore.edit { it[crewShareKey] = on }
+    }
+
+    /** True once the operator has opened the Flock (online) feature — gates the backend loop. */
+    val flockEnabled: Flow<Boolean> =
+        context.settingsDataStore.data.map { it[flockEnabledKey] ?: false }
+
+    suspend fun setFlockEnabled(on: Boolean) {
+        context.settingsDataStore.edit { it[flockEnabledKey] = on }
     }
 }

@@ -44,7 +44,7 @@ private data class HubEntry(val title: String, val sub: String, val icon: ImageV
 @Composable
 fun SensorsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
     val entries = listOf(
-        HubEntry("Crew", "Share a track code, see your crew live on the map", Icons.Default.Groups, "crew", Color(0xFF34D399)),
+        HubEntry("Flock", "Ring a band, see the wings you tail live on the map", Icons.Default.Groups, "crew", Color(0xFF34D399)),
         HubEntry("GPS Satellites", "Which satellites your GPS is locked onto", Icons.Default.SatelliteAlt, "satellites", Color(0xFF22D3EE)),
         HubEntry("Aircraft Overhead", "Live ADS-B — planes in the air near you", Icons.Default.Flight, "aircraft", Color(0xFF38BDF8)),
         HubEntry("Locator", "Home in on a device by signal — hot/cold + buzz", Icons.Default.MyLocation, "locator", Color(0xFF34D399)),

@@ -32,6 +32,7 @@ import com.cak3d.biscuitmesh.wardrive.WardriveManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
@@ -68,9 +69,9 @@ class BiscuitMeshApp : Application() {
         com.cak3d.biscuitmesh.sensors.TrackerFollowManager()
     }
 
-    /** Online "crew" layer (theGarden Supabase): anon identity, track codes, live locations. */
+    /** Online "Flock" layer (theGarden Supabase): anon identity, band codes, live locations. */
     val crew: com.cak3d.biscuitmesh.crew.CrewManager by lazy {
-        com.cak3d.biscuitmesh.crew.CrewManager(settingsStore)
+        com.cak3d.biscuitmesh.crew.CrewManager(appScope, settingsStore, locationProvider)
     }
 
     val fleet: FleetManager? by lazy {
@@ -202,6 +203,8 @@ class BiscuitMeshApp : Application() {
         usbDetector.start()
         // Load the bundled IEEE OUI registry off the main thread for vendor lookups.
         appScope.launch(Dispatchers.IO) { com.cak3d.biscuitmesh.sensors.OuiDb.ensureLoaded(this@BiscuitMeshApp) }
+        // Resume the Flock online layer if the operator has used it before.
+        appScope.launch { if (settingsStore.flockEnabled.first()) crew.activate() }
         // Touch the progress manager so it loads saved XP and starts scoring finds
         // from launch, even before the Field Guide screen is opened.
         progress

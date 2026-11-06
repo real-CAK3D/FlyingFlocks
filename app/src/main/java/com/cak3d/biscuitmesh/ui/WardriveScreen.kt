@@ -133,6 +133,8 @@ fun WardriveScreen(vm: MainViewModel) {
     val savedMapStyle by vm.mapStyle.collectAsStateWithLifecycle()
     val meshNodes by vm.meshNodes.collectAsStateWithLifecycle()
     val meshPlacements by vm.meshPlacements.collectAsStateWithLifecycle()
+    // Live Flock: wings you're tailing (people who gave you their band), shown on the map.
+    val flockPins by vm.crew.flock.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
 
@@ -418,6 +420,16 @@ fun WardriveScreen(vm: MainViewModel) {
                         m.setOnMarkerClickListener { _, _ -> pendingDeleteCam = hz; true }
                         map.overlays.add(m)
                     }
+                }
+
+                // Live Flock: a glowing pin for each wing you're tailing, in every view.
+                flockPins.forEach { w ->
+                    val m = Marker(map)
+                    m.position = GeoPoint(w.lat, w.lon)
+                    m.icon = dot(AndroidColor.parseColor("#34D399"), 19)
+                    m.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                    m.title = "Wing ${w.userId.take(8)}"
+                    map.overlays.add(m)
                 }
 
                 val lat = state.lastLat
