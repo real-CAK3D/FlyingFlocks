@@ -53,6 +53,11 @@ class BiscuitMeshApp : Application() {
 
     val deadZonesStore: DeadZonesStore by lazy { DeadZonesStore(this) }
 
+    /** Local-only log of devices seen inside dead zones — never uploaded. */
+    val deadZoneLogStore: com.cak3d.biscuitmesh.data.DeadZoneLogStore by lazy {
+        com.cak3d.biscuitmesh.data.DeadZoneLogStore(this)
+    }
+
     val fleet: FleetManager? by lazy {
         val adapter = bluetoothManager?.adapter ?: return@lazy null
         FleetManager(this, adapter, appScope, knownStore)

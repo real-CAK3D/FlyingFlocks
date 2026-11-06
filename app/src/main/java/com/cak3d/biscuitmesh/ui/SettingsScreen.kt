@@ -64,7 +64,7 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
+fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit, onOpenDeadZones: () -> Unit = {}) {
     val zones by vm.deadZones.collectAsStateWithLifecycle(initialValue = emptyList())
     val authorized by vm.authorizedUse.collectAsStateWithLifecycle()
     var showAdd by remember { mutableStateOf(false) }
@@ -114,6 +114,10 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
                 onRemove = { vm.removeDeadZone(it) },
                 onSetRadius = { id, r -> vm.setDeadZoneRadius(id, r) },
             )
+            androidx.compose.material3.OutlinedButton(
+                onClick = onOpenDeadZones,
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("View dead-zone devices (local only)") }
             HudSection(vm)
             AlertsScreenSection(vm)
             MeshSection(vm)

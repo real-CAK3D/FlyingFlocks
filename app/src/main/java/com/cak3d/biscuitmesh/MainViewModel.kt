@@ -448,6 +448,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { appRef.deadZonesStore.remove(id) }
     }
 
+    // --- Dead-zone device log (LOCAL ONLY — never uploaded) ----------------
+    /** zoneId -> devices seen there, kept only on this phone. */
+    val deadZoneLog: Flow<Map<String, List<com.cak3d.biscuitmesh.data.DeadZoneDevice>>> =
+        appRef.deadZoneLogStore.log
+
+    fun recordDeadZoneDevices(zoneId: String, devices: List<com.cak3d.biscuitmesh.data.DeadZoneDevice>) {
+        viewModelScope.launch { appRef.deadZoneLogStore.record(zoneId, devices) }
+    }
+
+    fun clearDeadZoneLog(zoneId: String) {
+        viewModelScope.launch { appRef.deadZoneLogStore.clear(zoneId) }
+    }
+
     fun setDeadZoneRadius(id: String, radiusM: Double) {
         viewModelScope.launch { appRef.deadZonesStore.setRadius(id, radiusM) }
     }

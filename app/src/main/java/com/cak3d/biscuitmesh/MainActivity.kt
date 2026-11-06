@@ -66,6 +66,7 @@ import com.cak3d.biscuitmesh.ui.DeviceDetailScreen
 import com.cak3d.biscuitmesh.ui.DrivesScreen
 import com.cak3d.biscuitmesh.ui.FindsScreen
 import com.cak3d.biscuitmesh.ui.FleetScreen
+import com.cak3d.biscuitmesh.ui.DeadZonesScreen
 import com.cak3d.biscuitmesh.ui.LabBenchScreen
 import com.cak3d.biscuitmesh.ui.LiveScreen
 import com.cak3d.biscuitmesh.ui.ProximityBanner
@@ -280,7 +281,11 @@ private fun MainShell(vm: MainViewModel) {
                         },
                     )
                 }
-                composable("settings") { SettingsScreen(vm = vm, onBack = { nav.popBackStack() }) }
+                composable("settings") {
+                    SettingsScreen(vm = vm, onBack = { nav.popBackStack() },
+                        onOpenDeadZones = { nav.navigate("deadzones") })
+                }
+                composable("deadzones") { DeadZonesScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("labbench") { LabBenchScreen(onBack = { nav.popBackStack() }) }
                 composable("drives") { DrivesScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("stats") { StatsScreen(vm = vm, onBack = { nav.popBackStack() }) }
