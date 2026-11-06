@@ -30,6 +30,12 @@ data class TerritoryCell(val cellId: String, val lat: Double, val lon: Double, v
 /** Your territory standing across the whole flock. */
 data class TerritoryStanding(val owned: Int, val total: Int, val strength: Int)
 
+/** One line in the global flock feed: a recent territory claim. */
+data class FeedItem(val handle: String, val cell: String, val strength: Int, val mine: Boolean, val ts: Long)
+
+/** Season standing: the current season and cells you hold this season vs all-time. */
+data class SeasonStanding(val season: String, val mineSeason: Int, val mineTotal: Int, val total: Int)
+
 /** One wing's standing on the flock leaderboard. */
 data class LeaderRow(val rank: Int, val handle: String, val score: Long, val wifi: Long, val km: Double, val me: Boolean)
 
@@ -67,6 +73,10 @@ class CrewManager(
     val board: StateFlow<Leaderboard?> = _board.asStateFlow()
     private val _handle = MutableStateFlow<String?>(null)
     val handle: StateFlow<String?> = _handle.asStateFlow()
+    private val _feed = MutableStateFlow<List<FeedItem>>(emptyList())
+    val feed: StateFlow<List<FeedItem>> = _feed.asStateFlow()
+    private val _season = MutableStateFlow<SeasonStanding?>(null)
+    val season: StateFlow<SeasonStanding?> = _season.asStateFlow()
 
     val myUserId: String? get() = session?.userId
 
@@ -100,6 +110,8 @@ class CrewManager(
                 _flock.value = tracked()
                 _totals.value = globalTotals()
                 _board.value = leaderboard()
+                _feed.value = globalFeed()
+                _season.value = seasonStanding()
             }.isSuccess
             if (ok) {
                 failures = 0
@@ -215,6 +227,24 @@ class CrewManager(
         val s = ensure()
         val o = JSONObject(SupabaseClient.rpc("ff_territory_mine", "{}", s.accessToken))
         return TerritoryStanding(o.optInt("owned"), o.optInt("total"), o.optInt("strength"))
+    }
+
+    private suspend fun globalFeed(): List<FeedItem> {
+        val s = ensure()
+        val arr = JSONArray(SupabaseClient.rpc("ff_global_feed", "{}", s.accessToken))
+        val out = ArrayList<FeedItem>()
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            out.add(FeedItem(o.optString("handle"), o.optString("cell"), o.optInt("strength"),
+                o.optBoolean("mine"), (o.optDouble("ts") * 1000).toLong()))
+        }
+        return out
+    }
+
+    private suspend fun seasonStanding(): SeasonStanding {
+        val s = ensure()
+        val o = JSONObject(SupabaseClient.rpc("ff_season_standing", "{}", s.accessToken))
+        return SeasonStanding(o.optString("season"), o.optInt("mine_season"), o.optInt("mine_total"), o.optInt("total"))
     }
 
     suspend fun pushStats(wifi: Long, bt: Long, cameras: Long, drives: Long, km: Double) {

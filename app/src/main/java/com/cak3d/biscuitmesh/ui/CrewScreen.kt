@@ -58,6 +58,8 @@ fun CrewScreen(vm: MainViewModel, onBack: () -> Unit) {
     val tail by vm.crew.flock.collectAsStateWithLifecycle()
     val totals by vm.crew.totals.collectAsStateWithLifecycle()
     val board by vm.crew.board.collectAsStateWithLifecycle()
+    val feed by vm.crew.feed.collectAsStateWithLifecycle()
+    val season by vm.crew.season.collectAsStateWithLifecycle()
     val savedHandle by vm.flockHandle.collectAsStateWithLifecycle(initialValue = "")
     val drives by vm.drives.collectAsStateWithLifecycle(initialValue = emptyList())
 
@@ -187,6 +189,41 @@ fun CrewScreen(vm: MainViewModel, onBack: () -> Unit) {
                             Stat("${t.wings}", "WINGS", FLOCK, Modifier.weight(1f))
                             Stat(fmt(t.drives), "FLIGHTS", Color(0xFFF59E0B), Modifier.weight(1f))
                             Stat("${t.km.toInt()}", "KM", ACCENT, Modifier.weight(1f))
+                        }
+                    }
+                }
+            }
+            season?.let { s ->
+                item("season") {
+                    FCard {
+                        Text("SEASON · ${s.season}", style = MaterialTheme.typography.labelMedium, color = Color(0xFFF59E0B),
+                            fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                        Text("Territory resets each month — grab cells to climb this season's board.",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                        Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Stat("${s.mineSeason}", "THIS SEASON", Color(0xFF34D399), Modifier.weight(1f))
+                            Stat("${s.mineTotal}", "ALL-TIME", ACCENT, Modifier.weight(1f))
+                            Stat("${s.total}", "FLOCK CELLS", Color(0xFFF59E0B), Modifier.weight(1f))
+                        }
+                    }
+                }
+            }
+            if (feed.isNotEmpty()) {
+                item("feed") {
+                    FCard {
+                        Text("FLOCK FEED · LIVE", style = MaterialTheme.typography.labelMedium, color = FLOCK,
+                            fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                        Text("The latest land grabs across the whole flock.", style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                        feed.take(12).forEach { f ->
+                            Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("▸", color = if (f.mine) FLOCK else ACCENT, fontFamily = FontFamily.Monospace)
+                                Text(if (f.mine) "You" else f.handle, style = MaterialTheme.typography.bodySmall,
+                                    fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold,
+                                    color = if (f.mine) FLOCK else MaterialTheme.colorScheme.onSurface)
+                                Text("held a cell ×${f.strength}", style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), modifier = Modifier.weight(1f))
+                            }
                         }
                     }
                 }
