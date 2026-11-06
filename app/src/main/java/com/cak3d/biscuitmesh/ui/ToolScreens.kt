@@ -1,5 +1,6 @@
 package com.cak3d.biscuitmesh.ui
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,6 +16,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Path
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -113,6 +116,7 @@ fun WifiScreen(vm: MainViewModel, onOpenTool: (String) -> Unit) {
             )
         }
         if (nets.isNotEmpty()) item("spectrum") { SpectrumCard(g24, g5, WIFI_CYAN) }
+        if (nets.isNotEmpty()) item("arch") { ArchSpectrumCard(g24, g5, WIFI_CYAN) }
         if (nets.isNotEmpty()) item("enc") { EncryptionCard(nets, WIFI_CYAN) }
         if (nets.isNotEmpty()) item("mfg") { ManufacturersCard(nets, ouiReady, WIFI_CYAN) }
         if (nets.isNotEmpty()) item("rssi") { RssiHistogramCard(nets, WIFI_CYAN) }
@@ -407,6 +411,62 @@ private fun ChannelBar(label: String, count: Int, max: Int, color: Color) {
         Text("$count", style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
     }
+}
+
+/** Per-AP spectrum arches: each network is an arch by channel, height = signal. */
+@Composable
+private fun ArchSpectrumCard(g24: List<PhoneScanRow>, g5: List<PhoneScanRow>, accent: Color) {
+    Card(
+        Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF05080A)),
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("SPECTRUM · ${g24.size + g5.size} APs", style = MaterialTheme.typography.labelMedium,
+                color = accent, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+            Text("each arch = one network · position = channel · height = signal",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+            if (g24.isNotEmpty()) {
+                Text("2.4 GHz", style = MaterialTheme.typography.labelSmall, color = BAND_24, fontFamily = FontFamily.Monospace)
+                ArchChart(g24, 1f, 13f, 2.5f)
+            }
+            if (g5.isNotEmpty()) {
+                Text("5 GHz", style = MaterialTheme.typography.labelSmall, color = BAND_5, fontFamily = FontFamily.Monospace)
+                ArchChart(g5, 32f, 165f, 8f)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ArchChart(nets: List<PhoneScanRow>, chMin: Float, chMax: Float, halfWidthCh: Float) {
+    Canvas(Modifier.fillMaxWidth().height(110.dp)) {
+        val w = size.width
+        val h = size.height
+        val span = (chMax - chMin).coerceAtLeast(1f)
+        fun x(ch: Float) = ((ch - chMin) / span) * w
+        val hwPx = (halfWidthCh / span) * w
+        drawLine(Color.White.copy(alpha = 0.12f), Offset(0f, h - 1f), Offset(w, h - 1f), 1.5f)
+        nets.sortedBy { it.rssi }.forEach { n ->
+            val cx = x(n.channel.toFloat())
+            val strength = ((n.rssi + 95f) / 65f).coerceIn(0.05f, 1f)
+            val peak = h * (1f - strength * 0.9f)
+            val col = apColor(n.id)
+            val p = Path().apply {
+                moveTo(cx - hwPx, h)
+                quadraticBezierTo(cx, peak - (h - peak), cx + hwPx, h)
+                close()
+            }
+            drawPath(p, col.copy(alpha = 0.28f))
+            drawPath(p, col, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2f))
+        }
+    }
+}
+
+// A stable per-AP colour from its BSSID, so each arch reads as a distinct network.
+private fun apColor(id: String): Color {
+    val hue = ((id.hashCode() and 0x7fffffff) % 360).toFloat()
+    return Color.hsv(hue, 0.55f, 1f)
 }
 
 /** Signal-strength histogram — how many networks fall in each RSSI band. */
