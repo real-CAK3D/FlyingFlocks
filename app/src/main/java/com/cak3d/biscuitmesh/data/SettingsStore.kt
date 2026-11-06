@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
 private val Context.settingsDataStore by preferencesDataStore(name = "settings")
@@ -26,6 +27,8 @@ class SettingsStore(private val context: Context) {
     private val keepAwakeKey = booleanPreferencesKey("keep_awake")
     private val vibrateAlertsKey = booleanPreferencesKey("vibrate_alerts")
     private val wigleAuthKey = stringPreferencesKey("wigle_auth")
+    private val sbSessionKey = stringPreferencesKey("sb_session_json")
+    private val crewShareKey = booleanPreferencesKey("crew_share_location")
 
     /** True once the operator has acknowledged the authorized-use-only terms. */
     val authorizedUse: Flow<Boolean> =
@@ -129,5 +132,21 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setWigleAuth(auth: String) {
         context.settingsDataStore.edit { it[wigleAuthKey] = auth.trim() }
+    }
+
+    /** Persisted Supabase anonymous session (JSON), or empty. */
+    suspend fun sbSession(): String =
+        context.settingsDataStore.data.first()[sbSessionKey] ?: ""
+
+    suspend fun setSbSession(json: String) {
+        context.settingsDataStore.edit { it[sbSessionKey] = json }
+    }
+
+    /** Share my live location with my crew (people who claimed my code). Off by default. */
+    val crewShare: Flow<Boolean> =
+        context.settingsDataStore.data.map { it[crewShareKey] ?: false }
+
+    suspend fun setCrewShare(on: Boolean) {
+        context.settingsDataStore.edit { it[crewShareKey] = on }
     }
 }

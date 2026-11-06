@@ -68,6 +68,7 @@ import com.cak3d.biscuitmesh.ui.DrivesScreen
 import com.cak3d.biscuitmesh.ui.FindsScreen
 import com.cak3d.biscuitmesh.ui.FleetScreen
 import com.cak3d.biscuitmesh.ui.AircraftScreen
+import com.cak3d.biscuitmesh.ui.CrewScreen
 import com.cak3d.biscuitmesh.ui.DeadZonesScreen
 import com.cak3d.biscuitmesh.ui.LabBenchScreen
 import com.cak3d.biscuitmesh.ui.LiveScreen
@@ -301,6 +302,7 @@ private fun MainShell(vm: MainViewModel) {
                 composable("aircraft") { AircraftScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("locator") { LocatorScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("trackers") { TrackerScreen(vm = vm, onBack = { nav.popBackStack() }) }
+                composable("crew") { CrewScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("drives") { DrivesScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("stats") { StatsScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("live") { LiveScreen(vm = vm, onBack = { nav.popBackStack() }) }

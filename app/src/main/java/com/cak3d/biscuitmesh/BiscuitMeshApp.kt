@@ -68,6 +68,11 @@ class BiscuitMeshApp : Application() {
         com.cak3d.biscuitmesh.sensors.TrackerFollowManager()
     }
 
+    /** Online "crew" layer (theGarden Supabase): anon identity, track codes, live locations. */
+    val crew: com.cak3d.biscuitmesh.crew.CrewManager by lazy {
+        com.cak3d.biscuitmesh.crew.CrewManager(settingsStore)
+    }
+
     val fleet: FleetManager? by lazy {
         val adapter = bluetoothManager?.adapter ?: return@lazy null
         FleetManager(this, adapter, appScope, knownStore)
