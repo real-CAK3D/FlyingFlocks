@@ -1,14 +1,19 @@
 package com.cak3d.biscuitmesh.ui
 
+import android.graphics.Paint
+import android.graphics.Typeface
 import android.os.BatteryManager
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,17 +35,25 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -50,6 +63,7 @@ import com.cak3d.biscuitmesh.usb.WtfLinkState
 import com.cak3d.biscuitmesh.wardrive.SampleKind
 import com.cak3d.biscuitmesh.wardrive.WardriveSample
 import com.cak3d.biscuitmesh.wardrive.WardriveState
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -66,7 +80,10 @@ private val RED = Color(0xFFFF5470)
 private val GRID = Color(0xFF00FF9C).copy(alpha = 0.18f)
 private const val RADAR_RANGE_M = 3000.0
 
-/** Maxed-out single-screen mission control: radar, charts, readouts, and a live log — no page scroll. */
+/** A radar contact: normalized x/y in [-1,1], colour, and whether it's a live (hashed) signal. */
+private data class Blip(val x: Float, val y: Float, val color: Color, val live: Boolean)
+
+/** Maxed-out single-screen mission control: matrix rain, a reactive radar, live gauges and a log. */
 @Composable
 fun LiveScreen(vm: MainViewModel, onBack: () -> Unit) {
     val context = LocalContext.current
@@ -87,7 +104,13 @@ fun LiveScreen(vm: MainViewModel, onBack: () -> Unit) {
     val actTrace = remember { mutableStateListOf<Float>() }
     val sigTrace = remember { mutableStateListOf<Float>() }
     val feed = remember { mutableStateListOf<String>() }
-    val batt = remember { mutableStateListOf(100) }  // single-cell holder for phone battery %
+    val batt = remember { mutableStateListOf(100) }
+    var detRate by remember { mutableStateOf(0f) }   // detections / second
+    // Audio sonar: opt-in Geiger-style clicks, one per new detection, so you can *hear*
+    // the air fill up without watching the screen. Off by default.
+    var sonar by remember { mutableStateOf(false) }
+    val tone = remember { runCatching { android.media.ToneGenerator(android.media.AudioManager.STREAM_MUSIC, 75) }.getOrNull() }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { runCatching { tone?.release() } } }
 
     fun push(tag: String, msg: String) {
         val t = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US).format(java.util.Date())
@@ -97,17 +120,16 @@ fun LiveScreen(vm: MainViewModel, onBack: () -> Unit) {
     LaunchedEffect(Unit) {
         push("SYS", "live console online")
         val bm = context.getSystemService(BatteryManager::class.java)
+        var lastN = samplesFlow?.value?.size ?: 0
         while (true) {
-            val s = wsFlow.value
             val n = samplesFlow?.value?.size ?: 0
             val bestSig = samplesFlow?.value?.values?.maxOfOrNull { it.rssi } ?: -110
             actTrace.add(n.toFloat()); if (actTrace.size > 60) actTrace.removeAt(0)
             sigTrace.add((bestSig + 110).toFloat().coerceAtLeast(0f)); if (sigTrace.size > 60) sigTrace.removeAt(0)
+            detRate = ((n - lastN).coerceAtLeast(0)) / 1.3f
+            lastN = n
             batt[0] = runCatching { bm?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: -1 }.getOrDefault(-1)
-            // Live telemetry drives the gauges/graphs above and the signals monitor below.
-            // It is NOT spammed into the log — that line used to repeat every 1.3 s and
-            // bury the real events. Dead-zone entry is the one telemetry worth logging.
-            kotlinx.coroutines.delay(1300)
+            delay(1300)
         }
     }
     LaunchedEffect(alert?.hazard?.id) { alert?.let { push("CAM", "${it.hazard.kind} @ ${it.distanceM}m") } }
@@ -121,113 +143,172 @@ fun LiveScreen(vm: MainViewModel, onBack: () -> Unit) {
     val logState = rememberLazyListState()
     LaunchedEffect(feed.size) { if (feed.isNotEmpty()) logState.animateScrollToItem(feed.size - 1) }
 
-    val blips = remember(cameras, meshNodes, ws.lastLat, ws.lastLon) {
-        val lat0 = ws.lastLat; val lon0 = ws.lastLon
-        if (lat0 == null || lon0 == null) emptyList()
-        else buildList {
-            cameras.forEach { addBlip(lat0, lon0, it.lat, it.lon, RED)?.let(::add) }
-            meshNodes.forEach { n -> val la = n.lat; val lo = n.lon; if (la != null && lo != null) addBlip(lat0, lon0, la, lo, CYAN)?.let(::add) }
+    // Live snapshot of the strongest signals in view — re-sorted each frame.
+    val topSignals = remember(samplesMap) { samplesMap.values.sortedByDescending { it.rssi }.take(40) }
+
+    // Radar contacts: real-geometry pins for cameras/mesh, plus hashed "live" blips for
+    // the signals in view (angle from the id, radius from signal strength) so the radar
+    // actually lights up with what you're catching.
+    val blips = remember(cameras, meshNodes, ws.lastLat, ws.lastLon, topSignals) {
+        buildList {
+            val lat0 = ws.lastLat; val lon0 = ws.lastLon
+            if (lat0 != null && lon0 != null) {
+                cameras.forEach { addBlip(lat0, lon0, it.lat, it.lon, RED)?.let(::add) }
+                meshNodes.forEach { n -> val la = n.lat; val lo = n.lon; if (la != null && lo != null) addBlip(lat0, lon0, la, lo, CYAN)?.let(::add) }
+            }
+            topSignals.forEach { s ->
+                val h = s.id.hashCode()
+                val ang = (h and 0xFFFF) / 65535.0 * 2.0 * Math.PI
+                val strength = ((s.rssi + 100).coerceIn(0, 70)) / 70.0   // 0 far .. 1 close
+                val r = (1.0 - strength).toFloat().coerceIn(0.1f, 0.97f)
+                val col = when { s.kind == SampleKind.RF -> AMBER; s.kind == SampleKind.BT -> CYAN; s.is5GHz -> GREEN; else -> GREEN }
+                add(Blip((sin(ang) * r).toFloat(), (-cos(ang) * r).toFloat(), col, true))
+            }
         }
     }
+
+    // Ping ripples: spawn an expanding ring whenever the number of tracked signals grows.
+    val ripples = remember { mutableStateListOf<Ripple>() }
+    var lastTracked by remember { mutableIntStateOf(0) }
+    LaunchedEffect(samplesMap.size) {
+        val grew = samplesMap.size - lastTracked
+        lastTracked = samplesMap.size
+        if (grew > 0) {
+            val h = System.nanoTime().toInt()
+            val ang = (h and 0xFFFF) / 65535.0 * 2.0 * Math.PI
+            val r = 0.3f + (h ushr 16 and 0xFF) / 255f * 0.6f
+            ripples.add(Ripple((sin(ang) * r).toFloat(), (-cos(ang) * r).toFloat()))
+            if (ripples.size > 6) ripples.removeAt(0)
+        }
+    }
+    // Sonar clicks on new detections (pitch rises when the air gets busy).
+    LaunchedEffect(samplesMap.size) {
+        if (sonar && samplesMap.size > 0) {
+            val t = if (detRate > 6f) android.media.ToneGenerator.TONE_PROP_BEEP2 else android.media.ToneGenerator.TONE_PROP_BEEP
+            runCatching { tone?.startTone(t, 30) }
+        }
+    }
+
+    // Age the ripples.
+    var ripTick by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            if (ripples.isNotEmpty()) {
+                ripples.forEach { it.age += 0.06f }
+                ripples.removeAll { it.age >= 1f }
+            }
+            ripTick++
+            delay(40)
+        }
+    }
+
     val sweep by rememberInfiniteTransition(label = "r").animateFloat(
         0f, 360f, infiniteRepeatable(tween(4500, easing = LinearEasing), RepeatMode.Restart), label = "s")
+    val livePulse by rememberInfiniteTransition(label = "lp").animateFloat(
+        0.35f, 1f, infiniteRepeatable(tween(900, easing = LinearEasing), RepeatMode.Reverse), label = "lpv")
 
     val spd = ws.speedMps?.let { if (mph) it * 2.23694f else it * 3.6f } ?: 0f
     val meshBatt = meshNodes.mapNotNull { it.battery }.maxOrNull()
     val dongleOn = wtfLink == WtfLinkState.CONNECTED
-    // Live snapshot of the strongest signals in view — re-sorted each frame, so it
-    // shows a lot of real info without the log's repetition.
-    val topSignals = remember(samplesMap) { samplesMap.values.sortedByDescending { it.rssi }.take(40) }
 
-    Column(Modifier.fillMaxSize().background(BG).padding(horizontal = 6.dp)) {
-        Row(Modifier.fillMaxWidth().height(36.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = GREEN) }
-            Text("flyingflocks", color = GREEN, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-            Text(" // LIVE", color = AMBER, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
-        }
-
-        // radar + readouts
-        Row(Modifier.fillMaxWidth().weight(1.15f), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Box(Modifier.fillMaxHeight().weight(1.05f), contentAlignment = Alignment.Center) {
-                Radar(blips, sweep, Modifier.fillMaxWidth().aspectRatio(1f))
+    Box(Modifier.fillMaxSize().background(BG)) {
+        MatrixRain(Modifier.fillMaxSize(), GREEN)
+        Column(Modifier.fillMaxSize().padding(horizontal = 6.dp)) {
+            Row(Modifier.fillMaxWidth().height(36.dp), verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = GREEN) }
+                Text("flyingflocks", color = GREEN, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Text(" // LIVE", color = AMBER.copy(alpha = livePulse), fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+                androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
+                Text(
+                    if (sonar) "♪ SONAR" else "♪ sonar",
+                    color = if (sonar) GREEN else GREEN.copy(alpha = 0.4f),
+                    fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 11.sp,
+                    modifier = Modifier
+                        .clickable { sonar = !sonar }
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                )
             }
-            Column(Modifier.fillMaxHeight().weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Readout("RANK", "${progress.rank}", progress.rankName.take(11), GREEN)
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    MiniStat("WIFI", "${ws.wifiCount}", CYAN, Modifier.weight(1f))
-                    MiniStat("BT", "${ws.btCount}", CYAN, Modifier.weight(1f))
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    MiniStat("CAMS", "${cameras.size}", RED, Modifier.weight(1f))
-                    MiniStat("MESH", "${meshNodes.size}", if (meshLink == MeshLinkState.CONNECTED) GREEN else GRID, Modifier.weight(1f))
-                }
-                Box(Modifier.fillMaxWidth().weight(1f)) {
-                    BarChart(listOf(
-                        Triple("WIFI", ws.wifiCount.toFloat(), CYAN),
-                        Triple("BT", ws.btCount.toFloat(), GREEN),
-                        Triple("CAM", cameras.size.toFloat(), RED),
-                        Triple("MESH", meshNodes.size.toFloat(), AMBER),
-                    ), Modifier.fillMaxSize())
-                }
-            }
-        }
 
-        // power + location strip
-        Row(Modifier.fillMaxWidth().height(30.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Chip("PWR", "${batt[0].coerceAtLeast(0)}%", if (batt[0] in 1..20) RED else GREEN)
-            Chip("MESH⚡", meshBatt?.let { "$it%" } ?: "--", if (meshBatt != null) CYAN else GRID)
-            Chip("DONGLE", if (dongleOn) "ON" else "off", if (dongleOn) GREEN else GRID)
-            Chip("SAT", "${wtfGps?.sats ?: 0}", AMBER)
-            Chip("ACC", ws.accuracy?.let { "${it.toInt()}m" } ?: "--", GREEN)
-        }
-
-        // gauges + graphs
-        Row(Modifier.fillMaxWidth().height(66.dp).padding(vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Column(Modifier.weight(1f)) {
-                Text("SPEED", color = AMBER.copy(alpha = 0.7f), fontFamily = FontFamily.Monospace, fontSize = 9.sp)
-                Text("%.0f".format(spd), color = AMBER, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 26.sp)
-                Text(if (mph) "mph" else "km/h", color = Color.White.copy(alpha = 0.4f), fontFamily = FontFamily.Monospace, fontSize = 8.sp)
-            }
-            GraphCol("ACTIVITY", actTrace, CYAN, Modifier.weight(1.4f))
-            GraphCol("SIGNAL", sigTrace, GREEN, Modifier.weight(1.4f))
-        }
-
-        // Bottom: events (fire on change, no spam) over a live signals monitor.
-        Column(Modifier.fillMaxWidth().weight(0.95f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            // EVENTS — only things that actually happened: cameras, mesh, dongle, rank.
-            Column(Modifier.fillMaxWidth().weight(0.4f).background(PANEL).padding(horizontal = 6.dp, vertical = 3.dp)) {
-                Text("root@flyingflocks:~# tail -f events", color = GREEN.copy(alpha = 0.6f), fontFamily = FontFamily.Monospace, fontSize = 9.sp)
-                LazyColumn(state = logState, modifier = Modifier.fillMaxSize()) {
-                    items(feed) { line ->
-                        val color = when {
-                            " CAM " in line -> RED
-                            " WTF " in line || " MESH " in line -> CYAN
-                            " RANK " in line || " SYS " in line -> AMBER
-                            " TLM " in line -> GREEN.copy(alpha = 0.55f)
-                            else -> GREEN
-                        }
-                        Text(line, color = color, fontFamily = FontFamily.Monospace, fontSize = 9.sp, lineHeight = 12.sp)
+            Row(Modifier.fillMaxWidth().weight(1.15f), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Box(Modifier.fillMaxHeight().weight(1.05f), contentAlignment = Alignment.Center) {
+                    Radar(blips, ripples, ripTick, sweep, Modifier.fillMaxWidth().aspectRatio(1f))
+                }
+                Column(Modifier.fillMaxHeight().weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Readout("RANK", "${progress.rank}", progress.rankName.take(11), GREEN)
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        MiniStat("WIFI", ws.wifiCount, CYAN, Modifier.weight(1f))
+                        MiniStat("BT", ws.btCount, CYAN, Modifier.weight(1f))
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        MiniStat("CAMS", cameras.size, RED, Modifier.weight(1f))
+                        MiniStat("MESH", meshNodes.size, if (meshLink == MeshLinkState.CONNECTED) GREEN else GRID, Modifier.weight(1f))
+                    }
+                    Box(Modifier.fillMaxWidth().weight(1f)) {
+                        BarChart(listOf(
+                            Triple("WIFI", ws.wifiCount.toFloat(), CYAN),
+                            Triple("BT", ws.btCount.toFloat(), GREEN),
+                            Triple("CAM", cameras.size.toFloat(), RED),
+                            Triple("MESH", meshNodes.size.toFloat(), AMBER),
+                        ), Modifier.fillMaxSize())
                     }
                 }
             }
-            // SIGNALS — live monitor of the strongest signals in view, full info, no repetition.
-            Column(Modifier.fillMaxWidth().weight(0.6f).background(PANEL).padding(horizontal = 6.dp, vertical = 3.dp)) {
-                Text(
-                    "signals // ${topSignals.size} shown · ${samplesMap.size} tracked",
-                    color = GREEN.copy(alpha = 0.6f), fontFamily = FontFamily.Monospace, fontSize = 9.sp,
-                )
-                if (topSignals.isEmpty()) {
-                    Text("awaiting signals — start a wardrive or connect a board",
-                        color = GREEN.copy(alpha = 0.4f), fontFamily = FontFamily.Monospace, fontSize = 9.sp)
-                } else {
-                    LazyColumn(Modifier.fillMaxSize()) {
-                        items(topSignals, key = { it.id }) { SignalLine(it) }
+
+            Row(Modifier.fillMaxWidth().height(30.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Chip("DET/s", "%.0f".format(detRate), if (detRate > 0f) GREEN else GRID)
+                Chip("PWR", "${batt[0].coerceAtLeast(0)}%", if (batt[0] in 1..20) RED else GREEN)
+                Chip("MESH⚡", meshBatt?.let { "$it%" } ?: "--", if (meshBatt != null) CYAN else GRID)
+                Chip("DONGLE", if (dongleOn) "ON" else "off", if (dongleOn) GREEN else GRID)
+                Chip("SAT", "${wtfGps?.sats ?: 0}", AMBER)
+            }
+
+            Row(Modifier.fillMaxWidth().height(66.dp).padding(vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(Modifier.weight(1f)) {
+                    Text("SPEED", color = AMBER.copy(alpha = 0.7f), fontFamily = FontFamily.Monospace, fontSize = 9.sp)
+                    Text("%.0f".format(spd), color = AMBER, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 26.sp)
+                    Text(if (mph) "mph" else "km/h", color = Color.White.copy(alpha = 0.4f), fontFamily = FontFamily.Monospace, fontSize = 8.sp)
+                }
+                GraphCol("ACTIVITY", actTrace, CYAN, Modifier.weight(1.4f))
+                GraphCol("SIGNAL", sigTrace, GREEN, Modifier.weight(1.4f))
+            }
+
+            Column(Modifier.fillMaxWidth().weight(0.95f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Column(Modifier.fillMaxWidth().weight(0.4f).background(PANEL).padding(horizontal = 6.dp, vertical = 3.dp)) {
+                    Text("root@flyingflocks:~# tail -f events", color = GREEN.copy(alpha = 0.6f), fontFamily = FontFamily.Monospace, fontSize = 9.sp)
+                    LazyColumn(state = logState, modifier = Modifier.fillMaxSize()) {
+                        items(feed) { line ->
+                            val color = when {
+                                " CAM " in line -> RED
+                                " WTF " in line || " MESH " in line -> CYAN
+                                " RANK " in line || " SYS " in line -> AMBER
+                                " TLM " in line -> GREEN.copy(alpha = 0.55f)
+                                else -> GREEN
+                            }
+                            Text(line, color = color, fontFamily = FontFamily.Monospace, fontSize = 9.sp, lineHeight = 12.sp)
+                        }
+                    }
+                }
+                Column(Modifier.fillMaxWidth().weight(0.6f).background(PANEL).padding(horizontal = 6.dp, vertical = 3.dp)) {
+                    Text(
+                        "signals // ${topSignals.size} shown · ${samplesMap.size} tracked · ${"%.0f".format(detRate)}/s",
+                        color = GREEN.copy(alpha = 0.6f), fontFamily = FontFamily.Monospace, fontSize = 9.sp,
+                    )
+                    if (topSignals.isEmpty()) {
+                        Text("awaiting signals — start a wardrive or connect a board",
+                            color = GREEN.copy(alpha = 0.4f), fontFamily = FontFamily.Monospace, fontSize = 9.sp)
+                    } else {
+                        LazyColumn(Modifier.fillMaxSize()) {
+                            items(topSignals, key = { it.id }) { SignalLine(it) }
+                        }
                     }
                 }
             }
         }
     }
 }
+
+/** A mutable expanding-ring ping on the radar. */
+private class Ripple(val x: Float, val y: Float, var age: Float = 0f)
 
 /** One live signal row: a band/kind tag, its label, and signal strength. */
 @Composable
@@ -260,18 +341,74 @@ private fun SignalLine(s: WardriveSample) {
 
 // --- helpers ---------------------------------------------------------------
 
-private fun addBlip(lat0: Double, lon0: Double, lat: Double, lon: Double, color: Color): Triple<Float, Float, Color>? {
+private fun addBlip(lat0: Double, lon0: Double, lat: Double, lon: Double, color: Color): Blip? {
     val dN = (lat - lat0) * 111320.0
     val dE = (lon - lon0) * 111320.0 * cos(Math.toRadians(lat0))
     val dist = hypot(dN, dE)
     if (dist > RADAR_RANGE_M) return null
     val r = (dist / RADAR_RANGE_M).toFloat()
     val ang = atan2(dE, dN)
-    return Triple((sin(ang) * r).toFloat(), (-cos(ang) * r).toFloat(), color)
+    return Blip((sin(ang) * r).toFloat(), (-cos(ang) * r).toFloat(), color, false)
+}
+
+/**
+ * Falling "data rain" backdrop — columns of glyphs streaming down, brightest at the head.
+ * Runs its own ~16fps loop so it animates without re-laying-out the dashboard.
+ */
+@Composable
+private fun MatrixRain(modifier: Modifier, color: Color) {
+    val glyphs = remember { "01010ｱｶｻﾀﾅﾊﾏﾔﾗ日ﾝ七二四九".toCharArray() }
+    var size by remember { mutableStateOf(IntSize.Zero) }
+    val cellPx = with(LocalDensity.current) { 13.dp.toPx() }
+    val drops = remember(size) {
+        val cols = if (size.width > 0) (size.width / cellPx).toInt().coerceAtLeast(1) else 0
+        FloatArray(cols) { (Math.random() * -40).toFloat() }
+    }
+    val speeds = remember(size) { FloatArray(drops.size) { (0.3f + Math.random().toFloat() * 0.9f) } }
+    var frame by remember { mutableIntStateOf(0) }
+    LaunchedEffect(size) {
+        if (size.width == 0) return@LaunchedEffect
+        val rows = size.height / cellPx
+        while (true) {
+            for (i in drops.indices) {
+                drops[i] += speeds[i]
+                if (drops[i] > rows + 6 && Math.random() > 0.975) drops[i] = (Math.random() * -12).toFloat()
+            }
+            frame++
+            delay(60)
+        }
+    }
+    val paint = remember {
+        Paint().apply { textSize = cellPx * 0.92f; typeface = Typeface.MONOSPACE; isAntiAlias = true }
+    }
+    Canvas(modifier.onSizeChanged { size = it }) {
+        frame  // read so the draw re-runs each tick
+        if (size.width == 0) return@Canvas
+        val rows = (size.height / cellPx).toInt() + 2
+        drawIntoCanvasSafe { cv ->
+            for (i in drops.indices) {
+                val headRow = drops[i].toInt()
+                val x = i * cellPx
+                for (tr in 0 until 11) {
+                    val row = headRow - tr
+                    if (row < 0 || row > rows) continue
+                    val a = if (tr == 0) 0.9f else (1f - tr / 11f) * 0.22f
+                    paint.color = color.copy(alpha = a).toArgb()
+                    val idx = ((i * 31 + row * 17 + frame / 3) % glyphs.size + glyphs.size) % glyphs.size
+                    cv.drawText(glyphs[idx].toString(), x, row * cellPx, paint)
+                }
+            }
+        }
+    }
+}
+
+/** Small shim so the matrix rain can paint text through the native canvas. */
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawIntoCanvasSafe(block: (android.graphics.Canvas) -> Unit) {
+    drawContext.canvas.nativeCanvas.let(block)
 }
 
 @Composable
-private fun Radar(blips: List<Triple<Float, Float, Color>>, sweepDeg: Float, modifier: Modifier) {
+private fun Radar(blips: List<Blip>, ripples: List<Ripple>, @Suppress("UNUSED_PARAMETER") ripTick: Int, sweepDeg: Float, modifier: Modifier) {
     Canvas(modifier) {
         val c = Offset(size.width / 2f, size.height / 2f)
         val rad = min(size.width, size.height) / 2f * 0.92f
@@ -279,15 +416,26 @@ private fun Radar(blips: List<Triple<Float, Float, Color>>, sweepDeg: Float, mod
         drawCircle(GREEN.copy(alpha = 0.5f), rad, c, style = Stroke(1.5f))
         drawLine(GRID, Offset(c.x - rad, c.y), Offset(c.x + rad, c.y), 1f)
         drawLine(GRID, Offset(c.x, c.y - rad), Offset(c.x, c.y + rad), 1f)
+        // sweep trail
         val lead = Math.toRadians(sweepDeg.toDouble() - 90.0)
         for (t in 0 until 28) {
             val a = lead - Math.toRadians(t * 1.7)
             drawLine(GREEN.copy(alpha = (1f - t / 28f) * 0.33f), c,
                 Offset(c.x + (cos(a) * rad).toFloat(), c.y + (sin(a) * rad).toFloat()), 2f)
         }
-        blips.forEach { (x, y, color) ->
-            val p = Offset(c.x + x * rad, c.y + y * rad)
-            drawCircle(color.copy(alpha = 0.25f), 9f, p); drawCircle(color, 4.5f, p)
+        // expanding ping ripples from new detections
+        ripples.forEach { rp ->
+            val p = Offset(c.x + rp.x * rad, c.y + rp.y * rad)
+            drawCircle(GREEN.copy(alpha = (1f - rp.age) * 0.5f), rad * 0.22f * rp.age, p, style = Stroke(1.5f))
+        }
+        // contacts — live signals get a soft halo, positioned pins a crisp dot
+        blips.forEach { b ->
+            val p = Offset(c.x + b.x * rad, c.y + b.y * rad)
+            if (b.live) {
+                drawCircle(b.color.copy(alpha = 0.18f), 6f, p); drawCircle(b.color.copy(alpha = 0.8f), 2.6f, p)
+            } else {
+                drawCircle(b.color.copy(alpha = 0.25f), 9f, p); drawCircle(b.color, 4.5f, p)
+            }
         }
         drawCircle(GREEN, 4f, c)
     }
@@ -316,9 +464,11 @@ private fun BarChart(bars: List<Triple<String, Float, Color>>, modifier: Modifie
     val maxV = bars.maxOf { it.second }.coerceAtLeast(1f)
     Row(modifier, verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         bars.forEach { (label, v, color) ->
+            val h by androidx.compose.animation.core.animateFloatAsState(
+                ((v / maxV) * 0.8f).coerceIn(0.02f, 0.8f), tween(500, easing = LinearEasing), label = "bar")
             Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.Bottom, horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("${v.toInt()}", color = color, fontFamily = FontFamily.Monospace, fontSize = 8.sp)
-                Box(Modifier.fillMaxWidth().fillMaxHeight(((v / maxV) * 0.8f).coerceIn(0.02f, 0.8f))
+                Box(Modifier.fillMaxWidth().fillMaxHeight(h)
                     .background(Brush.verticalGradient(listOf(color, color.copy(alpha = 0.3f)))))
                 Text(label, color = color.copy(alpha = 0.6f), fontFamily = FontFamily.Monospace, fontSize = 7.sp)
             }
@@ -337,11 +487,15 @@ private fun Readout(label: String, value: String, sub: String, accent: Color) {
     }
 }
 
+/** Mini stat whose number rolls to its new value and flashes brighter when it changes. */
 @Composable
-private fun MiniStat(label: String, value: String, accent: Color, modifier: Modifier) {
+private fun MiniStat(label: String, value: Int, accent: Color, modifier: Modifier) {
+    val animated by animateIntAsState(value, tween(450, easing = LinearEasing), label = "ms")
+    val changed = animated != value
+    val tint by animateColorAsState(if (changed) Color.White else accent, tween(300), label = "mt")
     Column(modifier.background(PANEL).padding(horizontal = 5.dp, vertical = 2.dp)) {
         Text(label, color = accent.copy(alpha = 0.7f), fontFamily = FontFamily.Monospace, fontSize = 7.sp)
-        Text(value, color = accent, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+        Text("$animated", color = tint, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 15.sp)
     }
 }
 
