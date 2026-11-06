@@ -71,9 +71,12 @@ import com.cak3d.biscuitmesh.ui.AircraftScreen
 import com.cak3d.biscuitmesh.ui.CrewScreen
 import com.cak3d.biscuitmesh.ui.DeadZonesScreen
 import com.cak3d.biscuitmesh.ui.LabBenchScreen
+import com.cak3d.biscuitmesh.ui.DriveReplayScreen
 import com.cak3d.biscuitmesh.ui.HuntsScreen
+import com.cak3d.biscuitmesh.ui.LedgerScreen
 import com.cak3d.biscuitmesh.ui.LiveScreen
 import com.cak3d.biscuitmesh.ui.SignalDetailScreen
+import com.cak3d.biscuitmesh.ui.TpmsScreen
 import com.cak3d.biscuitmesh.ui.WatchlistScreen
 import com.cak3d.biscuitmesh.ui.LocatorScreen
 import com.cak3d.biscuitmesh.ui.ProximityBanner
@@ -322,13 +325,22 @@ private fun MainShell(vm: MainViewModel) {
                 composable("locator") { LocatorScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("trackers") { TrackerScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("crew") { CrewScreen(vm = vm, onBack = { nav.popBackStack() }) }
-                composable("drives") { DrivesScreen(vm = vm, onBack = { nav.popBackStack() }) }
+                composable("drives") {
+                    DrivesScreen(vm = vm, onBack = { nav.popBackStack() },
+                        onOpenReplay = { nav.navigate("replay/$it") })
+                }
+                composable("replay/{id}") { entry ->
+                    DriveReplayScreen(vm = vm, driveId = entry.arguments?.getString("id") ?: "",
+                        onBack = { nav.popBackStack() })
+                }
                 composable("stats") { StatsScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("live") {
                     LiveScreen(vm = vm, onBack = { nav.popBackStack() },
                         onOpenSignal = { nav.navigate("signaldetail/${java.net.URLEncoder.encode(it, "UTF-8")}") })
                 }
                 composable("hunts") { HuntsScreen(vm = vm, onBack = { nav.popBackStack() }) }
+                composable("tiredash") { TpmsScreen(vm = vm, onBack = { nav.popBackStack() }) }
+                composable("ledger") { LedgerScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("watchlist") { WatchlistScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("signaldetail/{id}") { entry ->
                     val id = java.net.URLDecoder.decode(entry.arguments?.getString("id") ?: "", "UTF-8")

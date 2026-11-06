@@ -496,6 +496,29 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     // --- Device detail -----------------------------------------------------
     fun deviceHistory(id: String): com.cak3d.biscuitmesh.wardrive.DeviceHistory? = appRef.wardrive?.history(id)
 
+    // --- Drive replay / coverage ------------------------------------------
+    suspend fun captureSamples(id: String): List<com.cak3d.biscuitmesh.wardrive.GeoPt> =
+        com.cak3d.biscuitmesh.wardrive.CaptureParse.parse(appRef.drivesStore.captureCsv(id) ?: "")
+
+    /** Every saved drive's points, for a cumulative coverage heatmap (newest [limit] drives). */
+    suspend fun allCaptureSamples(limit: Int = 40): List<com.cak3d.biscuitmesh.wardrive.GeoPt> {
+        val ids = appRef.drivesStore.drives.first().filter { it.hasCapture }.take(limit).map { it.id }
+        return ids.flatMap { captureSamples(it) }
+    }
+
+    /** Each saved drive's points, grouped by drive id — for the cross-drive device ledger. */
+    suspend fun captureSamplesByDrive(limit: Int = 60): List<Pair<String, List<com.cak3d.biscuitmesh.wardrive.GeoPt>>> {
+        val ds = appRef.drivesStore.drives.first().filter { it.hasCapture }.take(limit)
+        return ds.map { it.id to captureSamples(it.id) }
+    }
+
+    // --- TPMS tire dashboard ----------------------------------------------
+    val tpmsAssignments: Flow<Map<com.cak3d.biscuitmesh.data.TirePos, String>> = appRef.tpmsStore.assignments
+    val tpmsLowPsi: Flow<Int> = appRef.tpmsStore.lowPsi
+    fun assignTire(pos: com.cak3d.biscuitmesh.data.TirePos, id: String) = viewModelScope.launch { appRef.tpmsStore.assign(pos, id) }
+    fun clearTire(pos: com.cak3d.biscuitmesh.data.TirePos) = viewModelScope.launch { appRef.tpmsStore.clear(pos) }
+    fun setTpmsLowPsi(psi: Int) = viewModelScope.launch { appRef.tpmsStore.setLowPsi(psi) }
+
     // --- Watchlist ---------------------------------------------------------
     val watchlist: Flow<List<String>> = appRef.watchlistStore.entries
     fun addWatch(entry: String) = viewModelScope.launch { appRef.watchlistStore.add(entry) }

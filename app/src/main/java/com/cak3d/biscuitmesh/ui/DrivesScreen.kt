@@ -1,5 +1,6 @@
 package com.cak3d.biscuitmesh.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -41,9 +42,10 @@ import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DrivesScreen(vm: MainViewModel, onBack: () -> Unit) {
+fun DrivesScreen(vm: MainViewModel, onBack: () -> Unit, onOpenReplay: (String) -> Unit = {}) {
     val drives by vm.drives.collectAsStateWithLifecycle(initialValue = emptyList())
     val useMph by vm.useMph.collectAsStateWithLifecycle()
+    val anyCapture = drives.any { it.hasCapture }
 
     Scaffold(
         containerColor = Color.Transparent,
@@ -75,9 +77,15 @@ fun DrivesScreen(vm: MainViewModel, onBack: () -> Unit) {
                 }
             }
             if (drives.isNotEmpty()) item("reach") { RangeReachCard(drives, useMph) }
+            if (anyCapture) item("coverage") {
+                OutlinedButton(onClick = { onOpenReplay("all") }, modifier = Modifier.fillMaxWidth()) {
+                    Text("View all-drive coverage heatmap")
+                }
+            }
             items(drives, key = { it.id }) { d ->
                 DriveCard(
                     d, useMph,
+                    onOpen = { if (d.hasCapture) onOpenReplay(d.id) },
                     onReupload = { vm.reuploadDrive(d.id) },
                     onDelete = { vm.deleteDrive(d.id) },
                 )
@@ -87,8 +95,9 @@ fun DrivesScreen(vm: MainViewModel, onBack: () -> Unit) {
 }
 
 @Composable
-private fun DriveCard(drive: DriveSession, useMph: Boolean, onReupload: () -> Unit, onDelete: () -> Unit) {
+private fun DriveCard(drive: DriveSession, useMph: Boolean, onOpen: () -> Unit, onReupload: () -> Unit, onDelete: () -> Unit) {
     Card(
+        modifier = if (drive.hasCapture) Modifier.clickable { onOpen() } else Modifier,
         shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {

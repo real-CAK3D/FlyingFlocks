@@ -59,6 +59,11 @@ class BiscuitMeshApp : Application() {
         com.cak3d.biscuitmesh.data.WatchlistStore(this)
     }
 
+    /** Learned TPMS sensor-to-tire assignments for the tire dashboard. */
+    val tpmsStore: com.cak3d.biscuitmesh.data.TpmsStore by lazy {
+        com.cak3d.biscuitmesh.data.TpmsStore(this)
+    }
+
     /** Local-only log of devices seen inside dead zones — never uploaded. */
     val deadZoneLogStore: com.cak3d.biscuitmesh.data.DeadZoneLogStore by lazy {
         com.cak3d.biscuitmesh.data.DeadZoneLogStore(this)
