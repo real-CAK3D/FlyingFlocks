@@ -319,6 +319,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { appRef.settingsStore.setPhoneSensors(enabled) }
     }
 
+    /** Use a connected board's GPS (Meshtastic node / dongle) as the wardrive fix. */
+    val boardGps: Flow<Boolean> = appRef.settingsStore.boardGps
+    fun setBoardGps(enabled: Boolean) { viewModelScope.launch { appRef.settingsStore.setBoardGps(enabled) } }
+    /** Whether a board fix is live right now (for the Settings status line). */
+    fun boardGpsFixLive(): Boolean = appRef.locationProvider.oneShotBoardFix() != null ||
+        appRef.mesh.myGpsFix() != null
+
     fun startWardrive(mode: WardriveMode) {
         appRef.wardrive?.start(mode, phoneSensors.value)
         // Keep scanning alive with the screen off / app backgrounded.

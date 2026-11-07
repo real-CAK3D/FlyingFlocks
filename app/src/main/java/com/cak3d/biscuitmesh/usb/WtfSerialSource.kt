@@ -45,7 +45,7 @@ data class WtfDetection(
 )
 
 /** The dongle's GPS state, from its board-info report. */
-data class WtfGps(val present: Boolean, val fix: Boolean, val sats: Int)
+data class WtfGps(val present: Boolean, val fix: Boolean, val sats: Int, val lat: Double? = null, val lon: Double? = null)
 
 /** Connection state of the dongle link, surfaced to the UI. */
 enum class WtfLinkState { DISCONNECTED, CONNECTING, CONNECTED }
@@ -228,7 +228,9 @@ class WtfSerialSource(context: Context, private val scope: CoroutineScope) {
             "sd_det" -> emit(ev, live = false)   // a line of the board's microSD detection log
             "sd_info" -> {                        // board status, incl. GPS module/fix/sats
                 if (ev.has("gps") || ev.has("gps_fix") || ev.has("sats")) {
-                    val g = WtfGps(ev.optInt("gps") == 1, ev.optInt("gps_fix") == 1, ev.optInt("sats"))
+                    val g = WtfGps(ev.optInt("gps") == 1, ev.optInt("gps_fix") == 1, ev.optInt("sats"),
+                        if (ev.has("lat") && !ev.isNull("lat")) ev.optDouble("lat") else null,
+                        if (ev.has("lon") && !ev.isNull("lon")) ev.optDouble("lon") else null)
                     _gps.value = g
                     android.util.Log.d(TAG, "GPS present=${g.present} fix=${g.fix} sats=${g.sats}")
                 }

@@ -19,6 +19,7 @@ class SettingsStore(private val context: Context) {
     private val wdgAutoUploadKey = booleanPreferencesKey("wdg_auto_upload")
     private val wdgLastUploadKey = stringPreferencesKey("wdg_last_upload")
     private val phoneSensorsKey = booleanPreferencesKey("phone_sensors_enabled")
+    private val boardGpsKey = booleanPreferencesKey("board_gps_enabled")
     private val hudEnabledKey = booleanPreferencesKey("hud_enabled")
     private val useMphKey = booleanPreferencesKey("use_mph")
     private val voiceAlertsKey = booleanPreferencesKey("voice_alerts")
@@ -73,6 +74,14 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setPhoneSensors(enabled: Boolean) {
         context.settingsDataStore.edit { it[phoneSensorsKey] = enabled }
+    }
+
+    /** Use a board's GPS (Meshtastic node / dongle) as the wardrive location when available. */
+    val boardGps: Flow<Boolean> =
+        context.settingsDataStore.data.map { it[boardGpsKey] ?: false }
+
+    suspend fun setBoardGps(enabled: Boolean) {
+        context.settingsDataStore.edit { it[boardGpsKey] = enabled }
     }
 
     /** Show the speed + speed-limit HUD on the wardrive map. On by default. */

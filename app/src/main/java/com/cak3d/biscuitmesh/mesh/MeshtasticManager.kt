@@ -74,6 +74,18 @@ class MeshtasticManager(private val context: Context, private val adapter: Bluet
         _link.value = MeshLinkState.DISCONNECTED
     }
 
+    // The connected (local) node's number, from MyNodeInfo — so we can read OUR node's GPS
+    // out of the NodeDB and use it as the phone's location when board-GPS mode is on.
+    @Volatile private var myNodeNum: Long = 0L
+
+    /** OUR node's current GPS fix, or null (not connected / no my_info / node has no position). */
+    fun myGpsFix(): Pair<Double, Double>? {
+        if (_link.value != MeshLinkState.CONNECTED) return null
+        val n = _nodes.value[myNodeNum] ?: return null
+        val la = n.lat; val lo = n.lon
+        return if (la != null && lo != null) la to lo else null
+    }
+
     private var gatt: BluetoothGatt? = null
     private var toRadio: BluetoothGattCharacteristic? = null
     private var fromRadio: BluetoothGattCharacteristic? = null
@@ -279,6 +291,7 @@ class MeshtasticManager(private val context: Context, private val adapter: Bluet
         while (r.has()) {
             val (field, wire) = r.tag()
             when {
+                field == 3 && wire == 2 -> parseMyInfo(r.lenBytes())    // my_info (MyNodeInfo)
                 field == 4 && wire == 2 -> parseNodeInfo(r.lenBytes())  // node_info
                 field == 11 && wire == 2 -> parsePacket(r.lenBytes())    // packet (MeshPacket)
                 else -> r.skip(wire)
@@ -348,6 +361,18 @@ class MeshtasticManager(private val context: Context, private val adapter: Bluet
         pbTag(o, field, 5)
         o.write((value and 0xFF).toInt()); o.write(((value ushr 8) and 0xFF).toInt())
         o.write(((value ushr 16) and 0xFF).toInt()); o.write(((value ushr 24) and 0xFF).toInt())
+    }
+
+    // MyNodeInfo { my_node_num = 1 } — identifies which NodeDB entry is us.
+    private fun parseMyInfo(buf: ByteArray) {
+        val r = Pb(buf)
+        while (r.has()) {
+            val (field, wire) = r.tag()
+            when {
+                field == 1 && wire == 0 -> myNodeNum = r.varint()
+                else -> r.skip(wire)
+            }
+        }
     }
 
     private fun parseNodeInfo(buf: ByteArray) {

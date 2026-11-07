@@ -245,6 +245,16 @@ class BiscuitMeshApp : Application() {
     override fun onCreate() {
         super.onCreate()
         usbDetector.start()
+
+        // Board GPS: when enabled, the wardrive takes its fix from a connected Meshtastic
+        // node's GPS (or the dongle's, if its firmware reports coordinates) instead of the phone.
+        locationProvider.externalFix = {
+            mesh.myGpsFix() ?: wtfSerial.gps.value?.let { g ->
+                val la = g.lat; val lo = g.lon
+                if (la != null && lo != null) la to lo else null
+            }
+        }
+        appScope.launch { settingsStore.boardGps.collect { locationProvider.useBoard = it } }
         // Load the bundled IEEE OUI registry off the main thread for vendor lookups.
         appScope.launch(Dispatchers.IO) { com.cak3d.biscuitmesh.sensors.OuiDb.ensureLoaded(this@BiscuitMeshApp) }
         // Resume the Flock online layer if the operator has used it before.

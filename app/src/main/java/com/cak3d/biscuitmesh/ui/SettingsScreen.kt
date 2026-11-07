@@ -158,6 +158,7 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit, onOpenDeadZones: () ->
                         )
                     }
                     2 -> {
+                        LocationSourceSection(vm)
                         MeshSection(vm)
                         WtfSection(vm)
                     }
@@ -425,6 +426,23 @@ private fun ExportSection(vm: MainViewModel) {
                 Text("Cameras KML")
             }
         }
+    }
+}
+
+@Composable
+private fun LocationSourceSection(vm: MainViewModel) {
+    val boardGps by vm.boardGps.collectAsStateWithLifecycle(initialValue = false)
+    SectionCard(
+        title = "Location source",
+        subtitle = "The map uses your phone's GPS by default. Turn this on to wardrive off a " +
+            "connected board's GPS instead — your Meshtastic node's position (or the dongle's, once " +
+            "its firmware reports coordinates). The phone fix is always kept as a fallback.",
+    ) {
+        ToggleRow(
+            "Use board GPS when available",
+            if (boardGps) "Meshtastic node / dongle GPS feeds the map" else "Phone GPS",
+            boardGps,
+        ) { vm.setBoardGps(it) }
     }
 }
 
