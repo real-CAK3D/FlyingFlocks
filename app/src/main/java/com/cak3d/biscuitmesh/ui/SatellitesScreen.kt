@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -64,7 +65,7 @@ private fun constColor(c: String): Color = when (c) {
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SatellitesScreen(vm: MainViewModel, onBack: () -> Unit) {
+fun SatellitesScreen(vm: MainViewModel, onBack: () -> Unit, onOpenGlobe: () -> Unit = {}) {
     val gnss by vm.gnssState.collectAsStateWithLifecycle()
     DisposableEffect(Unit) {
         vm.startGnss()
@@ -76,6 +77,9 @@ fun SatellitesScreen(vm: MainViewModel, onBack: () -> Unit) {
                 title = { Text("GPS Satellites") },
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
+                },
+                actions = {
+                    IconButton(onClick = onOpenGlobe) { Icon(Icons.Default.Public, contentDescription = "3D globe view") }
                 },
             )
         },

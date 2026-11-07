@@ -46,6 +46,10 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+/**
+ * Caw — chat carried over your Meshtastic mesh (off-grid, no internet). Needs a paired
+ * Meshtastic node; for the online room that anyone with the app can use, see Squawk.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MeshChatScreen(vm: MainViewModel, onBack: () -> Unit) {

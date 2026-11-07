@@ -101,13 +101,25 @@ class ProgressManager(
     }
 
     /** Standalone phone scans (WiFi/BT tabs) feed the same tracks. */
-    fun recordPhoneHit(kind: SampleKind, id: String, label: String, channel: Int = 0) {
+    fun recordPhoneHit(kind: SampleKind, id: String, label: String, channel: Int = 0, standard: String = "") {
         val track = when (kind) {
             SampleKind.AP, SampleKind.STATION -> wifiTrack(channel >= 32)
             SampleKind.BT -> ProgressTrack.BLUETOOTH
             SampleKind.RF -> return   // phone radios never emit sub-GHz
         }
-        if (award(track, "s:$id", if (label.isBlank()) 7 else 0)) commit()
+        val bonus = (if (label.isBlank()) 7 else 0) + modernWifiBonus(standard)
+        if (award(track, "s:$id", bonus)) commit()
+    }
+
+    /**
+     * Wi-Fi 6/6E/7 are the newer, rarer generations — a one-time XP kicker on top of the band XP
+     * the first time each such AP is seen, so catching modern gear actually moves your rank.
+     */
+    private fun modernWifiBonus(standard: String): Int = when (standard) {
+        "Wi-Fi 6" -> 4
+        "Wi-Fi 6E" -> 7
+        "Wi-Fi 7" -> 10
+        else -> 0
     }
 
     /** 5 GHz networks (channel >= 32) grind the rarer WIFI_5 track; everything else 2.4 GHz. */

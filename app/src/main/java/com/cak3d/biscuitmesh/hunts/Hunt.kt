@@ -18,31 +18,59 @@ data class HuntInputs(
     val signals: Int get() = wifi + bt
 }
 
-/** One bounty: a title, a target, and how to score it from the live stats. */
+/**
+ * One bounty. Instead of a single fixed goal, a hunt has a ladder of [tiers] that rolls up:
+ * clear one target and the next, bigger one takes its place (5 → 10 → 15 …). Your level on a
+ * hunt is how many rungs you've cleared; the hunt is "maxed" once you pass the last rung.
+ */
 data class Hunt(
     val id: String,
     val title: String,
-    val blurb: String,
+    /** A short unit noun for the thing being counted, e.g. "Wi-Fi networks", "km of road". */
+    val unit: String,
     val emoji: String,
-    val target: Int,
+    val tiers: List<Int>,
     val tier: Tier,
     val metric: (HuntInputs) -> Int,
 ) {
     enum class Tier(val label: String) { BRONZE("Bronze"), SILVER("Silver"), GOLD("Gold"), LEGEND("Legend") }
+
+    /** Rungs cleared at [value] (0..tiers.size). */
+    fun levelAt(value: Int): Int = tiers.count { value >= it }
+
+    /** The target you're currently working toward (the last rung once maxed). */
+    fun targetAt(value: Int): Int = tiers.firstOrNull { value < it } ?: tiers.last()
+
+    /** The lower bound of the current rung, so the bar fills within this rung only. */
+    fun floorAt(value: Int): Int {
+        val idx = tiers.indexOfFirst { value < it }
+        return if (idx <= 0) 0 else tiers[idx - 1]
+    }
+
+    fun maxed(value: Int): Boolean = value >= tiers.last()
+
+    /** 0f..1f within the current rung (full once maxed). */
+    fun progressAt(value: Int): Float {
+        if (maxed(value)) return 1f
+        val lo = floorAt(value)
+        val hi = targetAt(value)
+        val span = (hi - lo).coerceAtLeast(1)
+        return ((value - lo).toFloat() / span).coerceIn(0f, 1f)
+    }
 }
 
 /** The bounty board. Progress is derived live from the grind — no claiming needed. */
 val HUNTS: List<Hunt> = listOf(
-    Hunt("scout", "Scout", "Catch 100 Wi-Fi networks", "📡", 100, Hunt.Tier.BRONZE) { it.wifi },
-    Hunt("bluefinch", "Blue Finch", "Catch 100 Bluetooth devices", "🦷", 100, Hunt.Tier.BRONZE) { it.bt },
-    Hunt("mesh", "Mesh Weaver", "Make contact with a Meshtastic node", "🕸️", 1, Hunt.Tier.BRONZE) { it.mesh },
-    Hunt("subghz", "Ghost in the Band", "Catch a sub-GHz signal on the CC1101", "📻", 1, Hunt.Tier.BRONZE) { it.rf },
-    Hunt("band5", "High Band", "Catch 50 networks on 5 GHz", "📶", 50, Hunt.Tier.SILVER) { it.wifi5 },
-    Hunt("shutterbug", "Shutterbug", "Find 10 cameras of any kind", "📷", 10, Hunt.Tier.SILVER) { it.cameras },
-    Hunt("roadwarrior", "Road Warrior", "Survey 50 km of road", "🛣️", 50, Hunt.Tier.SILVER) { it.totalKm.toInt() },
-    Hunt("flockbuster", "Flock Buster", "Spot 5 Flock / ALPR cameras", "🚨", 5, Hunt.Tier.GOLD) { it.flock },
-    Hunt("centurion", "Centurion", "Reach rank 10", "🏅", 10, Hunt.Tier.GOLD) { it.rank },
-    Hunt("thousandaire", "Thousandaire", "Log 1,000 signals total", "💠", 1000, Hunt.Tier.GOLD) { it.signals },
-    Hunt("marathon", "Marathon", "Survey 250 km of road", "🏁", 250, Hunt.Tier.LEGEND) { it.totalKm.toInt() },
-    Hunt("apex", "Apex Predator", "Climb to rank 30", "🦅", 30, Hunt.Tier.LEGEND) { it.rank },
+    Hunt("scout", "Scout", "Wi-Fi networks", "📡", listOf(100, 250, 500, 1000, 2500, 5000, 10000), Hunt.Tier.BRONZE) { it.wifi },
+    Hunt("bluefinch", "Blue Finch", "Bluetooth devices", "🦷", listOf(100, 250, 500, 1000, 2500), Hunt.Tier.BRONZE) { it.bt },
+    Hunt("mesh", "Mesh Weaver", "Meshtastic contacts", "🕸️", listOf(1, 2, 5, 10), Hunt.Tier.BRONZE) { it.mesh },
+    Hunt("subghz", "Ghost in the Band", "sub-GHz signals", "📻", listOf(1, 5, 10, 25, 50), Hunt.Tier.BRONZE) { it.rf },
+    Hunt("band5", "High Band", "5 GHz networks", "📶", listOf(50, 100, 250, 500, 1000), Hunt.Tier.SILVER) { it.wifi5 },
+    Hunt("shutterbug", "Shutterbug", "cameras", "📷", listOf(10, 25, 50, 100), Hunt.Tier.SILVER) { it.cameras },
+    Hunt("roadwarrior", "Road Warrior", "km of road", "🛣️", listOf(50, 100, 250, 500), Hunt.Tier.SILVER) { it.totalKm.toInt() },
+    Hunt("flockbuster", "Flock Buster", "Flock / ALPR cameras", "🚨", listOf(5, 10, 15, 25, 50), Hunt.Tier.GOLD) { it.flock },
+    Hunt("centurion", "Centurion", "rank", "🏅", listOf(10, 20, 30, 40, 50), Hunt.Tier.GOLD) { it.rank },
+    Hunt("thousandaire", "Thousandaire", "signals total", "💠", listOf(1000, 5000, 10000, 25000, 50000), Hunt.Tier.GOLD) { it.signals },
+    Hunt("marathon", "Marathon", "km of road", "🏁", listOf(250, 500, 1000, 2000), Hunt.Tier.LEGEND) { it.totalKm.toInt() },
+    Hunt("apex", "Apex Predator", "rank", "🦅", listOf(30, 50, 75, 100), Hunt.Tier.LEGEND) { it.rank },
 )

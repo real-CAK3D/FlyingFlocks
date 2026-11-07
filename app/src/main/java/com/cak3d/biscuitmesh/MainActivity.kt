@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.BluetoothSearching
@@ -69,6 +70,7 @@ import com.cak3d.biscuitmesh.ui.FindsScreen
 import com.cak3d.biscuitmesh.ui.FleetScreen
 import com.cak3d.biscuitmesh.ui.AircraftScreen
 import com.cak3d.biscuitmesh.ui.AuroraScreen
+import com.cak3d.biscuitmesh.ui.GlobeScreen
 import com.cak3d.biscuitmesh.ui.CrewScreen
 import com.cak3d.biscuitmesh.ui.DeadZonesScreen
 import com.cak3d.biscuitmesh.ui.LabBenchScreen
@@ -76,7 +78,11 @@ import com.cak3d.biscuitmesh.ui.DriveReplayScreen
 import com.cak3d.biscuitmesh.ui.HuntsScreen
 import com.cak3d.biscuitmesh.ui.LedgerScreen
 import com.cak3d.biscuitmesh.ui.LiveScreen
+import com.cak3d.biscuitmesh.ui.FlockChatScreen
 import com.cak3d.biscuitmesh.ui.MeshChatScreen
+import com.cak3d.biscuitmesh.ui.ProfileScreen
+import com.cak3d.biscuitmesh.ui.WhisperListScreen
+import com.cak3d.biscuitmesh.ui.WhisperThreadScreen
 import com.cak3d.biscuitmesh.ui.SignalDetailScreen
 import com.cak3d.biscuitmesh.ui.TpmsScreen
 import com.cak3d.biscuitmesh.ui.WatchlistScreen
@@ -197,8 +203,8 @@ private fun MainShell(vm: MainViewModel) {
                         IconButton(onClick = { nav.navigate("drives") }) {
                             Icon(Icons.Default.History, contentDescription = "Drives")
                         }
-                        IconButton(onClick = { nav.navigate("stats") }) {
-                            Icon(Icons.Default.Insights, contentDescription = "Stats & Data")
+                        IconButton(onClick = { nav.navigate("profile") }) {
+                            Icon(Icons.Default.AccountCircle, contentDescription = "Profile")
                         }
                         IconButton(onClick = { nav.navigate("sensors") }) {
                             Icon(Icons.Default.SatelliteAlt, contentDescription = "Sensors & Sky")
@@ -326,7 +332,10 @@ private fun MainShell(vm: MainViewModel) {
                 composable("deadzones") { DeadZonesScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("labbench") { LabBenchScreen(onBack = { nav.popBackStack() }) }
                 composable("sensors") { SensorsHubScreen(onBack = { nav.popBackStack() }, onOpen = { nav.navigate(it) }) }
-                composable("satellites") { SatellitesScreen(vm = vm, onBack = { nav.popBackStack() }) }
+                composable("satellites") {
+                    SatellitesScreen(vm = vm, onBack = { nav.popBackStack() }, onOpenGlobe = { nav.navigate("globe") })
+                }
+                composable("globe") { GlobeScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("aircraft") { AircraftScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("aurora") { AuroraScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("locator") { LocatorScreen(vm = vm, onBack = { nav.popBackStack() }) }
@@ -349,6 +358,23 @@ private fun MainShell(vm: MainViewModel) {
                 composable("tiredash") { TpmsScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("ledger") { LedgerScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("meshchat") { MeshChatScreen(vm = vm, onBack = { nav.popBackStack() }) }
+                composable("squawk") { FlockChatScreen(vm = vm, onBack = { nav.popBackStack() }) }
+                composable("whisper") {
+                    WhisperListScreen(vm = vm, onBack = { nav.popBackStack() },
+                        onOpen = { id, h ->
+                            nav.navigate("dm/${java.net.URLEncoder.encode(id, "UTF-8")}/${java.net.URLEncoder.encode(h, "UTF-8")}")
+                        })
+                }
+                composable("dm/{id}/{handle}") { entry ->
+                    val id = java.net.URLDecoder.decode(entry.arguments?.getString("id") ?: "", "UTF-8")
+                    val h = java.net.URLDecoder.decode(entry.arguments?.getString("handle") ?: "", "UTF-8")
+                    WhisperThreadScreen(vm = vm, otherId = id, otherHandle = h, onBack = { nav.popBackStack() })
+                }
+                composable("profile") {
+                    ProfileScreen(vm = vm, onBack = { nav.popBackStack() },
+                        onOpenStats = { nav.navigate("stats") },
+                        onOpenFlock = { nav.navigate("crew") })
+                }
                 composable("watchlist") { WatchlistScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("signaldetail/{id}") { entry ->
                     val id = java.net.URLDecoder.decode(entry.arguments?.getString("id") ?: "", "UTF-8")

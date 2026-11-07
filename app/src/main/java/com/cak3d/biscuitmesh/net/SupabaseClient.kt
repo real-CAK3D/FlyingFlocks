@@ -40,6 +40,11 @@ object SupabaseClient {
         post("$URL_BASE/rest/v1/rpc/$fn", body, token)
     }
 
+    /** Insert a row (no conflict handling); returns nothing. */
+    suspend fun insert(table: String, body: String, token: String): Unit = withContext(Dispatchers.IO) {
+        post("$URL_BASE/rest/v1/$table", body, token, prefer = "return=minimal")
+    }
+
     /** Upsert a row (merge on conflict). */
     suspend fun upsert(table: String, body: String, token: String, onConflict: String? = null): Unit = withContext(Dispatchers.IO) {
         val u = "$URL_BASE/rest/v1/$table" + (if (onConflict != null) "?on_conflict=$onConflict" else "")

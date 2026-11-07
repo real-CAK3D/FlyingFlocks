@@ -15,14 +15,17 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Flight
+import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Insights
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Nightlight
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Radar
 import androidx.compose.material.icons.filled.SatelliteAlt
 import androidx.compose.material.icons.filled.Science
@@ -54,8 +57,11 @@ fun SensorsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
         HubEntry("Tracker Check", "Is a BLE tracker following you? Best-effort anti-stalking", Icons.Default.Radar, "trackers", Color(0xFFFF5470)),
         HubEntry("Aurora", "Live space weather — can you see the northern lights tonight?", Icons.Default.Nightlight, "aurora", Color(0xFFA855F7)),
         HubEntry("GPS Satellites", "Which satellites your GPS is locked onto", Icons.Default.SatelliteAlt, "satellites", Color(0xFF22D3EE)),
+        HubEntry("Orbit", "A live 3D globe of the satellites overhead", Icons.Default.Public, "globe", Color(0xFF38BDF8)),
         HubEntry("Aircraft Overhead", "Live ADS-B — planes in the air near you", Icons.Default.Flight, "aircraft", Color(0xFF38BDF8)),
-        HubEntry("Caw", "Broadcast text over your Meshtastic mesh — no internet", Icons.Default.Forum, "meshchat", Color(0xFF00E5A0)),
+        HubEntry("Caw", "Chat over your Meshtastic mesh — off-grid, no internet", Icons.Default.Forum, "meshchat", Color(0xFF00E5A0)),
+        HubEntry("Squawk", "Open chat with anyone running the app — online", Icons.Default.Campaign, "squawk", Color(0xFF5FD36A)),
+        HubEntry("Whisper", "Private 1:1 chat — swap Band codes & Meshtastic info", Icons.Default.Lock, "whisper", Color(0xFF86EFAC)),
         HubEntry("Flock", "Ring a band, see the wings you tail live on the map", Icons.Default.Groups, "crew", Color(0xFF34D399)),
         HubEntry("Hunts", "Bounty board — challenges that tick up as you drive", Icons.Default.EmojiEvents, "hunts", Color(0xFFFFD166)),
         HubEntry("Watchlist", "Flag MACs or names and spot them in range", Icons.Default.Visibility, "watchlist", Color(0xFF34D399)),

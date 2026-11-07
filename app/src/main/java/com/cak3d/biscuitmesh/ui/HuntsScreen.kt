@@ -74,7 +74,8 @@ fun HuntsScreen(vm: MainViewModel, onBack: () -> Unit) {
     )
 
     val scored = HUNTS.map { it to it.metric(inputs) }
-    val done = scored.count { (h, c) -> c >= h.target }
+    val maxed = scored.count { (h, c) -> h.maxed(c) }
+    val tiersCleared = scored.sumOf { (h, c) -> h.levelAt(c) }
 
     Scaffold(
         containerColor = Color.Transparent,
@@ -99,8 +100,9 @@ fun HuntsScreen(vm: MainViewModel, onBack: () -> Unit) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text("BOUNTY BOARD", style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.primary, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
-                        Text("$done / ${HUNTS.size} complete", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                        Text("Hunts tick up on their own as you drive and grind — no need to claim anything.",
+                        Text("$tiersCleared tiers cleared · $maxed / ${HUNTS.size} maxed",
+                            style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        Text("Hunts tick up on their own as you drive and grind. Clear a target and it rolls up to the next — 5 → 10 → 15 — so there's always a next rung.",
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f))
                     }
                 }
@@ -117,8 +119,10 @@ private fun remember0(vm: MainViewModel) = androidx.compose.runtime.remember(vm)
 
 @Composable
 private fun HuntRow(h: Hunt, current: Int) {
-    val complete = current >= h.target
-    val frac = (current.toFloat() / h.target).coerceIn(0f, 1f)
+    val maxed = h.maxed(current)
+    val level = h.levelAt(current)
+    val target = h.targetAt(current)
+    val frac = h.progressAt(current)
     val tc = tierColor(h.tier)
     Card(Modifier.fillMaxWidth(), shape = appCardShape(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
@@ -128,23 +132,29 @@ private fun HuntRow(h: Hunt, current: Int) {
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(h.title, style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold, color = if (complete) tc else MaterialTheme.colorScheme.onSurface)
+                            fontWeight = FontWeight.Bold, color = if (maxed) tc else MaterialTheme.colorScheme.onSurface)
+                        if (level > 0) Text("Lv $level", style = MaterialTheme.typography.labelSmall,
+                            color = tc, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
                         Text(h.tier.label.uppercase(), style = MaterialTheme.typography.labelSmall,
-                            color = tc, fontFamily = FontFamily.Monospace)
+                            color = tc.copy(alpha = 0.7f), fontFamily = FontFamily.Monospace)
                     }
-                    Text(h.blurb, style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f))
+                    Text(
+                        if (maxed) "Maxed — all ${h.tiers.size} rungs cleared"
+                        else "Next: ${target} ${h.unit}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+                    )
                 }
-                Text(if (complete) "✓" else "${(frac * 100).toInt()}%",
+                Text(if (maxed) "★" else "${(frac * 100).toInt()}%",
                     style = MaterialTheme.typography.titleMedium, fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Bold, color = if (complete) tc else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                    fontWeight = FontWeight.Bold, color = if (maxed) tc else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
             }
             Box(Modifier.fillMaxWidth().height(7.dp).clip(RoundedCornerShape(4.dp))
                 .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f))) {
                 Box(Modifier.fillMaxWidth(frac).height(7.dp).clip(RoundedCornerShape(4.dp)).background(tc))
             }
             Text(
-                if (complete) "Done — ${h.target}" else "$current / ${h.target}",
+                if (maxed) "$current ${h.unit}" else "$current / $target ${h.unit}",
                 style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
             )

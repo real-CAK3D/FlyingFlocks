@@ -353,10 +353,23 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             endMs = System.currentTimeMillis(),
             wifiCount = wifi,
             btCount = bt,
-            cameraCount = appRef.hazards?.hazards?.value?.size ?: 0,
+            cameraCount = camerasAlongTrack(track),
             distanceM = trackDistance(track),
         )
         appRef.drivesStore.save(session, csv)
+    }
+
+    /** Cameras actually passed on this drive — ones within ~150 m of the track, not the whole DB. */
+    private fun camerasAlongTrack(track: List<LatLon>): Int {
+        val hz = appRef.hazards?.hazards?.value ?: return 0
+        if (hz.isEmpty() || track.isEmpty()) return 0
+        val out = FloatArray(1)
+        return hz.count { h ->
+            track.any { p ->
+                android.location.Location.distanceBetween(p.lat, p.lon, h.lat, h.lon, out)
+                out[0] <= 150f
+            }
+        }
     }
 
     private fun trackDistance(track: List<LatLon>): Double {
@@ -508,6 +521,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
     val flockHandle: Flow<String> = appRef.settingsStore.flockHandleFlow
     fun setFlockHandle(name: String) = viewModelScope.launch { runCatching { appRef.crew.setHandle(name) } }
+
+    /** Start the online layer (idempotent) so the flock chat polls even when sharing is off. */
+    fun activateCrew() = appRef.crew.activate()
+    fun sendFlockChat(text: String) = viewModelScope.launch { runCatching { appRef.crew.sendMessage(text) } }
+    fun sendWhisper(otherId: String, text: String) = viewModelScope.launch { runCatching { appRef.crew.sendDm(otherId, text) } }
 
     // --- Device detail -----------------------------------------------------
     fun deviceHistory(id: String): com.cak3d.biscuitmesh.wardrive.DeviceHistory? = appRef.wardrive?.history(id)

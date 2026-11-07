@@ -42,6 +42,15 @@ data class LeaderRow(val rank: Int, val handle: String, val score: Long, val wif
 /** The flock leaderboard: the top wings, plus where you sit. */
 data class Leaderboard(val total: Int, val top: List<LeaderRow>, val me: LeaderRow?)
 
+/** One message in the flock's global chat room. */
+data class ChatMessage(val id: Long, val author: String, val handle: String?, val body: String, val ts: Long, val mine: Boolean)
+
+/** Another wing you can open a private whisper with. */
+data class WingContact(val userId: String, val handle: String)
+
+/** One message in a private 1:1 whisper. */
+data class DmMessage(val id: Long, val sender: String, val recipient: String, val body: String, val ts: Long, val mine: Boolean)
+
 /**
  * The "Flock" online layer on theGarden Supabase: an anonymous identity per install, one-time
  * band codes to let a wing tail you, live positions, operator count and all-time totals.
@@ -77,6 +86,8 @@ class CrewManager(
     val feed: StateFlow<List<FeedItem>> = _feed.asStateFlow()
     private val _season = MutableStateFlow<SeasonStanding?>(null)
     val season: StateFlow<SeasonStanding?> = _season.asStateFlow()
+    private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
+    val messages: StateFlow<List<ChatMessage>> = _messages.asStateFlow()
 
     val myUserId: String? get() = session?.userId
 
@@ -112,6 +123,7 @@ class CrewManager(
                 _board.value = leaderboard()
                 _feed.value = globalFeed()
                 _season.value = seasonStanding()
+                _messages.value = chatMessages()
             }.isSuccess
             if (ok) {
                 failures = 0
@@ -245,6 +257,92 @@ class CrewManager(
         val s = ensure()
         val o = JSONObject(SupabaseClient.rpc("ff_season_standing", "{}", s.accessToken))
         return SeasonStanding(o.optString("season"), o.optInt("mine_season"), o.optInt("mine_total"), o.optInt("total"))
+    }
+
+    // --- Flock chat (global room) -----------------------------------------
+    private fun parseTs(s: String): Long = runCatching {
+        java.time.OffsetDateTime.parse(s).toInstant().toEpochMilli()
+    }.getOrElse {
+        runCatching { Instant.parse(s).toEpochMilli() }.getOrElse { System.currentTimeMillis() }
+    }
+
+    private suspend fun chatMessages(): List<ChatMessage> {
+        val s = ensure()
+        val arr = JSONArray(SupabaseClient.select(
+            "ff_messages", "select=id,author,handle,body,created_at&order=created_at.desc&limit=80", s.accessToken))
+        val out = ArrayList<ChatMessage>(arr.length())
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            val author = o.optString("author")
+            out.add(ChatMessage(
+                id = o.optLong("id"),
+                author = author,
+                handle = o.optString("handle").takeIf { it.isNotBlank() && it != "null" },
+                body = o.optString("body"),
+                ts = parseTs(o.optString("created_at")),
+                mine = author == s.userId,
+            ))
+        }
+        out.reverse() // oldest → newest for the chat list
+        return out
+    }
+
+    /** Post a message to the flock's global chat. Attributed to your handle if one is set. */
+    suspend fun sendMessage(text: String) {
+        val body = text.trim().take(500)
+        if (body.isEmpty()) return
+        val s = ensure()
+        val row = JSONObject().put("author", s.userId).put("body", body)
+        _handle.value?.takeIf { it.isNotBlank() }?.let { row.put("handle", it) }
+        SupabaseClient.insert("ff_messages", row.toString(), s.accessToken)
+        _messages.value = chatMessages() // reflect the new message right away
+    }
+
+    // --- Whisper (private 1:1) --------------------------------------------
+    /** Other wings with a public handle, as a directory to start a private whisper with. */
+    suspend fun wings(): List<WingContact> {
+        val s = ensure()
+        val arr = JSONArray(SupabaseClient.select(
+            "ff_profiles", "select=id,handle&handle=not.is.null&order=handle.asc", s.accessToken))
+        val out = ArrayList<WingContact>(arr.length())
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            val id = o.optString("id")
+            val h = o.optString("handle")
+            if (id.isBlank() || id == s.userId || h.isBlank()) continue
+            out.add(WingContact(id, h))
+        }
+        return out
+    }
+
+    /** The whisper thread between you and [otherId], oldest → newest. RLS already limits to your rows. */
+    suspend fun dmThread(otherId: String): List<DmMessage> {
+        val s = ensure()
+        val q = "select=id,sender,recipient,body,created_at" +
+            "&or=(sender.eq.$otherId,recipient.eq.$otherId)&order=created_at.asc&limit=200"
+        val arr = JSONArray(SupabaseClient.select("ff_dm", q, s.accessToken))
+        val out = ArrayList<DmMessage>(arr.length())
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            out.add(DmMessage(
+                id = o.optLong("id"),
+                sender = o.optString("sender"),
+                recipient = o.optString("recipient"),
+                body = o.optString("body"),
+                ts = parseTs(o.optString("created_at")),
+                mine = o.optString("sender") == s.userId,
+            ))
+        }
+        return out
+    }
+
+    /** Send a private whisper to [otherId]. */
+    suspend fun sendDm(otherId: String, text: String) {
+        val body = text.trim().take(1000)
+        if (body.isEmpty()) return
+        val s = ensure()
+        val row = JSONObject().put("sender", s.userId).put("recipient", otherId).put("body", body)
+        SupabaseClient.insert("ff_dm", row.toString(), s.accessToken)
     }
 
     suspend fun pushStats(wifi: Long, bt: Long, cameras: Long, drives: Long, km: Double) {

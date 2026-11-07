@@ -52,8 +52,12 @@ fun StatsScreen(vm: MainViewModel, onBack: () -> Unit) {
 
     val totalMeters = drives.sumOf { it.distanceM }
     val totalMs = drives.sumOf { it.durationMs }
-    val wifi = progress.radios.firstOrNull { it.track.short == "Wi-Fi" }?.count ?: 0
-    val bt = progress.radios.firstOrNull { it.track.short == "BT" }?.count ?: 0
+    // Wi-Fi is split across the 2.4 GHz and 5 GHz tracks; sum both (the old code looked for a
+    // "Wi-Fi" short code that doesn't exist, so this always read 0).
+    val wifi = progress.radios
+        .filter { it.track == com.cak3d.biscuitmesh.progress.ProgressTrack.WIFI_24 || it.track == com.cak3d.biscuitmesh.progress.ProgressTrack.WIFI_5 }
+        .sumOf { it.count }
+    val bt = progress.radios.firstOrNull { it.track == com.cak3d.biscuitmesh.progress.ProgressTrack.BLUETOOTH }?.count ?: 0
 
     fun writeTo(uri: android.net.Uri?, text: String, label: String) {
         if (uri == null) return
