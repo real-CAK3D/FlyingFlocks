@@ -100,6 +100,15 @@ class WardriveManager(
     private val _samples = MutableStateFlow<Map<String, WardriveSample>>(emptyMap())
     val samples: StateFlow<Map<String, WardriveSample>> = _samples.asStateFlow()
 
+    // The live, mutable sample set — the source of truth. Hits mutate this thread-safe
+    // map directly (cheap), and a throttled publisher copies it into [_samples] a few
+    // times a second. This is what keeps a dense area from wedging the UI: without it,
+    // every single hit copied the whole map and emitted a StateFlow change, firing a
+    // Compose recomposition per hit until the main thread stalled (ANR / "can't close it").
+    private val liveSamples = java.util.concurrent.ConcurrentHashMap<String, WardriveSample>()
+    @Volatile private var samplesDirty = false
+    private var pubJob: Job? = null
+
     // Per-device sighting history for the detail screen. A plain map (not a flow) so
     // recording every re-sighting here never triggers a UI/map recomposition.
     private class Hist(val firstMs: Long) {
@@ -210,6 +219,8 @@ class WardriveManager(
         lastProcessedMs = System.currentTimeMillis()
         suppressed = false
         lastTrackLat = null; lastTrackLon = null; lastTrackMs = 0L
+        liveSamples.clear()
+        samplesDirty = false
         _samples.value = emptyMap()
         _track.value = emptyList()
         _state.update {
@@ -275,14 +286,13 @@ class WardriveManager(
                 if (newEntries.isEmpty()) return@collect
                 lastProcessedMs = newEntries.maxOf { it.timeMs }
                 if (lat == null || lon == null) return@collect
-                var changed = false
                 val acc = curAcc
                 newEntries.forEach { e ->
                     val parsed = parseSample(e.message, lat, lon, acc, e.timeMs) ?: return@forEach
                     if (!matchesMode(parsed.kind, _state.value.mode)) return@forEach
-                    if (mergeSample(parsed.copy(sources = setOf(e.address)))) changed = true
+                    mergeSample(parsed.copy(sources = setOf(e.address)))
                 }
-                if (changed) recount()
+                // The throttled publisher picks up the change; no per-batch emit here.
             }
         }
 
@@ -297,8 +307,24 @@ class WardriveManager(
             }
         }
 
+        // Throttled publisher: push the live sample set to the map/UI at most ~twice a
+        // second, no matter how fast hits arrive. Coalescing here is what prevents the
+        // scan from flooding the main thread and freezing the app.
+        pubJob = scope.launch {
+            while (true) {
+                delay(500)
+                if (samplesDirty) { samplesDirty = false; publishSamples() }
+            }
+        }
+
         phoneOn = usePhone && phoneSensors != null
         if (phoneOn) startPhone(mode)
+    }
+
+    /** Copy the live sample set into the observed flow and refresh the counts. */
+    private fun publishSamples() {
+        _samples.value = HashMap(liveSamples)
+        recount()
     }
 
     fun stop() {
@@ -308,24 +334,32 @@ class WardriveManager(
         locJob?.cancel(); locJob = null
         logJob?.cancel(); logJob = null
         rescanJob?.cancel(); rescanJob = null
+        pubJob?.cancel(); pubJob = null
+        publishSamples()   // final flush so the map/counts settle on the last state
         _state.update { it.copy(active = false) }
     }
 
-    /** Adds a sample, or merges a new source into an existing one. Returns true if anything changed. */
+    /**
+     * Adds a sample, or merges a new source into an existing one, into the live map.
+     * Returns true if anything changed; a change just flags the set dirty — the throttled
+     * publisher pushes it to the UI, so this stays cheap however fast hits arrive.
+     */
     private fun mergeSample(s: WardriveSample): Boolean {
         recordHistory(s)   // every sighting feeds the detail-screen history (no UI emit)
-        val existing = _samples.value[s.id]
+        val existing = liveSamples[s.id]
         if (existing == null) {
             // First time we've seen this device this session — alert if it's on the watchlist.
             if (watchSet.isNotEmpty() &&
                 com.cak3d.biscuitmesh.data.WatchlistStore.matches(watchSet, s.id, s.label) != null) {
                 onWatchHit?.invoke(s)
             }
-            _samples.update { it + (s.id to s) }
+            liveSamples[s.id] = s
+            samplesDirty = true
             return true
         }
         if (!existing.sources.containsAll(s.sources)) {
-            _samples.update { it + (s.id to existing.copy(sources = existing.sources + s.sources)) }
+            liveSamples[s.id] = existing.copy(sources = existing.sources + s.sources)
+            samplesDirty = true
             return true
         }
         return false
@@ -355,11 +389,11 @@ class WardriveManager(
             hit.kind, hit.id, hit.label, lat, lon, hit.rssi, System.currentTimeMillis(), curAcc,
             channel = hit.channel, sources = setOf(PHONE_SOURCE),
         )
-        if (mergeSample(sample)) recount()
+        mergeSample(sample)   // dirty-flagged; the throttled publisher emits it
     }
 
     private fun recount() {
-        val vals = _samples.value.values
+        val vals = liveSamples.values
         val wifi = vals.count { it.kind == SampleKind.AP || it.kind == SampleKind.STATION }
         val bt = vals.count { it.kind == SampleKind.BT }
         val counts = HashMap<String, Int>()

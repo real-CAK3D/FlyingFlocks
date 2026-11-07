@@ -78,6 +78,14 @@
             android:exported="false"
             android:foregroundServiceType="location" />
 
+        <!-- Stop/Start scan buttons in the notification shade. -->
+        <receiver android:name=".ScanControlReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="com.cak3d.biscuitmesh.action.STOP_SCAN" />
+                <action android:name="com.cak3d.biscuitmesh.action.START_SCAN" />
+            </intent-filter>
+        </receiver>
+
         <!-- Home-screen widgets: tap-to-toggle scans, plus a rank/stats tile. -->
         <receiver android:name=".widget.WardriveWidget" android:exported="false" android:label="Flocks: Wardrive">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>

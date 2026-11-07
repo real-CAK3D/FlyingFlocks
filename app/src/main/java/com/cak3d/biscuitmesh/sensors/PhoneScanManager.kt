@@ -2,9 +2,15 @@ package com.cak3d.biscuitmesh.sensors
 
 import com.cak3d.biscuitmesh.progress.ProgressManager
 import com.cak3d.biscuitmesh.wardrive.SampleKind
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 
 /** One row in the live phone-scan list. */
 data class PhoneScanRow(
@@ -32,7 +38,19 @@ class PhoneScanManager(
     private val sensors: PhoneSensors,
     private val progress: ProgressManager?,
 ) {
+    // Hits arrive on two threads — Wi-Fi on the main thread, BLE on its callback thread —
+    // so every touch of [rows] is guarded. Nothing here runs the UI thread hot: hits just
+    // update the map and flag it dirty; a throttled job does the sorting and the single
+    // StateFlow emit. Scoring is handed to a serial background scope. Together this keeps
+    // a dense area from flooding the main thread and freezing the app.
     private val rows = LinkedHashMap<String, PhoneScanRow>()
+    private val lock = Any()
+    @Volatile private var dirty = false
+    private var pubJob: Job? = null
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    // One-at-a-time scoring so concurrent hits never race the progress state.
+    private val scoreScope = CoroutineScope(SupervisorJob() + Dispatchers.Default.limitedParallelism(1))
 
     private val _results = MutableStateFlow<List<PhoneScanRow>>(emptyList())
     val results: StateFlow<List<PhoneScanRow>> = _results.asStateFlow()
@@ -44,20 +62,38 @@ class PhoneScanManager(
         if (_scanning.value) return
         _scanning.value = true
         sensors.start(wifi, ble) { hit ->
-            rows[hit.id] = PhoneScanRow(hit.kind, hit.id, hit.label, hit.rssi, System.currentTimeMillis(), hit.channel, hit.security, hit.standard)
-            _results.value = rows.values.sortedByDescending { it.rssi }
-            progress?.recordPhoneHit(hit.kind, hit.id, hit.label, hit.channel, hit.standard)
+            synchronized(lock) {
+                rows[hit.id] = PhoneScanRow(hit.kind, hit.id, hit.label, hit.rssi, System.currentTimeMillis(), hit.channel, hit.security, hit.standard)
+            }
+            dirty = true
+            progress?.let { p ->
+                scoreScope.launch { p.recordPhoneHit(hit.kind, hit.id, hit.label, hit.channel, hit.standard) }
+            }
+        }
+        pubJob = scope.launch {
+            while (true) {
+                delay(400)
+                if (dirty) {
+                    dirty = false
+                    val snap = synchronized(lock) { rows.values.toList() }
+                    _results.value = snap.sortedByDescending { it.rssi }
+                }
+            }
         }
     }
 
     fun stop() {
         if (!_scanning.value) return
         sensors.stop()
+        pubJob?.cancel(); pubJob = null
         _scanning.value = false
+        // Final flush so the list settles on the last seen state.
+        val snap = synchronized(lock) { rows.values.toList() }
+        _results.value = snap.sortedByDescending { it.rssi }
     }
 
     fun clear() {
-        rows.clear()
+        synchronized(lock) { rows.clear() }
         _results.value = emptyList()
     }
 }

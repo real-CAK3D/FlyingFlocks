@@ -186,7 +186,30 @@ class BiscuitMeshApp : Application() {
         } else {
             appScope.launch { settingsStore.setPhoneSensors(true) }
             wd.start(mode, true); WardriveService.start(this)
+            ScanControlNotification.clearStopped(this)
         }
+        com.cak3d.biscuitmesh.widget.ScanWidgetBase.refreshAll(this)
+    }
+
+    /** Stop every phone-driven scan from the notification shade (the frozen-UI kill switch). */
+    fun stopScanFromNotification() {
+        runCatching { wardrive?.stop() }
+        runCatching { phoneScan.stop() }
+        WardriveService.stop(this)
+        com.cak3d.biscuitmesh.widget.ScanWidgetBase.refreshAll(this)
+        // Leave a one-tap "Start scan" notice behind so restarting is easy.
+        ScanControlNotification.showStopped(this)
+    }
+
+    /** Start a full wardrive (phone radios on) from the notification shade. */
+    fun startScanFromNotification() {
+        val wd = wardrive ?: return
+        if (!wd.state.value.active) {
+            appScope.launch { settingsStore.setPhoneSensors(true) }
+            wd.start(com.cak3d.biscuitmesh.wardrive.WardriveMode.ALL, true)
+            WardriveService.start(this)
+        }
+        ScanControlNotification.clearStopped(this)
         com.cak3d.biscuitmesh.widget.ScanWidgetBase.refreshAll(this)
     }
 

@@ -104,6 +104,8 @@ class WardriveService : Service() {
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentIntent(open)
             .setOngoing(true)
+            // Stop button in the shade — a kill switch that works even if the UI is bogged down.
+            .addAction(0, "◼ Stop scan", ScanControlReceiver.stopIntent(this))
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .build()
     }
