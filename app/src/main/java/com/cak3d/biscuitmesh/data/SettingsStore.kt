@@ -25,6 +25,7 @@ class SettingsStore(private val context: Context) {
     private val voiceAlertsKey = booleanPreferencesKey("voice_alerts")
     private val mapStyleKey = stringPreferencesKey("map_style")
     private val wtfSourceEnabledKey = booleanPreferencesKey("wtf_source_enabled")
+    private val marauderSourceEnabledKey = booleanPreferencesKey("marauder_source_enabled")
     private val keepAwakeKey = booleanPreferencesKey("keep_awake")
     private val vibrateAlertsKey = booleanPreferencesKey("vibrate_alerts")
     private val wigleAuthKey = stringPreferencesKey("wigle_auth")
@@ -122,6 +123,14 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setWtfSourceEnabled(enabled: Boolean) {
         context.settingsDataStore.edit { it[wtfSourceEnabledKey] = enabled }
+    }
+
+    /** Ingest live sightings from a plugged-in ESP Marauder onto the map. On by default. */
+    val marauderSourceEnabled: Flow<Boolean> =
+        context.settingsDataStore.data.map { it[marauderSourceEnabledKey] ?: true }
+
+    suspend fun setMarauderSourceEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit { it[marauderSourceEnabledKey] = enabled }
     }
 
     /** Keep the screen on everywhere in the app, not just on the wardrive map. Off by default. */

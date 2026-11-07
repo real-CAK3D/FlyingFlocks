@@ -161,6 +161,7 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit, onOpenDeadZones: () ->
                         LocationSourceSection(vm)
                         MeshSection(vm)
                         WtfSection(vm)
+                        MarauderSection(vm)
                     }
                     3 -> {
                         ExportSection(vm)
@@ -568,6 +569,65 @@ private fun WtfSection(vm: MainViewModel) {
             Icon(Icons.Default.FileUpload, contentDescription = null)
             Spacer(Modifier.width(8.dp))
             Text("Import What the Flock backup")
+        }
+    }
+}
+
+@Composable
+private fun MarauderSection(vm: MainViewModel) {
+    val link by vm.marauderLink.collectAsStateWithLifecycle()
+    val name by vm.marauderDeviceName.collectAsStateWithLifecycle()
+    val sourceOn by vm.marauderSourceEnabled.collectAsStateWithLifecycle()
+
+    val connected = link == com.cak3d.biscuitmesh.usb.WtfLinkState.CONNECTED
+    val connecting = link == com.cak3d.biscuitmesh.usb.WtfLinkState.CONNECTING
+
+    SectionCard(
+        title = "ESP Marauder",
+        subtitle = "Plug an ESP Marauder into the phone (USB-OTG). While a scan is running, " +
+            "the Wi-Fi and Bluetooth devices it sees drop onto your map, tagged with the " +
+            "phone's GPS. Works with CP210x and CH340 dev-kits and native-USB boards.",
+    ) {
+        val status = when {
+            connected -> name ?: "Connected"
+            connecting -> "Connecting…"
+            else -> "Not connected"
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Icon(
+                if (connected) Icons.Default.CheckCircle else Icons.Default.Usb,
+                contentDescription = null,
+                tint = if (connected) Color(0xFF3DDC84) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+            )
+            Text(status, style = MaterialTheme.typography.bodyMedium)
+        }
+
+        if (connected) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { vm.rescanMarauder() }, modifier = Modifier.weight(1f)) {
+                    Text("Scan")
+                }
+                OutlinedButton(onClick = { vm.stopMarauderScan() }, modifier = Modifier.weight(1f)) {
+                    Text("Stop scan")
+                }
+                OutlinedButton(onClick = { vm.disconnectMarauder() }, modifier = Modifier.weight(1f)) {
+                    Text("Disconnect")
+                }
+            }
+            Text(
+                "Start a wardrive to record what the Marauder finds — hits only land on the map " +
+                    "while a scan session is active.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+            )
+        } else {
+            Button(onClick = { vm.connectMarauder() }, enabled = !connecting, modifier = Modifier.fillMaxWidth()) {
+                Text("Connect Marauder")
+            }
+        }
+
+        ToggleRow("Plot Marauder sightings", "Add its live detections to the map", sourceOn) {
+            vm.setMarauderSourceEnabled(it)
         }
     }
 }

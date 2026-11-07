@@ -116,6 +116,11 @@ class BiscuitMeshApp : Application() {
     /** A Biscuit board attached over USB-serial (speaks the same CMD:/DATA: protocol as BLE). */
     val biscuitSerial: BiscuitSerialSource by lazy { BiscuitSerialSource(this, appScope) }
 
+    /** An ESP Marauder attached over USB-serial; its scan output drops onto the wardrive map. */
+    val marauderSerial: com.cak3d.biscuitmesh.usb.MarauderSerialSource by lazy {
+        com.cak3d.biscuitmesh.usb.MarauderSerialSource(this, appScope)
+    }
+
     /** Meshtastic mesh — connects to a node over BLE and reads its node database. */
     val mesh: com.cak3d.biscuitmesh.mesh.MeshtasticManager by lazy {
         com.cak3d.biscuitmesh.mesh.MeshtasticManager(this, bluetoothManager?.adapter)
@@ -231,6 +236,7 @@ class BiscuitMeshApp : Application() {
     }
 
     @Volatile private var wtfEnabled = true
+    @Volatile private var marauderEnabled = true
     @Volatile private var vibrateEnabled = true
 
     /** Short buzz for a camera alert (respects the vibrate-on-alert setting at the call site). */
@@ -330,6 +336,21 @@ class BiscuitMeshApp : Application() {
                 hazardStore.merge(listOf(
                     Hazard("wtf:${d.mac}", HazardKind.FLOCK, lat, lon, d.ssid.ifBlank { d.mac })
                 ))
+            }
+        }
+
+        // An ESP Marauder on USB streams scan output; each parsed sighting is geo-tagged with
+        // the phone's current fix (the Marauder has no GPS) and dropped onto the wardrive map,
+        // the same pipeline as a phone-radio hit. Only ingested while a scan session is active.
+        appScope.launch { settingsStore.marauderSourceEnabled.collect { marauderEnabled = it } }
+        appScope.launch {
+            marauderSerial.hits.collect { h ->
+                if (!marauderEnabled) return@collect
+                val kind = if (h.kind == com.cak3d.biscuitmesh.usb.MarauderKind.BT)
+                    com.cak3d.biscuitmesh.wardrive.SampleKind.BT
+                else com.cak3d.biscuitmesh.wardrive.SampleKind.AP
+                wardrive?.addExternalHit(kind, h.mac, h.label, h.rssi, h.channel,
+                    com.cak3d.biscuitmesh.usb.MARAUDER_SOURCE)
             }
         }
 

@@ -81,6 +81,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setWtfSourceEnabled(on: Boolean) { viewModelScope.launch { appRef.settingsStore.setWtfSourceEnabled(on) } }
 
+    /** Link state / name of a plugged-in ESP Marauder. */
+    val marauderLink: StateFlow<com.cak3d.biscuitmesh.usb.WtfLinkState> = appRef.marauderSerial.link
+    val marauderDeviceName: StateFlow<String?> = appRef.marauderSerial.deviceName
+
+    /** Whether the Marauder's live sightings are plotted on the map. On by default. */
+    val marauderSourceEnabled: StateFlow<Boolean> =
+        appRef.settingsStore.marauderSourceEnabled.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    fun setMarauderSourceEnabled(on: Boolean) { viewModelScope.launch { appRef.settingsStore.setMarauderSourceEnabled(on) } }
+    fun connectMarauder() { appRef.marauderSerial.connect() }
+    fun disconnectMarauder() { appRef.marauderSerial.disconnect() }
+    fun rescanMarauder() { appRef.marauderSerial.sendCmd("scanall") }
+    fun stopMarauderScan() { appRef.marauderSerial.sendCmd("stopscan") }
+
     // --- Screen / alerts / export ----------------------------------------
     val keepAwake: StateFlow<Boolean> =
         appRef.settingsStore.keepAwake.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)

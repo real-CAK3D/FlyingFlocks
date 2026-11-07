@@ -392,6 +392,23 @@ class WardriveManager(
         mergeSample(sample)   // dirty-flagged; the throttled publisher emits it
     }
 
+    /**
+     * Geo-tags and dedups an observation from an external USB source (e.g. an ESP Marauder),
+     * using the phone's current fix — the source has no GPS of its own. Honors the active
+     * session, the current mode and dead-zone suppression, exactly like a phone hit.
+     */
+    fun addExternalHit(kind: SampleKind, id: String, label: String, rssi: Int, channel: Int, source: String) {
+        if (!_state.value.active) return
+        val lat = curLat ?: return   // null while suppressed in a dead zone
+        val lon = curLon ?: return
+        if (!matchesMode(kind, _state.value.mode)) return
+        val sample = WardriveSample(
+            kind, id, label, lat, lon, rssi, System.currentTimeMillis(), curAcc,
+            channel = channel, sources = setOf(source),
+        )
+        mergeSample(sample)   // dirty-flagged; the throttled publisher emits it
+    }
+
     private fun recount() {
         val vals = liveSamples.values
         val wifi = vals.count { it.kind == SampleKind.AP || it.kind == SampleKind.STATION }
