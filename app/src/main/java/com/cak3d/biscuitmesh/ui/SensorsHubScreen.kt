@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.Flight
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Insights
@@ -28,6 +29,8 @@ import androidx.compose.material.icons.filled.Nightlight
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Radar
 import androidx.compose.material.icons.filled.SatelliteAlt
+import androidx.compose.material.icons.filled.Sensors
+import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material.icons.filled.Science
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -54,16 +57,21 @@ private data class HubEntry(val title: String, val sub: String, val icon: ImageV
 fun SensorsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
     val entries = listOf(
         HubEntry("Locator", "Home in on a device by signal — hot/cold + buzz", Icons.Default.MyLocation, "locator", Color(0xFF34D399)),
+        HubEntry("Background Collect", "Phone-only — keep catching Wi-Fi & BT with the screen off", Icons.Default.Sensors, "collect", Color(0xFF5FD36A)),
         HubEntry("Tracker Check", "Is a BLE tracker following you? Best-effort anti-stalking", Icons.Default.Radar, "trackers", Color(0xFFFF5470)),
+        HubEntry("Compass", "A live 3D compass — always know which way you're heading", Icons.Default.Explore, "compass", Color(0xFFFFD166)),
+        HubEntry("Radar", "A live radar of the Wi-Fi & BT devices around you", Icons.Default.Radar, "radar", Color(0xFF22D3EE)),
         HubEntry("Aurora", "Live space weather — can you see the northern lights tonight?", Icons.Default.Nightlight, "aurora", Color(0xFFA855F7)),
         HubEntry("GPS Satellites", "Which satellites your GPS is locked onto", Icons.Default.SatelliteAlt, "satellites", Color(0xFF22D3EE)),
         HubEntry("Orbit", "A live 3D globe of the satellites overhead", Icons.Default.Public, "globe", Color(0xFF38BDF8)),
         HubEntry("Aircraft Overhead", "Live ADS-B — planes in the air near you", Icons.Default.Flight, "aircraft", Color(0xFF38BDF8)),
         HubEntry("Caw", "Chat over your Meshtastic mesh — off-grid, no internet", Icons.Default.Forum, "meshchat", Color(0xFF00E5A0)),
         HubEntry("Squawk", "Open chat with anyone running the app — online", Icons.Default.Campaign, "squawk", Color(0xFF5FD36A)),
-        HubEntry("Whisper", "Private 1:1 chat — swap Band codes & Meshtastic info", Icons.Default.Lock, "whisper", Color(0xFF86EFAC)),
+        HubEntry("Chirps", "Private 1:1 chirps — leave a feather, swap Band & Meshtastic info", Icons.Default.Lock, "whisper", Color(0xFF86EFAC)),
         HubEntry("Flock", "Ring a band, see the wings you tail live on the map", Icons.Default.Groups, "crew", Color(0xFF34D399)),
+        HubEntry("Global Stats", "The whole flock's totals and the leaderboard", Icons.Default.Insights, "globalstats", Color(0xFF22D3EE)),
         HubEntry("Hunts", "Bounty board — challenges that tick up as you drive", Icons.Default.EmojiEvents, "hunts", Color(0xFFFFD166)),
+        HubEntry("Games", "Mini-games — hunt a signal, spot species, beat the clock", Icons.Default.SportsEsports, "games", Color(0xFF34D399)),
         HubEntry("Watchlist", "Flag MACs or names and spot them in range", Icons.Default.Visibility, "watchlist", Color(0xFF34D399)),
         HubEntry("Tire Pressure", "Learn your car's TPMS sensors, watch live pressure", Icons.Default.DirectionsCar, "tiredash", Color(0xFF38BDF8)),
         HubEntry("Device Ledger", "Regulars vs transients across all your drives", Icons.Default.Insights, "ledger", Color(0xFF22D3EE)),

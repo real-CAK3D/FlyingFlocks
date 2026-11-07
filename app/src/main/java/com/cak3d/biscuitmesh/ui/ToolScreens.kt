@@ -24,7 +24,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Bluetooth
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Wifi
@@ -33,7 +36,10 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
@@ -78,14 +84,16 @@ private val BT_BLUE = Color(0xFF7C9CFF)
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun WifiScreen(vm: MainViewModel, onOpenTool: (String) -> Unit) {
+fun WifiScreen(vm: MainViewModel, onOpenTool: (String) -> Unit, onLocate: (String) -> Unit = {}) {
     val scanning by vm.phoneScanning.collectAsStateWithLifecycle(initialValue = false)
     val results by vm.phoneScanResults.collectAsStateWithLifecycle(initialValue = emptyList())
     val nets = results.filter { it.kind == SampleKind.AP || it.kind == SampleKind.STATION }
-    val g6 = nets.filter { it.channel >= 1000 }            // Wi-Fi 6E (offset-marked)
-    val g5 = nets.filter { it.channel in 32..999 }
-    val g24 = nets.filter { it.channel in 1..14 }
-    val other = nets.filter { it.channel == 0 }
+    var query by remember { mutableStateOf("") }
+    val shown = if (query.isBlank()) nets else nets.filter { rowMatches(it, query) }
+    val g6 = shown.filter { it.channel >= 1000 }            // Wi-Fi 6E (offset-marked)
+    val g5 = shown.filter { it.channel in 32..999 }
+    val g24 = shown.filter { it.channel in 1..14 }
+    val other = shown.filter { it.channel == 0 }
     DisposableEffect(Unit) { onDispose { vm.stopPhoneScan() } }
 
     val context = LocalContext.current
@@ -116,6 +124,7 @@ fun WifiScreen(vm: MainViewModel, onOpenTool: (String) -> Unit) {
                 onStop = { vm.stopPhoneScan() },
             )
         }
+        if (nets.isNotEmpty()) item("search") { SearchField(query, { query = it }, WIFI_CYAN) }
         if (nets.isNotEmpty()) item("spectrum") { SpectrumCard(g24, g5, WIFI_CYAN) }
         if (nets.isNotEmpty()) item("arch") { ArchSpectrumCard(g24, g5, WIFI_CYAN) }
         if (nets.isNotEmpty()) item("gen") { WifiGenerationsCard(nets, WIFI_CYAN) }
@@ -124,21 +133,22 @@ fun WifiScreen(vm: MainViewModel, onOpenTool: (String) -> Unit) {
         if (nets.isNotEmpty()) item("rssi") { RssiHistogramCard(nets, WIFI_CYAN) }
         if (g6.isNotEmpty()) {
             item("l6") { SectionLabel("6 GHZ · ${g6.size}", WIFI_CYAN) }
-            items(g6, key = { "g6-${it.id}" }) { NetworkRow(it, WIFI_CYAN) }
+            items(g6, key = { "g6-${it.id}" }) { NetworkRow(it, WIFI_CYAN, onLocate) }
         }
         if (g5.isNotEmpty()) {
             item("l5") { SectionLabel("5 GHZ · ${g5.size}", WIFI_CYAN) }
-            items(g5, key = { "g5-${it.id}" }) { NetworkRow(it, WIFI_CYAN) }
+            items(g5, key = { "g5-${it.id}" }) { NetworkRow(it, WIFI_CYAN, onLocate) }
         }
         if (g24.isNotEmpty()) {
             item("l24") { SectionLabel("2.4 GHZ · ${g24.size}", WIFI_CYAN) }
-            items(g24, key = { "g24-${it.id}" }) { NetworkRow(it, WIFI_CYAN) }
+            items(g24, key = { "g24-${it.id}" }) { NetworkRow(it, WIFI_CYAN, onLocate) }
         }
         if (other.isNotEmpty()) {
             item("lo") { SectionLabel("OTHER · ${other.size}", WIFI_CYAN) }
-            items(other, key = { "go-${it.id}" }) { NetworkRow(it, WIFI_CYAN) }
+            items(other, key = { "go-${it.id}" }) { NetworkRow(it, WIFI_CYAN, onLocate) }
         }
         if (nets.isEmpty()) item("empty") { EmptyScanHint(scanning, "networks", WIFI_CYAN) }
+        else if (shown.isEmpty()) item("nomatch") { EmptyScanHint(false, "a match — clear the search", WIFI_CYAN) }
 
         item("tlabel") { SectionLabel("TOOLS", WIFI_CYAN) }
         item("tabs") { ToolTabRow(tabs.map { it.first }, tab) { tab = it } }
@@ -154,10 +164,12 @@ fun WifiScreen(vm: MainViewModel, onOpenTool: (String) -> Unit) {
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun BluetoothScreen(vm: MainViewModel, onOpenTool: (String) -> Unit) {
+fun BluetoothScreen(vm: MainViewModel, onOpenTool: (String) -> Unit, onLocate: (String) -> Unit = {}) {
     val scanning by vm.phoneScanning.collectAsStateWithLifecycle(initialValue = false)
     val results by vm.phoneScanResults.collectAsStateWithLifecycle(initialValue = emptyList())
     val devs = results.filter { it.kind == SampleKind.BT }
+    var query by remember { mutableStateOf("") }
+    val shown = if (query.isBlank()) devs else devs.filter { rowMatches(it, query) }
     DisposableEffect(Unit) { onDispose { vm.stopPhoneScan() } }
 
     val catCounts = remember(devs) {
@@ -190,10 +202,11 @@ fun BluetoothScreen(vm: MainViewModel, onOpenTool: (String) -> Unit) {
                 onStop = { vm.stopPhoneScan() },
             )
         }
+        if (devs.isNotEmpty()) item("search") { SearchField(query, { query = it }, BT_BLUE) }
         if (devs.isNotEmpty()) item("priv") { PrivacyCard(devs, BT_BLUE) }
         if (devs.isNotEmpty()) {
-            item("ld") { SectionLabel("DEVICES · ${devs.size}", BT_BLUE) }
-            items(devs, key = { "d-${it.id}" }) { DeviceRow(it, BT_BLUE) }
+            item("ld") { SectionLabel("DEVICES · ${shown.size}", BT_BLUE) }
+            items(shown, key = { "d-${it.id}" }) { DeviceRow(it, BT_BLUE, onLocate) }
         } else item("empty") { EmptyScanHint(scanning, "BLE devices", BT_BLUE) }
 
         // BT House — what the named devices actually are, grouped by room.
@@ -288,7 +301,7 @@ private fun EmptyScanHint(scanning: Boolean, what: String, accent: Color) {
 
 /** One Wi-Fi network: SSID, BSSID, channel + band, signal and a strength bar. */
 @Composable
-private fun NetworkRow(row: PhoneScanRow, accent: Color) {
+private fun NetworkRow(row: PhoneScanRow, accent: Color, onLocate: (String) -> Unit) {
     val band = when {
         row.channel >= 1000 -> "6 GHz"
         row.channel >= 32 -> "5 GHz"
@@ -303,21 +316,24 @@ private fun NetworkRow(row: PhoneScanRow, accent: Color) {
         if (row.standard.isNotBlank()) { append("  ·  "); append(row.standard) }
         OuiDb.vendor(row.id)?.let { append("  ·  "); append(it) }
     }
-    SignalCard(accent, row.label.ifBlank { "(hidden network)" }, row.id, meta, row.rssi, wifiStrength(row.rssi))
+    SignalCard(accent, row.label.ifBlank { "(hidden network)" }, row.id, meta, row.rssi, wifiStrength(row.rssi), onLocate)
 }
 
 /** One BLE device: name, MAC, signal and a strength bar. */
 @Composable
-private fun DeviceRow(row: PhoneScanRow, accent: Color) {
+private fun DeviceRow(row: PhoneScanRow, accent: Color, onLocate: (String) -> Unit) {
     val meta = "BLE  ·  2.4 GHz  ·  ${bleAddrType(row.id)}" +
         (OuiDb.vendor(row.id)?.let { "  ·  $it" } ?: "")
-    SignalCard(accent, row.label.ifBlank { "(unnamed)" }, row.id, meta, row.rssi, btStrength(row.rssi))
+    SignalCard(accent, row.label.ifBlank { "(unnamed)" }, row.id, meta, row.rssi, btStrength(row.rssi), onLocate)
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SignalCard(accent: Color, title: String, mono: String, meta: String, rssi: Int, strength: Float) {
+private fun SignalCard(accent: Color, title: String, mono: String, meta: String, rssi: Int, strength: Float, onLocate: (String) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
     Card(
-        Modifier.fillMaxWidth(),
+        onClick = { expanded = !expanded },
+        modifier = Modifier.fillMaxWidth(),
         shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
@@ -340,8 +356,42 @@ private fun SignalCard(accent: Color, title: String, mono: String, meta: String,
                 if (strength > 0f) Box(Modifier.fillMaxWidth(strength).height(6.dp)
                     .clip(RoundedCornerShape(3.dp)).background(accent))
             }
+            if (expanded) {
+                OutlinedButton(onClick = { onLocate(mono) }, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Default.MyLocation, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Locate — walk to it")
+                }
+            } else {
+                Text("tap to locate", style = MaterialTheme.typography.labelSmall,
+                    color = accent.copy(alpha = 0.5f), fontFamily = FontFamily.Monospace)
+            }
         }
     }
+}
+
+/** Search box for the scan lists — filters by name, MAC, or vendor. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SearchField(query: String, onChange: (String) -> Unit, accent: Color) {
+    OutlinedTextField(
+        value = query,
+        onValueChange = onChange,
+        singleLine = true,
+        placeholder = { Text("Search name, MAC or vendor") },
+        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = accent) },
+        trailingIcon = {
+            if (query.isNotEmpty()) IconButton(onClick = { onChange("") }) {
+                Icon(Icons.Default.Close, contentDescription = "Clear")
+            }
+        },
+        modifier = Modifier.fillMaxWidth(),
+    )
+}
+
+private fun rowMatches(row: PhoneScanRow, q: String): Boolean {
+    if (row.label.contains(q, ignoreCase = true) || row.id.contains(q, ignoreCase = true)) return true
+    return OuiDb.vendor(row.id)?.contains(q, ignoreCase = true) == true
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -755,6 +805,18 @@ private fun TabbedToolScreen(
             contentPadding = PaddingValues(12.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            item("hdr") {
+                com.cak3d.biscuitmesh.ui.theme.ThemedCard(Modifier.fillMaxWidth()) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Icon(leadingIcon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(30.dp))
+                        Column {
+                            Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                            Text("Extra tools and utilities — same deck, odds and ends.", style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f))
+                        }
+                    }
+                }
+            }
             items(tools, key = { it.key }) { tool ->
                 ToolRow(tool, leadingIcon) { onOpenTool(tool.key) }
             }

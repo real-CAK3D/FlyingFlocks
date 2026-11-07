@@ -34,14 +34,38 @@ class WardriveService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         startInForeground(build("Scanning…"))
-        val wd = (application as? BiscuitMeshApp)?.wardrive
+        val app = application as? BiscuitMeshApp
+        val wd = app?.wardrive
         job?.cancel()
         job = scope.launch {
+            var nextMilestone = 50
+            var lastRank = app?.progress?.state?.value?.rank ?: 0
             wd?.state?.collect { s ->
                 if (!s.active) { stopSelf(); return@collect }
+                val finds = s.wifiCount + s.btCount
+                val prog = app?.progress?.state?.value
+                val rank = prog?.rank ?: 0
+                val rankName = prog?.rankName ?: ""
                 val text = "${s.wifiCount} Wi-Fi · ${s.btCount} BT" +
-                    if (s.inDeadZone) " · paused (dead zone)" else ""
+                    (if (rank > 0) " · rank $rank" else "") +
+                    (if (s.inDeadZone) " · paused (dead zone)" else "")
                 runCatching { notifManager().notify(NOTIF_ID, build(text)) }
+                // Periodic pop-up update: a milestone every +50 signals caught this session.
+                if (finds >= nextMilestone) {
+                    runCatching {
+                        NotificationHelper.notify(this@WardriveService, NOTIF_ID + 1,
+                            "Flock still collecting", "$finds signals this session · rank $rank $rankName")
+                    }
+                    while (finds >= nextMilestone) nextMilestone += 50
+                }
+                // Rank-up pop-up.
+                if (rank > lastRank && lastRank > 0) {
+                    runCatching {
+                        NotificationHelper.notify(this@WardriveService, NOTIF_ID + 2,
+                            "Ranked up!", "You're now rank $rank · $rankName")
+                    }
+                }
+                lastRank = rank
             }
         }
         return START_STICKY

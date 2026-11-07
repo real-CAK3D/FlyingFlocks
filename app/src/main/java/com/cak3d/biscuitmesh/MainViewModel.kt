@@ -325,6 +325,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         WardriveService.start(appRef)
     }
 
+    /**
+     * Phone-only background collection: forces the phone's own radios on, starts an ALL-mode
+     * wardrive, and keeps it alive with the screen off via the foreground service (which pings
+     * notification updates as the count climbs). Lock the phone and it keeps catching Wi-Fi/BT.
+     */
+    fun startBackgroundCollect() {
+        viewModelScope.launch { appRef.settingsStore.setPhoneSensors(true) }
+        appRef.wardrive?.start(WardriveMode.ALL, true)
+        WardriveService.start(appRef)
+    }
+
+    fun stopBackgroundCollect() = stopWardrive()
+
     fun stopWardrive() {
         // Capture the finished drive before stopping (stop keeps samples/track).
         val st = appRef.wardrive?.state?.value

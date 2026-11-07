@@ -70,7 +70,15 @@ import com.cak3d.biscuitmesh.ui.FindsScreen
 import com.cak3d.biscuitmesh.ui.FleetScreen
 import com.cak3d.biscuitmesh.ui.AircraftScreen
 import com.cak3d.biscuitmesh.ui.AuroraScreen
+import com.cak3d.biscuitmesh.ui.BackgroundCollectScreen
+import com.cak3d.biscuitmesh.ui.BandBlitzScreen
+import com.cak3d.biscuitmesh.ui.DeviceSafariScreen
+import com.cak3d.biscuitmesh.ui.GamesScreen
+import com.cak3d.biscuitmesh.ui.SignalHuntScreen
+import com.cak3d.biscuitmesh.ui.NavigateScreen
+import com.cak3d.biscuitmesh.ui.NavMode
 import com.cak3d.biscuitmesh.ui.GlobeScreen
+import com.cak3d.biscuitmesh.ui.GlobalStatsScreen
 import com.cak3d.biscuitmesh.ui.CrewScreen
 import com.cak3d.biscuitmesh.ui.DeadZonesScreen
 import com.cak3d.biscuitmesh.ui.LabBenchScreen
@@ -86,7 +94,6 @@ import com.cak3d.biscuitmesh.ui.WhisperThreadScreen
 import com.cak3d.biscuitmesh.ui.SignalDetailScreen
 import com.cak3d.biscuitmesh.ui.TpmsScreen
 import com.cak3d.biscuitmesh.ui.WatchlistScreen
-import com.cak3d.biscuitmesh.ui.LocatorScreen
 import com.cak3d.biscuitmesh.ui.ProximityBanner
 import com.cak3d.biscuitmesh.ui.SatellitesScreen
 import com.cak3d.biscuitmesh.ui.SensorsHubScreen
@@ -286,8 +293,18 @@ private fun MainShell(vm: MainViewModel) {
                     })
                 }
                 composable("wardrive") { WardriveScreen(vm) }
-                composable("wifi") { WifiScreen(vm, onOpenTool = { nav.navigate("runtool/$it") }) }
-                composable("bluetooth") { BluetoothScreen(vm, onOpenTool = { nav.navigate("runtool/$it") }) }
+                composable("wifi") {
+                    WifiScreen(vm, onOpenTool = { nav.navigate("runtool/$it") },
+                        onLocate = { nav.navigate("navlocate/${java.net.URLEncoder.encode(it, "UTF-8")}") })
+                }
+                composable("bluetooth") {
+                    BluetoothScreen(vm, onOpenTool = { nav.navigate("runtool/$it") },
+                        onLocate = { nav.navigate("navlocate/${java.net.URLEncoder.encode(it, "UTF-8")}") })
+                }
+                composable("navlocate/{id}") { entry ->
+                    val id = java.net.URLDecoder.decode(entry.arguments?.getString("id") ?: "", "UTF-8")
+                    NavigateScreen(vm = vm, onBack = { nav.popBackStack() }, startMode = NavMode.LOCATOR, startTargetId = id)
+                }
                 composable("subghz") {
                     SubGhzScreen(vm, onOpenMap = {
                         nav.navigate("wardrive") {
@@ -336,9 +353,17 @@ private fun MainShell(vm: MainViewModel) {
                     SatellitesScreen(vm = vm, onBack = { nav.popBackStack() }, onOpenGlobe = { nav.navigate("globe") })
                 }
                 composable("globe") { GlobeScreen(vm = vm, onBack = { nav.popBackStack() }) }
+                composable("globalstats") { GlobalStatsScreen(vm = vm, onBack = { nav.popBackStack() }) }
+                composable("collect") { BackgroundCollectScreen(vm = vm, onBack = { nav.popBackStack() }) }
+                composable("games") { GamesScreen(onBack = { nav.popBackStack() }, onOpen = { nav.navigate(it) }) }
+                composable("game/signalhunt") { SignalHuntScreen(vm = vm, onBack = { nav.popBackStack() }) }
+                composable("game/safari") { DeviceSafariScreen(vm = vm, onBack = { nav.popBackStack() }) }
+                composable("game/blitz") { BandBlitzScreen(vm = vm, onBack = { nav.popBackStack() }) }
+                composable("compass") { NavigateScreen(vm = vm, onBack = { nav.popBackStack() }, startMode = NavMode.COMPASS) }
+                composable("radar") { NavigateScreen(vm = vm, onBack = { nav.popBackStack() }, startMode = NavMode.RADAR) }
                 composable("aircraft") { AircraftScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("aurora") { AuroraScreen(vm = vm, onBack = { nav.popBackStack() }) }
-                composable("locator") { LocatorScreen(vm = vm, onBack = { nav.popBackStack() }) }
+                composable("locator") { NavigateScreen(vm = vm, onBack = { nav.popBackStack() }, startMode = NavMode.LOCATOR) }
                 composable("trackers") { TrackerScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("crew") { CrewScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("drives") {

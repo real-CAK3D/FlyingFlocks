@@ -96,6 +96,10 @@ class MeshtasticManager(private val context: Context, private val adapter: Bluet
     // (usually Home Base) when several mesh nodes are in range.
     private val candidates = HashMap<android.bluetooth.BluetoothDevice, Int>()
     private val picker = Runnable { connectBest() }
+    // Arm the picker ONCE, on the first candidate. A node beacons every ~60 ms, so
+    // re-posting it on every advertisement (the old behaviour) reset the 2 s timer
+    // forever and it never connected — it just scanned until the watchdog gave up.
+    private var pickScheduled = false
 
     /** Scan for any Meshtastic node and connect to the strongest one in range. */
     fun scanAndConnect() {
@@ -108,6 +112,7 @@ class MeshtasticManager(private val context: Context, private val adapter: Bluet
         _link.value = MeshLinkState.SCANNING
         scanning = true
         candidates.clear()
+        pickScheduled = false
         // NOTE: we deliberately scan UNFILTERED and match in code. Depending on the node's
         // firmware/hardware the 128-bit Meshtastic service UUID is carried in the scan
         // response (or lives only in the GATT table), so a hard ScanFilter.setServiceUuid
@@ -141,9 +146,12 @@ class MeshtasticManager(private val context: Context, private val adapter: Bluet
             if (!looksLikeMesh(result)) return
             Log.d(TAG, "candidate mesh node ${dev.address} rssi=${result.rssi} name=${result.scanRecord?.deviceName}")
             candidates[dev] = result.rssi
-            // Give nearby nodes ~2s to show up, then connect to the strongest.
-            scanWatchdog.removeCallbacks(picker)
-            scanWatchdog.postDelayed(picker, 2_000)
+            // Give nearby nodes ~2s to show up, then connect to the strongest — but arm
+            // this ONCE, or a node beaconing every ~60 ms keeps pushing it out forever.
+            if (!pickScheduled) {
+                pickScheduled = true
+                scanWatchdog.postDelayed(picker, 2_000)
+            }
         }
         override fun onScanFailed(errorCode: Int) {
             Log.w(TAG, "mesh scan failed $errorCode")
@@ -154,6 +162,7 @@ class MeshtasticManager(private val context: Context, private val adapter: Bluet
     private fun stopScan() {
         scanWatchdog.removeCallbacks(scanTimeout)
         scanWatchdog.removeCallbacks(picker)
+        pickScheduled = false
         if (scanning) { runCatching { scanner?.stopScan(scanCb) }; scanning = false }
     }
 

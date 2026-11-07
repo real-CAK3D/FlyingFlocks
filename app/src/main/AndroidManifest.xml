@@ -78,6 +78,28 @@
             android:exported="false"
             android:foregroundServiceType="location" />
 
+        <!-- Home-screen widgets: tap-to-toggle scans, plus a rank/stats tile. -->
+        <receiver android:name=".widget.WardriveWidget" android:exported="false" android:label="Flocks: Wardrive">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_scan_info" />
+        </receiver>
+        <receiver android:name=".widget.WifiWidget" android:exported="false" android:label="Flocks: Wi-Fi scan">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_scan_info" />
+        </receiver>
+        <receiver android:name=".widget.BtWidget" android:exported="false" android:label="Flocks: BT scan">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_scan_info" />
+        </receiver>
+        <receiver android:name=".widget.SubGhzWidget" android:exported="false" android:label="Flocks: Sub-GHz">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_scan_info" />
+        </receiver>
+        <receiver android:name=".widget.StatsWidget" android:exported="false" android:label="Flocks: Rank">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_stats_info" />
+        </receiver>
+
         <!-- Shares generated drive-card images from the cache dir. -->
         <provider
             android:name="androidx.core.content.FileProvider"

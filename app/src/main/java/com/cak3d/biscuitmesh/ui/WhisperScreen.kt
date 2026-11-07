@@ -80,7 +80,7 @@ fun WhisperListScreen(vm: MainViewModel, onBack: () -> Unit, onOpen: (String, St
         containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
-                title = { Text("Whisper") },
+                title = { Text("Chirps") },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
@@ -100,7 +100,7 @@ fun WhisperListScreen(vm: MainViewModel, onBack: () -> Unit, onOpen: (String, St
                 Text(
                     if (handle.isBlank())
                         "Set a handle in Flock first — it's how other wings find you here."
-                    else "Private 1:1 whispers. Only you and the other wing can read them — good for swapping Band codes and Meshtastic details.",
+                    else "Private 1:1 chirps. Only you and the other wing can read them — good for swapping Band codes and Meshtastic details.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                     modifier = Modifier.padding(bottom = 4.dp),
@@ -172,7 +172,7 @@ fun WhisperThreadScreen(vm: MainViewModel, otherId: String, otherHandle: String,
         Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 12.dp)) {
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 if (messages.isEmpty()) {
-                    Text("No whispers yet. Say hi — only $otherHandle can see this.",
+                    Text("No chirps yet — leave a feather 🪶. Only $otherHandle can see this.",
                         Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
                 } else {
                     LazyColumn(state = listState, modifier = Modifier.fillMaxSize(),

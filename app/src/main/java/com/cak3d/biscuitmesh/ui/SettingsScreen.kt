@@ -51,7 +51,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Switch
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -112,41 +114,63 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit, onOpenDeadZones: () ->
             )
         },
     ) { padding ->
-        Column(
-            Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            AppearanceSection(vm)
-            DeadZonesSection(
-                zones = zones,
-                onAdd = { openAddZone() },
-                onRemove = { vm.removeDeadZone(it) },
-                onSetRadius = { id, r -> vm.setDeadZoneRadius(id, r) },
-            )
-            androidx.compose.material3.OutlinedButton(
-                onClick = onOpenDeadZones,
-                modifier = Modifier.fillMaxWidth(),
-            ) { Text("View dead-zone devices (local only)") }
-            androidx.compose.material3.OutlinedButton(
-                onClick = onOpenWigle,
-                modifier = Modifier.fillMaxWidth(),
-            ) { Text("WiGLE account stats") }
-            HudSection(vm)
-            AlertsScreenSection(vm)
-            MeshSection(vm)
-            WtfSection(vm)
-            ExportSection(vm)
-            WdgSection(vm)
-            AuthorizedUseSection(
-                accepted = authorized,
-                onAccept = { vm.acceptAuthorizedUse() },
-                onRevoke = { vm.revokeAuthorizedUse() },
-            )
-            AboutSection()
+        Column(Modifier.fillMaxSize().padding(padding)) {
+            val tabs = listOf("General", "Privacy", "Devices", "Data", "About")
+            var tab by remember { mutableStateOf(0) }
+            ScrollableTabRow(
+                selectedTabIndex = tab,
+                containerColor = Color.Transparent,
+                edgePadding = 12.dp,
+            ) {
+                tabs.forEachIndexed { i, t ->
+                    Tab(selected = tab == i, onClick = { tab = i },
+                        text = { Text(t, fontWeight = if (tab == i) FontWeight.Bold else FontWeight.Normal) })
+                }
+            }
+            Column(
+                Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                when (tab) {
+                    0 -> {
+                        AppearanceSection(vm)
+                        HudSection(vm)
+                        AlertsScreenSection(vm)
+                    }
+                    1 -> {
+                        DeadZonesSection(
+                            zones = zones,
+                            onAdd = { openAddZone() },
+                            onRemove = { vm.removeDeadZone(it) },
+                            onSetRadius = { id, r -> vm.setDeadZoneRadius(id, r) },
+                        )
+                        androidx.compose.material3.OutlinedButton(
+                            onClick = onOpenDeadZones, modifier = Modifier.fillMaxWidth(),
+                        ) { Text("View dead-zone devices (local only)") }
+                        AuthorizedUseSection(
+                            accepted = authorized,
+                            onAccept = { vm.acceptAuthorizedUse() },
+                            onRevoke = { vm.revokeAuthorizedUse() },
+                        )
+                    }
+                    2 -> {
+                        MeshSection(vm)
+                        WtfSection(vm)
+                    }
+                    3 -> {
+                        ExportSection(vm)
+                        WdgSection(vm)
+                        androidx.compose.material3.OutlinedButton(
+                            onClick = onOpenWigle, modifier = Modifier.fillMaxWidth(),
+                        ) { Text("WiGLE account stats") }
+                    }
+                    4 -> AboutSection()
+                }
+            }
         }
     }
 

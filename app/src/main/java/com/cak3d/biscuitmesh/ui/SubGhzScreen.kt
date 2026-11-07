@@ -1,6 +1,7 @@
 package com.cak3d.biscuitmesh.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -385,43 +386,71 @@ private fun BandMeter(band: RfBand, bestRssi: Int?, count: Int) {
     }
 }
 
+private fun agoText(timeMs: Long): String {
+    val s = ((System.currentTimeMillis() - timeMs) / 1000).coerceAtLeast(0)
+    return when { s < 60 -> "${s}s ago"; s < 3600 -> "${s / 60}m ago"; else -> "${s / 3600}h ago" }
+}
+
 @Composable
 private fun TpmsRow(s: TpmsSensor) {
+    var expanded by remember { mutableStateOf(false) }
     Card(
         Modifier.fillMaxWidth(),
         shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
-        Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Default.DirectionsCar, contentDescription = null, tint = RF_AMBER, modifier = Modifier.size(24.dp))
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text("TPMS ${s.id}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold,
-                    fontFamily = FontFamily.Monospace)
-                Text("${"%.2f".format(s.freq)} MHz · ${s.tempC}°C", style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+        Column(Modifier.fillMaxWidth().clickable { expanded = !expanded }.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.DirectionsCar, contentDescription = null, tint = RF_AMBER, modifier = Modifier.size(24.dp))
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("TPMS ${s.id}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold,
+                        fontFamily = FontFamily.Monospace)
+                    Text("${"%.2f".format(s.freq)} MHz · ${s.tempC}°C", style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                }
+                Text("${"%.1f".format(s.psi)} psi", style = MaterialTheme.typography.titleMedium,
+                    color = RF_AMBER, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
             }
-            Text("${"%.1f".format(s.psi)} psi", style = MaterialTheme.typography.titleMedium,
-                color = RF_AMBER, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+            if (expanded) {
+                Text("${s.kpa} kPa · ${"%.1f".format(s.psi)} psi · ${s.tempC}°C · ${agoText(s.timeMs)}",
+                    style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace,
+                    color = RF_AMBER.copy(alpha = 0.85f))
+                Text("FSK-decoded and positively identified by its 4-byte ID — this is really a tyre sensor, not a guess.",
+                    style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+            }
         }
     }
 }
 
 @Composable
 private fun KeyfobRow(k: KeyfobEvent) {
+    var expanded by remember { mutableStateOf(false) }
     Card(
         Modifier.fillMaxWidth(),
         shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
-        Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Default.SettingsRemote, contentDescription = null, tint = RF_AMBER, modifier = Modifier.size(24.dp))
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text("OOK burst · ${"%.2f".format(k.freq)} MHz", style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold)
-                Text("${k.pulses} pulses · keyfob / remote / maybe TPMS", style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+        Column(Modifier.fillMaxWidth().clickable { expanded = !expanded }.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.SettingsRemote, contentDescription = null, tint = RF_AMBER, modifier = Modifier.size(24.dp))
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("OOK burst · ${"%.2f".format(k.freq)} MHz", style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold)
+                    Text("${k.pulses} pulses · keyfob / remote / maybe TPMS", style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                }
+                Text(agoText(k.timeMs), style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f))
+            }
+            if (expanded) {
+                Text("raw bits: ${k.bits.ifBlank { "—" }}", style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace, color = RF_AMBER.copy(alpha = 0.85f))
+                Text("An OOK burst — could be a keyfob, a remote, a doorbell/garage opener, or an OOK TPMS (they share this encoding). Replay it on your own device from the Transmit section above.",
+                    style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
             }
         }
     }

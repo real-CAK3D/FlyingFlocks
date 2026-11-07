@@ -170,6 +170,35 @@ class BiscuitMeshApp : Application() {
     /** Live phone Wi-Fi/BLE scanning for the WiFi and Bluetooth tabs. */
     val phoneScan: PhoneScanManager by lazy { PhoneScanManager(scanSensors, progress) }
 
+    // --- Home-screen widget control ---------------------------------------
+    @Volatile var subGhzSweeping = false
+        private set
+
+    val wardriveActive: Boolean get() = wardrive?.state?.value?.active == true
+    val wardriveMode: com.cak3d.biscuitmesh.wardrive.WardriveMode?
+        get() = wardrive?.state?.value?.let { if (it.active) it.mode else null }
+
+    /** Toggle a background wardrive in [mode] (phone radios on) from a home-screen widget. */
+    fun widgetToggleScan(mode: com.cak3d.biscuitmesh.wardrive.WardriveMode) {
+        val wd = wardrive ?: return
+        if (wd.state.value.active) {
+            wd.stop(); WardriveService.stop(this)
+        } else {
+            appScope.launch { settingsStore.setPhoneSensors(true) }
+            wd.start(mode, true); WardriveService.start(this)
+        }
+        com.cak3d.biscuitmesh.widget.ScanWidgetBase.refreshAll(this)
+    }
+
+    /** Toggle the connected boards' sub-GHz sweep from a home-screen widget. */
+    fun widgetToggleSubGhz() {
+        val cmd = if (subGhzSweeping) "stopscan" else "scanall"
+        fleet?.broadcast(com.cak3d.biscuitmesh.protocol.command(cmd))
+        biscuitSerial.send(com.cak3d.biscuitmesh.protocol.command(cmd))
+        subGhzSweeping = !subGhzSweeping
+        com.cak3d.biscuitmesh.widget.ScanWidgetBase.refreshAll(this)
+    }
+
     /** On-demand camera sweep around a point (Field Guide "find cameras near me"). */
     suspend fun sweepCameras(lat: Double, lon: Double): Int {
         val radius = progress.cameraScanRadiusM()
@@ -220,6 +249,23 @@ class BiscuitMeshApp : Application() {
         appScope.launch(Dispatchers.IO) { com.cak3d.biscuitmesh.sensors.OuiDb.ensureLoaded(this@BiscuitMeshApp) }
         // Resume the Flock online layer if the operator has used it before.
         appScope.launch { if (settingsStore.flockEnabled.first()) crew.activate() }
+
+        // Keep the home-screen widgets in sync with scan + rank state.
+        wardrive?.let { wd ->
+            appScope.launch {
+                var last: Pair<Boolean, com.cak3d.biscuitmesh.wardrive.WardriveMode>? = null
+                wd.state.collect { s ->
+                    val cur = s.active to s.mode
+                    if (cur != last) { last = cur; com.cak3d.biscuitmesh.widget.ScanWidgetBase.refreshAll(this@BiscuitMeshApp) }
+                }
+            }
+        }
+        appScope.launch {
+            var lastRank = -1
+            progress.state.collect { p ->
+                if (p.rank != lastRank) { lastRank = p.rank; com.cak3d.biscuitmesh.widget.StatsWidget.refresh(this@BiscuitMeshApp) }
+            }
+        }
 
         // Watchlist alerts: keep the wardrive's watch set current, and notify on a first-time hit.
         wardrive?.let { wd ->
