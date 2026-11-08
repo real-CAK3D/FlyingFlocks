@@ -289,13 +289,23 @@ class BiscuitMeshApp : Application() {
         // Resume the Flock online layer if the operator has used it before.
         appScope.launch { if (settingsStore.flockEnabled.first()) crew.activate() }
 
-        // Keep the home-screen widgets in sync with scan + rank state.
+        // Keep the home-screen widgets in sync with scan state. Repaint instantly on a
+        // start/stop/mode change, and while scanning repaint as the live counts climb —
+        // throttled to every 2.5s so the widgets show live numbers without churn.
         wardrive?.let { wd ->
             appScope.launch {
-                var last: Pair<Boolean, com.cak3d.biscuitmesh.wardrive.WardriveMode>? = null
+                var lastToggle: Pair<Boolean, com.cak3d.biscuitmesh.wardrive.WardriveMode>? = null
+                var lastCounts = -1 to -1
+                var lastRefresh = 0L
                 wd.state.collect { s ->
-                    val cur = s.active to s.mode
-                    if (cur != last) { last = cur; com.cak3d.biscuitmesh.widget.ScanWidgetBase.refreshAll(this@BiscuitMeshApp) }
+                    val toggle = s.active to s.mode
+                    val counts = s.wifiCount to s.btCount
+                    val now = android.os.SystemClock.elapsedRealtime()
+                    val toggled = toggle != lastToggle
+                    if (toggled || (counts != lastCounts && now - lastRefresh > 2500)) {
+                        lastToggle = toggle; lastCounts = counts; lastRefresh = now
+                        com.cak3d.biscuitmesh.widget.ScanWidgetBase.refreshAll(this@BiscuitMeshApp)
+                    }
                 }
             }
         }

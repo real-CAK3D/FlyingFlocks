@@ -4,7 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:gravity="center"
+    android:gravity="center_vertical"
     android:padding="14dp"
     android:background="@drawable/widget_bg">
 
@@ -13,17 +13,41 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:textColor="#E7F0E2"
-        android:textSize="16sp"
+        android:textSize="15sp"
         android:textStyle="bold"
+        android:maxLines="1"
         android:text="Scan" />
 
     <TextView
         android:id="@+id/w_state"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
+        android:layout_marginTop="4dp"
         android:fontFamily="monospace"
-        android:textSize="13sp"
+        android:textSize="12sp"
         android:textColor="#8FA189"
+        android:maxLines="1"
         android:text="○ tap to scan" />
+
+    <TextView
+        android:id="@+id/w_primary"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:textColor="#5FD36A"
+        android:textSize="19sp"
+        android:textStyle="bold"
+        android:maxLines="1"
+        android:text="" />
+
+    <TextView
+        android:id="@+id/w_secondary"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:fontFamily="monospace"
+        android:textSize="11sp"
+        android:textColor="#8FA189"
+        android:maxLines="2"
+        android:text="" />
 </LinearLayout>

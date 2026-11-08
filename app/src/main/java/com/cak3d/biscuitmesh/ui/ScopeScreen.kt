@@ -63,6 +63,7 @@ private val MONO = FontFamily.Monospace
 private const val COLS = 28      // spectrum columns (channel bins)
 private const val ROWS = 40      // terrain depth (time rows kept)
 private const val HIST = 120     // waveform history length
+private const val RSSI_BUCKETS = 8  // −100…−20 dBm in 10 dBm steps
 
 /** Map a Wi-Fi channel to a spectrum column: 2.4 GHz left, 5 GHz middle, 6 GHz right. */
 private fun colOf(ch: Int): Int {
@@ -113,6 +114,7 @@ fun ScopeScreen(vm: MainViewModel, onBack: () -> Unit) {
     var band6 by remember { mutableStateOf(0) }
     var bandBt by remember { mutableStateOf(0) }
     var peakDbm by remember { mutableStateOf(-120) }
+    var rssiHist by remember { mutableStateOf(IntArray(RSSI_BUCKETS)) }   // dBm distribution
 
     LaunchedEffect(Unit) {
         var lastTotal = 0
@@ -140,6 +142,11 @@ fun ScopeScreen(vm: MainViewModel, onBack: () -> Unit) {
                 if (s > row[c]) row[c] = s
             }
             terrain.add(0, row); if (terrain.size > ROWS) terrain.removeAt(terrain.size - 1)
+
+            // RSSI distribution — how many contacts sit in each 10 dBm bucket (−100 … −20).
+            val hist = IntArray(RSSI_BUCKETS)
+            for (r in valid) { hist[(((r.rssi + 100) / 10)).coerceIn(0, RSSI_BUCKETS - 1)]++ }
+            rssiHist = hist
 
             // Headline stats.
             total = snap.size
@@ -202,6 +209,7 @@ fun ScopeScreen(vm: MainViewModel, onBack: () -> Unit) {
                 }
             }
             item { ScopePanel("BANDS", "live network count per band") { BandBars(band24, band5, band6, bandBt) } }
+            item { ScopePanel("SIGNAL PROFILE", "how many contacts at each signal level") { RssiProfile(rssiHist) } }
             item { ScopePanel("FEED · tail", "newest detections") { FeedPanel(feed) } }
         }
     }
@@ -368,6 +376,29 @@ private fun Bar(label: String, value: Int, maxv: Int, color: Color) {
         }
         Text("$value", color = color, fontFamily = MONO, fontWeight = FontWeight.Bold, fontSize = 12.sp,
             modifier = Modifier.width(28.dp))
+    }
+}
+
+@Composable
+private fun RssiProfile(hist: IntArray) {
+    val maxv = max(1, hist.maxOrNull() ?: 1)
+    // Strong signals (−20 dBm) at the top, weak (−90) at the bottom — a volume-profile read.
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        for (b in RSSI_BUCKETS - 1 downTo 0) {
+            val hiDbm = -100 + (b + 1) * 10
+            val count = hist[b]
+            val color = ramp((b + 0.5f) / RSSI_BUCKETS)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("$hiDbm", color = Color.White.copy(alpha = 0.55f), fontFamily = MONO, fontSize = 10.sp,
+                    modifier = Modifier.width(34.dp))
+                Box(Modifier.weight(1f).height(12.dp).background(Color.White.copy(alpha = 0.05f), RoundedCornerShape(3.dp))) {
+                    if (count > 0) Box(Modifier.fillMaxWidth(count / maxv.toFloat()).height(12.dp)
+                        .background(color.copy(alpha = 0.8f), RoundedCornerShape(3.dp)))
+                }
+                Text("$count", color = color, fontFamily = MONO, fontWeight = FontWeight.Bold, fontSize = 11.sp,
+                    modifier = Modifier.width(24.dp))
+            }
+        }
     }
 }
 
