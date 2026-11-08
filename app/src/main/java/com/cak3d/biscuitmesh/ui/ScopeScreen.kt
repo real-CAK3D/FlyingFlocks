@@ -54,6 +54,9 @@ import com.cak3d.biscuitmesh.MainViewModel
 import com.cak3d.biscuitmesh.sensors.PhoneScanRow
 import com.cak3d.biscuitmesh.wardrive.SampleKind
 import kotlinx.coroutines.delay
+import kotlin.math.exp
+import kotlin.math.roundToInt
+import kotlin.math.sin
 
 private val BG = Color(0xFF05080A)
 private val PANEL = Color(0xFF0B1014)
@@ -68,7 +71,7 @@ private val GRID = Color(0xFF243638)
 private val HEADER = Color(0xFF11191D)
 private val MONO = FontFamily.Monospace
 
-private const val BINS = 38
+private const val BINS = 90
 private const val TERRAIN_LIMIT = 40
 private const val TRACE_LIMIT = 120
 private const val PROFILE_BINS = 16
@@ -91,11 +94,13 @@ private fun PhoneScanRow.scopeBand(): ScopeBand = when {
     else -> ScopeBand.Other
 }
 
-private fun channelBin(channel: Int, band: ScopeBand): Int = when (band) {
-    ScopeBand.WiFi24 -> channel - 1
-    ScopeBand.WiFi5 -> 15 + (channel - 32) * 12 / 145
-    ScopeBand.WiFi6 -> 29 + (channel - 1000).coerceIn(0, 233) * 8 / 233
-    else -> -1
+/** Continuous bin position (0 until BINS) for a channel, or -1 for non-Wi-Fi. 2.4 GHz on
+ *  the left, 5 GHz in the middle, 6 GHz on the right, with a gap between the bands. */
+private fun channelCenterBin(channel: Int, band: ScopeBand): Float = when (band) {
+    ScopeBand.WiFi24 -> (channel - 1).coerceIn(0, 13) / 13f * 25f            // 0 .. 25
+    ScopeBand.WiFi5 -> 33f + (channel - 32).coerceIn(0, 145) / 145f * 40f    // 33 .. 73
+    ScopeBand.WiFi6 -> 80f + (channel - 1000).coerceIn(0, 233) / 233f * 9f   // 80 .. 89
+    else -> -1f
 }
 
 private fun strength(rssi: Float): Float =
@@ -254,17 +259,38 @@ private inline fun summarize(rows: List<PhoneScanRow>, onValid: (PhoneScanRow) -
         if (ranked.size < RANK_LIMIT) ranked.add(row)
         val bucket = (strength(rssi.toFloat()) * PROFILE_BINS).toInt().coerceAtMost(PROFILE_BINS - 1)
         profile[bucket]++
-        val bin = channelBin(row.channel, row.scopeBand())
-        if (bin >= 0) {
-            val level = strength(rssi.toFloat()).coerceAtLeast(0.04f)
-            bins[bin] = maxOf(bins[bin], level)
-            if (channelPeak == null || rssi > channelPeak.rssi) {
-                channelPeak = ScopePeak(bin, rssi)
+        val center = channelCenterBin(row.channel, row.scopeBand())
+        if (center >= 0f) {
+            val level = strength(rssi.toFloat())
+            // Spread each AP across its spectral width (a Wi-Fi channel is ~20 MHz wide, not
+            // a single line) so the surface rolls into ridges instead of spiking on one bin.
+            // Overlapping APs accumulate, so busy channels build into mountains.
+            val sigma = 3.4f
+            val lo = (center - sigma * 3f).toInt().coerceAtLeast(0)
+            val hi = (center + sigma * 3f).toInt().coerceAtMost(BINS - 1)
+            for (j in lo..hi) {
+                val d = j - center
+                bins[j] += level * exp(-(d * d) / (2f * sigma * sigma))
             }
+            val cbin = center.roundToInt().coerceIn(0, BINS - 1)
+            if (channelPeak == null || rssi > channelPeak.rssi) channelPeak = ScopePeak(cbin, rssi)
         }
     }
+    // A gentle textured noise floor so valleys roll continuously instead of flatlining at
+    // zero, then a light 1-2-1 smooth for rounded ridgelines. Together these turn a handful
+    // of discrete APs into a continuous terrain instead of isolated spikes.
+    for (j in bins.indices) {
+        bins[j] = (bins[j] + 0.05f + 0.03f * (0.5f + 0.5f * sin(j * 0.7f))).coerceIn(0f, 1f)
+    }
+    val surface = FloatArray(BINS)
+    for (j in bins.indices) {
+        val a = bins[(j - 1).coerceAtLeast(0)]
+        val b = bins[j]
+        val c = bins[(j + 1).coerceAtMost(BINS - 1)]
+        surface[j] = (a + 2f * b + c) / 4f
+    }
     val trace = if (count == 0) null else ScopeTrace(high, low, total.toFloat() / count)
-    return ScopeSnapshot(bins, trace, channelPeak, profile, ranked, count)
+    return ScopeSnapshot(surface, trace, channelPeak, profile, ranked, count)
 }
 
 @Composable
@@ -399,7 +425,7 @@ private fun DrawScope.drawSurface(
         val depth = line / 10f
         drawLine(GRID, project(0, depth, 0f), project(BINS - 1, depth, 0f))
     }
-    for (bin in listOf(14, 28)) {
+    for (bin in listOf(29, 77)) {
         drawLine(CYAN.copy(alpha = 0.26f), project(bin, 0f, 0f), project(bin, 1f, 0f))
     }
 
@@ -456,9 +482,9 @@ private fun DrawScope.drawSurface(
         caption(text, "NO CURRENT WI-FI CHANNELS", 9.dp.toPx(), 8.dp.toPx(), MUTED, 10)
     }
     val axisY = height - 17.dp.toPx()
-    caption(text, "2.4 GHz", width * 0.04f, axisY, GREEN, 10)
-    caption(text, "5 GHz", width * 0.47f, axisY, CYAN, 10)
-    caption(text, "6 GHz", width * 0.79f, axisY, AMBER, 10)
+    caption(text, "2.4 GHz", width * 0.09f, axisY, GREEN, 10)
+    caption(text, "5 GHz", width * 0.52f, axisY, CYAN, 10)
+    caption(text, "6 GHz", width * 0.84f, axisY, AMBER, 10)
 }
 
 @Composable
