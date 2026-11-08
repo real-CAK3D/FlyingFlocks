@@ -34,6 +34,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.inset
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -45,23 +46,19 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.cak3d.biscuitmesh.MainViewModel
-import com.cak3d.biscuitmesh.sensors.GnssSnapshot
 import com.cak3d.biscuitmesh.sensors.PhoneScanRow
 import com.cak3d.biscuitmesh.wardrive.SampleKind
-import com.cak3d.biscuitmesh.wardrive.WardriveSample
 import kotlinx.coroutines.delay
-import kotlin.math.exp
-import kotlin.math.roundToInt
-import kotlin.math.sin
 
 private val BG = Color(0xFF05080A)
-private val PANEL = Color(0xFF0B1014)
+private val PANEL = Color(0xFF050708)
 private val GREEN = Color(0xFF5FD36A)
 private val CYAN = Color(0xFF22D3EE)
 private val AMBER = Color(0xFFF0B429)
@@ -69,16 +66,20 @@ private val EMBER = Color(0xFFFF6A3D)
 private val RED = Color(0xFFFF5470)
 private val INK = Color(0xFFE9F0EE)
 private val MUTED = Color(0xFF9AABA9)
-private val GRID = Color(0xFF243638)
-private val HEADER = Color(0xFF11191D)
+private val GRID = Color(0xFF252624)
+private val HEADER = Color(0xFF121415)
+private val WALL_GRID = Color(0xFF451E22)
+private val GOLD = Color(0xFFFFDC8D)
 private val MONO = FontFamily.Monospace
 
-private const val BINS = 96
+private const val BINS = 48
+private const val BLE_BIN = 45
+private const val CANDLE_TICKS = 3
 private const val TERRAIN_LIMIT = 40
 private const val TRACE_LIMIT = 120
 private const val PROFILE_BINS = 16
 private const val RANK_LIMIT = 6
-private const val FEED_LIMIT = 8
+private const val FEED_LIMIT = 12
 private const val TICK_MS = 220L
 private const val MIN_DBM = -100
 private const val MAX_DBM = -20
@@ -96,132 +97,46 @@ private fun PhoneScanRow.scopeBand(): ScopeBand = when {
     else -> ScopeBand.Other
 }
 
-/** Continuous bin position (0 until BINS) for a channel, or -1 for non-Wi-Fi. 2.4 GHz on
- *  the left, 5 GHz in the middle, 6 GHz on the right, with a gap between the bands. */
-private fun channelCenterBin(channel: Int, band: ScopeBand): Float = when (band) {
-    ScopeBand.WiFi24 -> (channel - 1).coerceIn(0, 13) / 13f * 25f            // 0 .. 25
-    ScopeBand.WiFi5 -> 33f + (channel - 32).coerceIn(0, 145) / 145f * 40f    // 33 .. 73
-    ScopeBand.WiFi6 -> 80f + (channel - 1000).coerceIn(0, 233) / 233f * 9f   // 80 .. 89
-    else -> -1f
+private fun channelBin(channel: Int, band: ScopeBand): Int = when (band) {
+    ScopeBand.WiFi24 -> channel - 1
+    ScopeBand.WiFi5 -> 15 + (channel - 32) * 15 / 145
+    ScopeBand.WiFi6 -> 32 + (channel - 1000).coerceIn(0, 233) * 9 / 233
+    ScopeBand.Ble -> BLE_BIN // The phone reports RSSI but no BLE channel. This is a separate lane.
+    ScopeBand.Other -> -1
 }
 
 private fun strength(rssi: Float): Float =
     ((rssi - MIN_DBM) / (MAX_DBM - MIN_DBM)).coerceIn(0f, 1f)
 
-// ---- Full-spectrum mapping: every signal placed by its real frequency -------------
-/** Centre frequency (MHz) of a Wi-Fi channel, or 0 if unknown. */
-private fun wifiMhz(channel: Int): Float = when {
-    channel == 14 -> 2484f
-    channel in 1..13 -> 2412f + (channel - 1) * 5f
-    channel in 32..177 -> 5000f + channel * 5f
-    channel >= 1000 -> 5950f + (channel - 1000) * 5f   // 6 GHz (stored as real ch + 1000)
-    else -> 0f
-}
-
-/** Rough L1 frequency (MHz) for a GNSS constellation. */
-private fun gnssMhz(constellation: String): Float = when (constellation.uppercase()) {
-    "GLONASS" -> 1602f
-    "BEIDOU" -> 1561f
-    else -> 1575f   // GPS / Galileo / QZSS / SBAS L1
-}
-
-/**
- * Segmented frequency axis (returns a bin 0 until BINS): sub-GHz on the left, then GPS,
- * 2.4 GHz, 5 GHz and 6 GHz, each given a readable share with gaps between the bands.
- */
-private fun freqBin(mhz: Float): Float {
-    // Continuous (no gaps) so the terrain fills edge to edge like a spectrum analyzer.
-    val p = when {
-        mhz < 960f -> (mhz - 300f) / 660f * 0.18f                // sub-GHz: 0.00–0.18
-        mhz < 2400f -> 0.18f + (mhz - 960f) / 1440f * 0.24f      // incl GPS ~1.5 GHz: 0.18–0.42
-        mhz < 2500f -> 0.42f + (mhz - 2400f) / 100f * 0.10f      // 2.4 GHz: 0.42–0.52
-        mhz < 5900f -> 0.52f + (mhz - 2500f) / 3400f * 0.28f     // incl 5 GHz: 0.52–0.80
-        else -> 0.80f + (mhz - 5900f) / 1300f * 0.20f            // 6 GHz: 0.80–1.00
-    }
-    return p.coerceIn(0f, 1f) * (BINS - 1)
-}
-
-/**
- * Build one full-spectrum terrain row from every signal the phone (and a board, if any)
- * can see: Wi-Fi + BT from the scan, GNSS satellites, and sub-GHz RF pings. Each is spread
- * across its spectral width so the surface rolls into terrain, with a textured floor. The
- * returned peak marks the strongest radio (device) for the call-out.
- */
-private fun buildSpectrum(
-    rows: List<PhoneScanRow>,
-    gnss: GnssSnapshot,
-    rf: Collection<WardriveSample>?,
-    tick: Float,
-): Pair<FloatArray, ScopePeak?> {
-    // A textured spectrum-analyzer noise floor across the whole width, so the surface reads
-    // as a continuous rolling range rather than isolated spikes. It drifts with `tick` so the
-    // terrain flows as it scrolls back. Real signals pile on top as taller, brighter peaks.
-    val bins = FloatArray(BINS) { j ->
-        (0.20f +
-            0.085f * sin(j * 0.21f + tick) +
-            0.055f * sin(j * 0.57f - tick * 1.3f) +
-            0.040f * sin(j * 1.17f + tick * 0.6f)).coerceAtLeast(0.05f)
-    }
-    fun add(mhz: Float, level: Float) {
-        if (mhz <= 0f) return
-        val center = freqBin(mhz)
-        val sigma = 2.6f
-        val lo = (center - sigma * 3f).toInt().coerceAtLeast(0)
-        val hi = (center + sigma * 3f).toInt().coerceAtMost(BINS - 1)
-        for (j in lo..hi) {
-            val d = j - center
-            bins[j] += level * exp(-(d * d) / (2f * sigma * sigma))
-        }
-    }
-    var peakRssi = Int.MIN_VALUE
-    var peakMhz = 0f
-    for (r in rows) {
-        if (r.rssi >= 0) continue
-        val mhz = if (r.kind == SampleKind.BT) 2440f else wifiMhz(r.channel)
-        add(mhz, strength(r.rssi.toFloat()))
-        if (mhz > 0f && r.rssi > peakRssi) { peakRssi = r.rssi; peakMhz = mhz }
-    }
-    for (s in gnss.sats) if (s.cn0 > 0f) add(gnssMhz(s.constellation), (s.cn0 / 48f).coerceIn(0f, 1f))
-    rf?.forEach { s ->
-        if (s.kind == SampleKind.RF) {
-            val mhz = s.label.removeSuffix(" MHz").trim().toFloatOrNull()
-            if (mhz != null) add(mhz, strength(s.rssi.toFloat()))
-        }
-    }
-    val surface = FloatArray(BINS)
-    for (j in bins.indices) {
-        val a = bins[(j - 1).coerceAtLeast(0)].coerceIn(0f, 1f)
-        val b = bins[j].coerceIn(0f, 1f)
-        val c = bins[(j + 1).coerceAtMost(BINS - 1)].coerceIn(0f, 1f)
-        surface[j] = (a + 2f * b + c) / 4f
-    }
-    val peak = if (peakRssi > Int.MIN_VALUE && peakMhz > 0f)
-        ScopePeak(freqBin(peakMhz).roundToInt().coerceIn(0, BINS - 1), peakRssi) else null
-    return surface to peak
-}
-
 private fun heat(level: Float): Color =
     if (level < 0.55f) lerp(GREEN, AMBER, level / 0.55f)
     else lerp(AMBER, EMBER, (level - 0.55f) / 0.45f)
 
-/** Orange spectrum-analyzer heat ramp: dark ember valleys → red → orange → pale yellow → bright peaks. */
-private fun terrainHeat(level: Float): Color = when {
-    level < 0.25f -> lerp(Color(0xFF1E0D06), Color(0xFFA32916), level / 0.25f)
-    level < 0.52f -> lerp(Color(0xFFA32916), Color(0xFFFA6E22), (level - 0.25f) / 0.27f)
-    level < 0.80f -> lerp(Color(0xFFFA6E22), Color(0xFFFFD98F), (level - 0.52f) / 0.28f)
-    else -> lerp(Color(0xFFFFD98F), Color(0xFFFFF6E2), (level - 0.80f) / 0.20f)
+private val FIRE_STOPS = listOf(
+    Color(0xFF1B090D), Color(0xFF731724), Color(0xFFBE2919), Color(0xFFF75A22),
+    Color(0xFFFF9C43), GOLD, Color(0xFFFFF2C7),
+)
+private val SURFACE_STOPS = listOf(
+    Color(0xFF171850), Color(0xFF2437B8), Color(0xFF258DDD), CYAN,
+    Color(0xFF35CF85), Color(0xFFCCE843), AMBER, EMBER, Color(0xFFE84B9E),
+)
+private val RIBBON = listOf(RED, EMBER, AMBER, GREEN, CYAN, Color(0xFF8566E8))
+private val RIBBON_SMOOTHING = floatArrayOf(.72f, .50f, .35f, .23f, .14f, .08f)
+private const val PALETTE_STEPS = 48
+
+private fun palette(stops: List<Color>) = Array(PALETTE_STEPS + 1) { step ->
+    val position = step.toFloat() / PALETTE_STEPS * (stops.size - 1)
+    val lower = position.toInt().coerceAtMost(stops.lastIndex - 1)
+    lerp(stops[lower], stops[lower + 1], position - lower)
 }
 
-private const val PALETTE_STEPS = 32
-private val TERRAIN_COLORS = Array(PALETTE_STEPS + 1) { terrainHeat(it / PALETTE_STEPS.toFloat()) }
-private val WATERFALL_COLORS = Array(PALETTE_STEPS + 1) {
-    val level = it / PALETTE_STEPS.toFloat()
-    if (level < 0.66f) lerp(Color(0xFF0A2843), CYAN, level / 0.66f)
-    else lerp(CYAN, Color(0xFFA3FAF1), (level - 0.66f) / 0.34f)
-}
+private val TERRAIN_COLORS = palette(FIRE_STOPS)
+private val WATERFALL_COLORS = palette(SURFACE_STOPS)
 
-private data class ScopeTrace(val high: Int, val low: Int, val mean: Float)
-private data class ScopePeak(val bin: Int, val rssi: Int)
+private data class ScopeTrace(val high: Int, val low: Int, val mean: Float, val contacts: Int, val discoveries: Int = 0)
+private data class ScopeCandle(val open: Int, val high: Int, val low: Int, val close: Int, val mean: Float, val contacts: Int, val discoveries: Int)
+private data class ScopePeak(val bin: Int, val rssi: Int, val band: ScopeBand, val channel: Int)
+private data class ScopeSlice(val bins: FloatArray, val peak: ScopePeak?)
 private data class ScopeHit(val row: PhoneScanRow, val time: String)
 private data class ScopeArrival(val tickMs: Long, val count: Int)
 private data class ScopeSnapshot(
@@ -231,6 +146,7 @@ private data class ScopeSnapshot(
     val profile: IntArray = IntArray(PROFILE_BINS),
     val ranked: List<PhoneScanRow> = emptyList(),
     val contacts: Int = 0,
+    val bands: IntArray = IntArray(ScopeBand.entries.size),
 )
 
 private fun <T> MutableList<T>.appendCapped(value: T, limit: Int) {
@@ -240,7 +156,7 @@ private fun <T> MutableList<T>.appendCapped(value: T, limit: Int) {
 
 @Composable
 fun ScopeScreen(vm: MainViewModel, onBack: () -> Unit) {
-    val terrain = remember(vm) { mutableStateListOf<FloatArray>() }
+    val terrain = remember(vm) { mutableStateListOf<ScopeSlice>() }
     val trace = remember(vm) { mutableStateListOf<ScopeTrace?>() }
     val feed = remember(vm) { mutableStateListOf<ScopeHit>() }
     var current by remember(vm) { mutableStateOf(ScopeSnapshot()) }
@@ -250,8 +166,7 @@ fun ScopeScreen(vm: MainViewModel, onBack: () -> Unit) {
 
     DisposableEffect(vm) {
         vm.startPhoneScan(wifi = true, ble = true)
-        vm.startGnss()
-        onDispose { vm.stopPhoneScan(); vm.stopGnss() }
+        onDispose { vm.stopPhoneScan() }
     }
 
     LaunchedEffect(vm) {
@@ -260,16 +175,15 @@ fun ScopeScreen(vm: MainViewModel, onBack: () -> Unit) {
         val timeFormat = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
         var previous: List<PhoneScanRow>? = null
         var rate = 0
-        var tick = 0f
         while (true) {
             val rows = vm.phoneScanResults.value
             val now = System.nanoTime() / 1_000_000L
             var next = current
             var newHits: List<ScopeHit>? = null
+            var discovered = 0
             if (rows !== previous) {
                 previous = rows
                 val newest = feed.mapTo(ArrayList(FEED_LIMIT + 1)) { it.row }
-                var discovered = 0
                 next = summarize(rows) { row ->
                     if (row.lastSeenMs >= enteredAt && seen.add(row.id)) {
                         discovered++
@@ -288,15 +202,11 @@ fun ScopeScreen(vm: MainViewModel, onBack: () -> Unit) {
             while (arrivals.firstOrNull()?.let { now - it.tickMs >= 1_000L } == true) {
                 rate -= arrivals.removeFirst().count
             }
-            // Full-spectrum terrain from every source we can see, rebuilt each tick so it
-            // keeps scrolling even when the Wi-Fi list hasn't changed (GNSS/RF still move).
-            tick += 0.17f
-            val spectrum = buildSpectrum(rows, vm.gnssState.value, vm.wardriveSamples?.value?.values, tick)
             Snapshot.withMutableSnapshot {
-                current = next.copy(channelPeak = spectrum.second)
+                current = next
                 newPerSecond = rate
-                terrain.appendCapped(spectrum.first, TERRAIN_LIMIT)
-                trace.appendCapped(next.trace, TRACE_LIMIT)
+                terrain.appendCapped(ScopeSlice(next.bins, next.channelPeak), TERRAIN_LIMIT)
+                trace.appendCapped(next.trace?.copy(discoveries = discovered), TRACE_LIMIT)
                 newHits?.let {
                     feed.clear()
                     feed.addAll(it)
@@ -309,37 +219,32 @@ fun ScopeScreen(vm: MainViewModel, onBack: () -> Unit) {
     Scaffold(containerColor = BG, topBar = { ScopeTopBar(text, onBack) }) { padding ->
         BoxWithConstraints(Modifier.fillMaxSize().padding(padding)) {
             val wide = maxWidth >= 640.dp
+            val heroHeight = (maxWidth * .53f).coerceIn(214.dp, 490.dp)
+            val traceHeight = (maxWidth * .34f).coerceIn(154.dp, 260.dp)
+            val lowerHeight = (maxWidth * .46f).coerceIn(230.dp, 400.dp)
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(12.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                contentPadding = PaddingValues(horizontal = if (wide) 8.dp else 2.dp, vertical = 2.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                item { ScopeStats(text, current.contacts, newPerSecond, current.trace?.high) }
+                item { ScopeStats(text, current, newPerSecond) }
                 item {
-                    ScopePanel(
-                        text, "01  SPECTRAL TERRAIN", "FULL SPECTRUM · SUB-GHZ → 6 GHZ · WI-FI / BT / GPS / RF",
-                        height = if (wide) 384 else 290,
-                        description = "Full radio spectrum — sub-GHz, GPS, Wi-Fi, Bluetooth. Newest at the front.",
-                    ) { drawSurface(text, terrain, current.channelPeak, waterfall = false) }
+                    ScopePanel(text, "◆  3D DEPTH VISUALIZER", "CH / RSSI / HISTORY", heroHeight.value.toInt(),
+                        "RF depth, Wi-Fi channels and a separate Bluetooth lane. Newest at the front.") {
+                        drawDepth(text, terrain)
+                    }
                 }
-                if (wide) {
-                    item {
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Column(Modifier.weight(1.2f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                ScopeTracePanel(text, trace, current.profile)
-                                ScopeWaterfallPanel(text, terrain)
-                            }
-                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                ScopeRankPanel(text, current.ranked)
-                                ScopeFeedPanel(text, feed)
-                            }
+                item { ScopeTracePanel(text, trace, current.profile, traceHeight.value.toInt()) }
+                item {
+                    Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Column(Modifier.weight(1.05f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            ScopeRankPanel(text, current.ranked, (lowerHeight.value * .40f).toInt())
+                            ScopeFeedPanel(text, feed, (lowerHeight.value * .60f).toInt() - 2)
+                        }
+                        Column(Modifier.weight(1f)) {
+                            ScopeWaterfallPanel(text, terrain, lowerHeight.value.toInt())
                         }
                     }
-                } else {
-                    item { ScopeTracePanel(text, trace, current.profile) }
-                    item { ScopeWaterfallPanel(text, terrain) }
-                    item { ScopeRankPanel(text, current.ranked) }
-                    item { ScopeFeedPanel(text, feed) }
                 }
             }
         }
@@ -350,6 +255,7 @@ private inline fun summarize(rows: List<PhoneScanRow>, onValid: (PhoneScanRow) -
     val bins = FloatArray(BINS)
     val profile = IntArray(PROFILE_BINS)
     val ranked = ArrayList<PhoneScanRow>(RANK_LIMIT)
+    val bands = IntArray(ScopeBand.entries.size)
     var channelPeak: ScopePeak? = null
     var high = Int.MIN_VALUE
     var low = Int.MAX_VALUE
@@ -367,45 +273,45 @@ private inline fun summarize(rows: List<PhoneScanRow>, onValid: (PhoneScanRow) -
         if (ranked.size < RANK_LIMIT) ranked.add(row)
         val bucket = (strength(rssi.toFloat()) * PROFILE_BINS).toInt().coerceAtMost(PROFILE_BINS - 1)
         profile[bucket]++
-        val center = channelCenterBin(row.channel, row.scopeBand())
-        if (center >= 0f) {
-            val level = strength(rssi.toFloat())
-            // Spread each AP across its spectral width (a Wi-Fi channel is ~20 MHz wide, not
-            // a single line) so the surface rolls into ridges instead of spiking on one bin.
-            // Overlapping APs accumulate, so busy channels build into mountains.
-            val sigma = 3.4f
-            val lo = (center - sigma * 3f).toInt().coerceAtLeast(0)
-            val hi = (center + sigma * 3f).toInt().coerceAtMost(BINS - 1)
-            for (j in lo..hi) {
-                val d = j - center
-                bins[j] += level * exp(-(d * d) / (2f * sigma * sigma))
+        val band = row.scopeBand()
+        bands[band.ordinal]++
+        val bin = channelBin(row.channel, band)
+        if (bin >= 0) {
+            val level = strength(rssi.toFloat()).coerceAtLeast(0.06f)
+            val first = when (band) {
+                ScopeBand.WiFi24 -> 0
+                ScopeBand.WiFi5 -> 15
+                ScopeBand.WiFi6 -> 32
+                else -> 43
             }
-            val cbin = center.roundToInt().coerceIn(0, BINS - 1)
-            if (channelPeak == null || rssi > channelPeak.rssi) channelPeak = ScopePeak(cbin, rssi)
+            val last = when (band) {
+                ScopeBand.WiFi24 -> 13
+                ScopeBand.WiFi5 -> 30
+                ScopeBand.WiFi6 -> 41
+                else -> 47
+            }
+            // Widen the marker for legibility within its band. This is not measured bandwidth.
+            for (offset in -2..2) {
+                val column = bin + offset
+                if (column in first..last) {
+                    val fade = when (offset) { 0 -> 1f; -1, 1 -> .62f; else -> .24f }
+                    bins[column] = maxOf(bins[column], level * fade)
+                }
+            }
+            if (channelPeak == null || rssi > channelPeak.rssi) {
+                channelPeak = ScopePeak(bin, rssi, band, row.channel)
+            }
         }
     }
-    // A gentle textured noise floor so valleys roll continuously instead of flatlining at
-    // zero, then a light 1-2-1 smooth for rounded ridgelines. Together these turn a handful
-    // of discrete APs into a continuous terrain instead of isolated spikes.
-    for (j in bins.indices) {
-        bins[j] = (bins[j] + 0.05f + 0.03f * (0.5f + 0.5f * sin(j * 0.7f))).coerceIn(0f, 1f)
-    }
-    val surface = FloatArray(BINS)
-    for (j in bins.indices) {
-        val a = bins[(j - 1).coerceAtLeast(0)]
-        val b = bins[j]
-        val c = bins[(j + 1).coerceAtMost(BINS - 1)]
-        surface[j] = (a + 2f * b + c) / 4f
-    }
-    val trace = if (count == 0) null else ScopeTrace(high, low, total.toFloat() / count)
-    return ScopeSnapshot(surface, trace, channelPeak, profile, ranked, count)
+    val trace = if (count == 0) null else ScopeTrace(high, low, total.toFloat() / count, count)
+    return ScopeSnapshot(bins, trace, channelPeak, profile, ranked, count, bands)
 }
 
 @Composable
 private fun ScopeTopBar(text: TextMeasurer, onBack: () -> Unit) {
     Row(Modifier.fillMaxWidth().background(BG).statusBarsPadding()) {
         Canvas(
-            Modifier.height(56.dp).width(56.dp)
+            Modifier.height(44.dp).width(44.dp)
                 .clickable(role = Role.Button, onClickLabel = "Back", onClick = onBack)
                 .semantics { contentDescription = "Back" },
         ) {
@@ -416,35 +322,33 @@ private fun ScopeTopBar(text: TextMeasurer, onBack: () -> Unit) {
             drawLine(GREEN, center - Offset(arm, 0f), center + Offset(0f, arm), 2.dp.toPx())
         }
         Canvas(
-            Modifier.height(56.dp).weight(1f)
+            Modifier.height(44.dp).weight(1f)
                 .semantics { heading(); contentDescription = "RF Depth. Live phone scope." },
         ) {
-            caption(text, "RF / DEPTH", 0f, 5.dp.toPx(), INK, 20, bold = true)
-            caption(text, "LIVE PHONE SCOPE · WI-FI / BLE", 0f, 33.dp.toPx(), GREEN, 10)
+            caption(text, "RF / DEPTH", 0f, 4.dp.toPx(), INK, 16, bold = true)
+            caption(text, "LIVE PHONE SCOPE · WI-FI / BLE", 0f, 25.dp.toPx(), GREEN, 9)
         }
     }
 }
 
 @Composable
-private fun ScopeStats(text: TextMeasurer, count: Int, rate: Int, peak: Int?) {
-    val peakText = peak?.let { "$it dBm" } ?: "—"
-    Canvas(
-        Modifier.fillMaxWidth().height(61.dp).semantics {
-            contentDescription = "$count contacts, $rate new per second, peak $peakText"
-        },
-    ) {
-        drawRect(PANEL)
-        drawRect(GRID, style = Stroke(1.dp.toPx()))
-        val cell = size.width / 3f
-        val labels = listOf("CONTACTS", "NEW / SEC", "PEAK")
-        val values = listOf(count.toString(), rate.toString(), peakText)
-        val colors = listOf(GREEN, CYAN, peak?.let { heat(strength(it.toFloat())) } ?: MUTED)
-        for (index in labels.indices) {
+private fun ScopeStats(text: TextMeasurer, snapshot: ScopeSnapshot, rate: Int) {
+    val peak = snapshot.trace?.high?.let { "$it dBm" } ?: "—"
+    Canvas(Modifier.fillMaxWidth().height(23.dp).semantics {
+        contentDescription = "${snapshot.contacts} contacts, $rate new per second, peak $peak"
+    }) {
+        drawRect(HEADER)
+        val cell = size.width / 7f
+        val fields = listOf("● LIVE ${snapshot.contacts}", "2.4 ${snapshot.bands[0]}",
+            "5G ${snapshot.bands[1]}", "6G ${snapshot.bands[2]}", "BLE ${snapshot.bands[3]}",
+            "+$rate/s", peak)
+        val colors = listOf(GREEN, GREEN, CYAN, AMBER, RED, CYAN, GOLD)
+        for (index in fields.indices) {
             val x = cell * index
             if (index > 0) drawLine(GRID, Offset(x, 0f), Offset(x, size.height))
-            caption(text, labels[index], x + 9.dp.toPx(), 8.dp.toPx(), MUTED, 10, cell - 14.dp.toPx())
-            caption(text, values[index], x + 9.dp.toPx(), 23.dp.toPx(), colors[index], 17, cell - 14.dp.toPx(), bold = true)
+            caption(text, fields[index], x + 3.dp.toPx(), 5.dp.toPx(), colors[index], 8, cell - 5.dp.toPx(), true)
         }
+        drawLine(AMBER.copy(alpha = .45f), Offset(0f, size.height - 1), Offset(size.width, size.height - 1))
     }
 }
 
@@ -461,15 +365,17 @@ private fun ScopePanel(
         Modifier.fillMaxWidth().height(height.dp)
             .semantics { contentDescription = description },
     ) {
-        val headerHeight = 40.dp.toPx()
+        val headerHeight = 17.dp.toPx()
         drawRect(PANEL)
         drawRect(HEADER, size = Size(size.width, headerHeight))
         drawLine(GRID, Offset(0f, headerHeight), Offset(size.width, headerHeight))
         drawRect(GRID, style = Stroke(1.dp.toPx()))
-        caption(text, title, 10.dp.toPx(), 4.dp.toPx(), CYAN, 12, bold = true)
-        caption(text, subtitle, 10.dp.toPx(), 22.dp.toPx(), MUTED, 9)
-        inset(left = 8.dp.toPx(), top = headerHeight + 4.dp.toPx(), right = 8.dp.toPx(), bottom = 5.dp.toPx()) {
-            content()
+        caption(text, title, 4.dp.toPx(), 2.dp.toPx(), GOLD, 8, size.width * .57f, true)
+        caption(text, subtitle, size.width * .59f, 2.dp.toPx(), MUTED, 7)
+        clipRect {
+            inset(left = 3.dp.toPx(), top = headerHeight + 1.dp.toPx(), right = 3.dp.toPx(), bottom = 2.dp.toPx()) {
+                content()
+            }
         }
     }
 }
@@ -483,13 +389,15 @@ private fun DrawScope.caption(
     fontSize: Int,
     width: Float = size.width - x,
     bold: Boolean = false,
+    titleFace: Boolean = false,
 ) {
     val available = width.toInt()
     if (available <= 0) return
     val layout = text.measure(
         text = AnnotatedString(value),
         style = TextStyle(
-            fontFamily = MONO, fontSize = fontSize.sp,
+            fontFamily = if (titleFace) FontFamily.Serif else MONO, fontSize = fontSize.sp,
+            fontStyle = if (titleFace) FontStyle.Italic else FontStyle.Normal,
             fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal,
         ),
         maxLines = 1,
@@ -499,232 +407,353 @@ private fun DrawScope.caption(
     drawText(layout, color = color, topLeft = Offset(x, y))
 }
 
-@Composable
-private fun ScopeWaterfallPanel(text: TextMeasurer, terrain: List<FloatArray>) {
-    ScopePanel(text, "03  3D WATERFALL", "CHANNEL INTENSITY · NEWEST AT FRONT", 195,
-        "Wi-Fi channel intensity over time.") {
-        drawSurface(text, terrain, peak = null, waterfall = true)
-    }
-}
-
-private fun DrawScope.drawSurface(
-    text: TextMeasurer,
-    terrain: List<FloatArray>,
-    peak: ScopePeak?,
-    waterfall: Boolean,
-) {
+private fun DrawScope.drawDepth(text: TextMeasurer, terrain: List<ScopeSlice>) {
     val width = size.width
     val height = size.height
-    val front = height - 22.dp.toPx()
-    drawRect(Brush.verticalGradient(listOf(BG, if (waterfall) Color(0xFF0D242B) else Color(0xFF201510), PANEL)))
-
+    drawRect(Brush.verticalGradient(listOf(Color.Black, Color(0xFF270D0D), Color(0xFF090506))))
+    val axis = height - 12.dp.toPx()
+    val focalBin = terrain.lastOrNull()?.peak?.bin ?: BINS / 2
     fun project(bin: Int, depth: Float, level: Float): Offset {
-        val convergence = 1f - depth * 0.54f
-        val x = width * (0.49f + 0.13f * depth + (bin / (BINS - 1f) - 0.5f) * 0.94f * convergence)
-        val floor = front * (1f - 0.57f * depth) + width * 0.008f * bin / (BINS - 1f)
-        val lift = front * (if (waterfall) 0.34f else 0.48f) * (1f - 0.48f * depth)
-        return Offset(x, floor - level * lift)
+        val perspective = 1f - .88f * depth
+        val relative = (bin - focalBin) / (BINS - 1f)
+        val x = width * (.59f - .15f * depth + relative * 1.12f * perspective)
+        val floor = axis * (.99f - .61f * depth)
+        return Offset(x, floor - level * axis * (.36f - .19f * depth))
     }
+    for (bin in 0 until BINS step 2) {
+        drawLine(WALL_GRID, project(bin, 0f, 0f), project(bin, 1f, 0f))
+    }
+    for (line in 0..16) {
+        val depth = line / 16f
+        drawLine(WALL_GRID, project(0, depth, 0f), project(BINS - 1, depth, 0f))
+    }
+    drawMesh(terrain, TERRAIN_COLORS, ::project, rainbow = false)
 
-    for (bin in 0 until BINS step 3) {
-        drawLine(GRID, project(bin, 0f, 0f), project(bin, 1f, 0f))
-    }
-    for (line in 0..10) {
-        val depth = line / 10f
-        drawLine(GRID, project(0, depth, 0f), project(BINS - 1, depth, 0f))
-    }
-
-    val palette = if (waterfall) WATERFALL_COLORS else TERRAIN_COLORS
-    val cell = Path()
     val ridge = Path()
-    val floorRow = FloatArray(BINS)
+    var connected = false
     for (index in terrain.indices) {
-        val row = terrain[index]
-        val older = terrain.getOrNull(index - 1) ?: floorRow
-        val near = (terrain.lastIndex - index) / TERRAIN_LIMIT.toFloat()
-        val far = near + 1f / TERRAIN_LIMIT
-        val opacity = 0.94f - near * 0.53f
+        val frame = terrain[index]
+        val peak = frame.peak
+        if (peak == null) {
+            connected = false
+            continue
+        }
+        val depth = (terrain.lastIndex - index) / TERRAIN_LIMIT.toFloat()
+        val point = project(peak.bin, depth, frame.bins[peak.bin])
+        if (connected) ridge.lineTo(point.x, point.y) else ridge.moveTo(point.x, point.y)
+        connected = true
+        if (index % 4 == 0 && depth in .25f..0.85f) {
+            val right = Offset(point.x + width * (.18f + depth * .13f), point.y - height * .01f)
+            val lift = height * (.045f + frame.bins[peak.bin] * .25f)
+            val wall = Path().apply {
+                moveTo(point.x, point.y)
+                lineTo(point.x, point.y - lift)
+                lineTo(right.x, right.y - lift * .92f)
+                lineTo(right.x, right.y)
+                close()
+            }
+            drawPath(wall, EMBER.copy(alpha = .12f))
+            drawPath(wall, EMBER.copy(alpha = .36f), style = Stroke(1.dp.toPx()))
+            drawLine(GOLD.copy(alpha = .30f), point - Offset(0f, lift * .46f),
+                right - Offset(0f, lift * .41f))
+            drawLine(INK.copy(alpha = .7f), right - Offset(0f, lift * .12f), right, 1.dp.toPx())
+        }
+    }
+    drawPath(ridge, Color(0xFF090F13), style = Stroke(4.dp.toPx()))
+    drawPath(ridge, Color(0xFF99E8F3), style = Stroke(1.dp.toPx()))
+
+    caption(text, "R F   D E P T H", width * .43f, 1.dp.toPx(), GOLD, 13, titleFace = true)
+    caption(text, "PHONE RF", 3.dp.toPx(), 2.dp.toPx(), INK, 8, bold = true)
+    caption(text, "WI-FI / BLE", 3.dp.toPx(), 13.dp.toPx(), MUTED, 7)
+    for (index in 0..6) {
+        val tint = TERRAIN_COLORS[(6 - index) * 7]
+        caption(text, "${-30 - index * 10} dBm", 3.dp.toPx(), (26 + index * 8).dp.toPx(), tint, 7)
+    }
+    caption(text, "SNAPSHOTS ${terrain.size}/$TERRAIN_LIMIT", width * .72f, 4.dp.toPx(), GOLD, 7)
+    caption(text, "FRONT = NEWEST", width * .72f, 15.dp.toPx(), MUTED, 7)
+    val frame = terrain.lastOrNull()
+    val peak = frame?.peak
+    if (peak != null) {
+        val point = project(peak.bin, 0f, frame.bins[peak.bin])
+        val channel = when (peak.band) {
+            ScopeBand.Ble -> "BLE"
+            ScopeBand.WiFi6 -> "6G CH ${peak.channel - 1000}"
+            else -> "${peak.band.tag} CH ${peak.channel}"
+        }
+        plotTag(text, "LAST  ${peak.rssi}", point, width * .62f, height * .77f, CYAN, 66)
+        plotTag(text, channel, project(peak.bin, .68f, frame.bins[peak.bin]), width * .36f, height * .21f, GOLD, 74)
+        plotTag(text, "BASE GRID", project((peak.bin - 5).coerceAtLeast(0), .27f, 0f),
+            width * .20f, height * .70f, INK, 62)
+        val tapeX = width * .77f
+        val tapeY = height * .83f
+        drawRect(Color.Black.copy(alpha = .82f), Offset(tapeX, tapeY), Size(width - tapeX, 23.dp.toPx()))
+        caption(text, "TAPE  ${peak.band.tag}", tapeX + 3.dp.toPx(), tapeY, GOLD, 7)
+        caption(text, "${peak.rssi} dBm", tapeX + 3.dp.toPx(), tapeY + 10.dp.toPx(), INK, 8)
+    } else {
+        caption(text, "WAITING FOR PHONE SCAN", width * .33f, height * .55f, MUTED, 9)
+    }
+    caption(text, "2.4 / 5 / 6 GHz · BLE LANE", 3.dp.toPx(), axis, MUTED, 7)
+}
+
+private fun DrawScope.plotTag(
+    text: TextMeasurer, label: String, point: Offset, targetX: Float, targetY: Float, color: Color, widthDp: Int,
+) {
+    val width = minOf(widthDp.dp.toPx(), size.width)
+    val x = targetX.coerceIn(0f, size.width - width)
+    val y = targetY.coerceIn(0f, (size.height - 12.dp.toPx()).coerceAtLeast(0f))
+    drawLine(color.copy(alpha = .65f), point, Offset(x + width * .5f, y + 5.dp.toPx()))
+    drawRect(color, Offset(x, y), Size(width, 11.dp.toPx()))
+    caption(text, label, x + 2.dp.toPx(), y, BG, 7, width - 4.dp.toPx(), true)
+}
+
+private fun DrawScope.drawMesh(
+    terrain: List<ScopeSlice>, palette: Array<Color>,
+    project: (Int, Float, Float) -> Offset, rainbow: Boolean,
+) {
+    val cell = Path()
+    for (index in 1 until terrain.size) {
+        val near = (terrain.lastIndex - index) / (TERRAIN_LIMIT - 1f)
+        val far = near + 1f / (TERRAIN_LIMIT - 1f)
+        val back = terrain[index - 1].bins
+        val front = terrain[index].bins
         for (bin in 0 until BINS - 1) {
-            val a = older[bin]
-            val b = older[bin + 1]
-            val c = row[bin + 1]
-            val d = row[bin]
-            val level = maxOf(maxOf(a, b), maxOf(c, d))
-            if (level == 0f) continue
+            val a = back[bin]
+            val b = back[bin + 1]
+            val c = front[bin + 1]
+            val d = front[bin]
+            val level = (a + b + c + d) / 4f
             val p1 = project(bin, far, a)
             val p2 = project(bin + 1, far, b)
             val p3 = project(bin + 1, near, c)
             val p4 = project(bin, near, d)
-            val tint = palette[(level * PALETTE_STEPS).toInt()]
+            if (level <= .001f) {
+                if (!rainbow) {
+                    drawLine(WALL_GRID.copy(alpha = .55f), p4, p3)
+                    drawLine(WALL_GRID.copy(alpha = .44f), p1, p4)
+                }
+                continue
+            }
+            val peak = maxOf(maxOf(a, b), maxOf(c, d))
+            val color = palette[((.40f * level + .60f * peak) * PALETTE_STEPS).toInt()]
             cell.reset()
             cell.moveTo(p1.x, p1.y)
             cell.lineTo(p2.x, p2.y)
             cell.lineTo(p3.x, p3.y)
             cell.lineTo(p4.x, p4.y)
             cell.close()
-            drawPath(cell, tint.copy(alpha = opacity * (0.50f + level * 0.50f)))
-            drawLine(tint.copy(alpha = opacity * 0.9f), p4, p3)
-        }
-        if (index == terrain.lastIndex) {
-            for (bin in row.indices) {
-                val point = project(bin, 0f, row[bin])
-                if (bin == 0) ridge.moveTo(point.x, point.y) else ridge.lineTo(point.x, point.y)
-            }
-            drawPath(ridge, if (waterfall) CYAN else AMBER, style = Stroke(1.dp.toPx()))
+            drawPath(cell, color.copy(alpha = .95f - near * .22f))
+            val grid = if (rainbow) INK.copy(alpha = .15f) else BG.copy(alpha = .32f)
+            drawLine(grid, p4, p3)
+            drawLine(grid, p1, p4)
         }
     }
-    val latest = terrain.lastOrNull()
-    if (peak != null && latest != null) {
-        val point = project(peak.bin, 0f, latest[peak.bin])
-        val labelWidth = minOf(132.dp.toPx(), width)
-        val x = (point.x + 9.dp.toPx()).coerceIn(0f, width - labelWidth)
-        val y = (point.y - 30.dp.toPx()).coerceAtLeast(1.dp.toPx())
-        drawLine(CYAN, point, Offset(x, y + 9.dp.toPx()), 1.dp.toPx())
-        drawCircle(CYAN, 3.dp.toPx(), point)
-        drawRect(CYAN, Offset(x, y), Size(labelWidth, 18.dp.toPx()))
-        caption(text, "PEAK  ${peak.rssi} dBm", x + 4.dp.toPx(), y + 1.dp.toPx(), BG, 10, labelWidth - 6.dp.toPx(), true)
-    } else if (latest == null || latest.none { it > 0f }) {
-        caption(text, "NO CURRENT WI-FI CHANNELS", 9.dp.toPx(), 8.dp.toPx(), MUTED, 10)
-    }
-    val axisY = height - 17.dp.toPx()
-    caption(text, "SUB-GHZ", width * 0.02f, axisY, MUTED, 9)
-    caption(text, "GPS", width * 0.25f, axisY, MUTED, 9)
-    caption(text, "2.4", width * 0.43f, axisY, MUTED, 9)
-    caption(text, "5 GHz", width * 0.64f, axisY, MUTED, 9)
-    caption(text, "6", width * 0.86f, axisY, MUTED, 9)
 }
 
 @Composable
-private fun ScopeTracePanel(text: TextMeasurer, trace: List<ScopeTrace?>, profile: IntArray) {
-    ScopePanel(text, "02  SIGNAL TRACE", "PEAK / MEAN · RSSI PROFILE", 197,
-        "Strongest and mean signal over time, with a high-low envelope and RSSI distribution.") {
+private fun ScopeWaterfallPanel(text: TextMeasurer, terrain: List<ScopeSlice>, height: Int) {
+    ScopePanel(text, "◆  RF INTENSITY SURFACE", "3D", height, "Color surface of Wi-Fi and Bluetooth signal strength over time.") {
+        drawRect(Color.Black)
+        val w = size.width
+        val h = size.height
+        fun project(bin: Int, depth: Float, level: Float): Offset {
+            val x = bin / (BINS - 1f)
+            return Offset(w * (.12f + .68f * x + .12f * depth), h * (.77f + .13f * x - .46f * depth - .29f * level))
+        }
+        for (line in 0..4) {
+            val depth = line / 4f
+            drawLine(GRID, project(0, depth, 0f), project(BINS - 1, depth, 0f))
+        }
+        for (bin in 0 until BINS step 7) {
+            drawLine(GRID, project(bin, 0f, 0f), project(bin, 1f, 0f))
+        }
+        drawMesh(terrain, WATERFALL_COLORS, ::project, rainbow = true)
+        drawRect(Brush.verticalGradient(SURFACE_STOPS.asReversed()), Offset(w - 6.dp.toPx(), h * .15f),
+            Size(4.dp.toPx(), h * .68f))
+        caption(text, "RSSI / CHANNEL / TIME", 3.dp.toPx(), 3.dp.toPx(), MUTED, 8)
+        caption(text, "OLDER", w * .19f, h * .25f, MUTED, 7)
+        caption(text, "CHANNEL / BLE", w * .28f, h * .92f, MUTED, 7)
+        terrain.lastOrNull()?.peak?.let {
+            val point = project(it.bin, 0f, strength(it.rssi.toFloat()))
+            plotTag(text, "${it.rssi} dBm", point, w * .48f, h * .57f, INK, 58)
+        }
+    }
+}
+
+@Composable
+private fun ScopeTracePanel(text: TextMeasurer, trace: List<ScopeTrace?>, profile: IntArray, height: Int) {
+    ScopePanel(text, "◆  RSSI · WI-FI / BLE", "CANDLES / PROFILE", height,
+        "RSSI candles, six smoothed averages, current signal distribution, and contact activity.") {
         drawTrace(text, trace, profile)
     }
 }
 
+private fun candles(trace: List<ScopeTrace?>): List<ScopeCandle?> =
+    trace.chunked(CANDLE_TICKS).map { samples ->
+        val valid = samples.filterNotNull()
+        if (valid.isEmpty()) null else ScopeCandle(
+            open = valid.first().high, high = valid.maxOf { it.high }, low = valid.minOf { it.low },
+            close = valid.last().high, mean = valid.map { it.mean }.average().toFloat(),
+            contacts = valid.maxOf { it.contacts }, discoveries = valid.sumOf { it.discoveries },
+        )
+    }
+
 private fun DrawScope.drawTrace(text: TextMeasurer, trace: List<ScopeTrace?>, profile: IntArray) {
-    val left = 34.dp.toPx()
-    val right = size.width * 0.77f
-    val top = 9.dp.toPx()
-    val bottom = size.height - 21.dp.toPx()
-    val height = bottom - top
-    if (right <= left || height <= 0f) return
-    fun x(index: Int) = right - (trace.lastIndex - index) * (right - left) / (TRACE_LIMIT - 1f)
-    fun y(rssi: Float) = bottom - strength(rssi) * height
-    for (dbm in MIN_DBM..MAX_DBM step 20) {
+    drawRect(Color.Black)
+    val left = 2.dp.toPx()
+    val right = size.width * .67f
+    val top = 23.dp.toPx()
+    val bottom = size.height - 28.dp.toPx()
+    val chartHeight = bottom - top
+    val profileRight = size.width - 25.dp.toPx()
+    if (right <= left || chartHeight <= 0f || profileRight <= right) return
+    val bars = candles(trace)
+    val step = (right - left) / (TRACE_LIMIT / CANDLE_TICKS)
+    fun x(index: Int) = right - (bars.size - index - .5f) * step
+    fun y(rssi: Float) = bottom - strength(rssi) * chartHeight
+    caption(text, "RF  ▪  RSSI  ▪  660 ms", left, 1.dp.toPx(), INK, 8, right - left)
+    for (index in RIBBON.indices) {
+        val keyX = left + index * 19.dp.toPx()
+        caption(text, "MA${index + 1}", keyX, 12.dp.toPx(), RIBBON[index], 7, 18.dp.toPx())
+    }
+
+    for (dbm in MIN_DBM..MAX_DBM step 10) {
         val line = y(dbm.toFloat())
-        drawLine(GRID, Offset(left, line), Offset(size.width, line))
-        caption(text, dbm.toString(), 0f, line - 6.dp.toPx(), MUTED, 9)
+        drawLine(GRID.copy(alpha = .65f), Offset(left, line), Offset(profileRight, line))
+        caption(text, dbm.toString(), profileRight + 2.dp.toPx(), line - 5.dp.toPx(), MUTED, 7)
     }
-    for (division in 0..6) {
-        val gridX = left + (right - left) * division / 6
-        drawLine(GRID, Offset(gridX, top), Offset(gridX, bottom))
+    for (division in 0..8) {
+        val gridX = left + (right - left) * division / 8
+        drawLine(GRID.copy(alpha = .55f), Offset(gridX, top), Offset(gridX, bottom))
     }
-    val maxCount = profile.maxOrNull()?.coerceAtLeast(1) ?: 1
-    val barHeight = height / PROFILE_BINS
-    val barRight = size.width - 2.dp.toPx()
+
+    val maxCount = profile.maxOrNull() ?: 0
+    val barHeight = chartHeight / PROFILE_BINS
+    var mode = -1
     for (bucket in profile.indices) {
-        val length = (barRight - right - 7.dp.toPx()) * profile[bucket] / maxCount
-        if (length > 0f) {
-            val level = (bucket + 0.5f) / PROFILE_BINS
-            drawRect(heat(level), Offset(barRight - length, bottom - (bucket + 1) * barHeight),
-                Size(length, (barHeight - 1.dp.toPx()).coerceAtLeast(1f)))
-        }
+        val count = profile[bucket]
+        if (count == 0) continue
+        if (mode < 0 || count > profile[mode]) mode = bucket
+        val length = (profileRight - right - 3.dp.toPx()) * count / maxCount
+        val barY = bottom - (bucket + 1) * barHeight
+        val tint = lerp(GOLD, EMBER, bucket / PROFILE_BINS.toFloat())
+        val size = Size(length, (barHeight - .5.dp.toPx()).coerceAtLeast(1f))
+        drawRect(Brush.horizontalGradient(listOf(tint.copy(alpha = .35f), tint),
+            startX = profileRight - length, endX = profileRight), Offset(profileRight - length, barY), size)
     }
-    val envelope = Path()
-    val peak = Path()
-    val mean = Path()
-    var index = 0
-    while (index < trace.size) {
-        if (trace[index] == null) {
-            index++
+    if (mode >= 0) {
+        val level = bottom - (mode + .5f) * barHeight
+        for (segment in 0..24) {
+            val px = left + (right - left) * segment / 25
+            drawLine(GOLD.copy(alpha = .45f), Offset(px, level), Offset(px + 2.dp.toPx(), level))
+        }
+        plotTag(text, "POC", Offset(right, level), right - 22.dp.toPx(), level - 5.dp.toPx(), GOLD, 20)
+    }
+
+    val maxContacts = bars.maxOfOrNull { it?.contacts ?: 0 }?.coerceAtLeast(1) ?: 1
+    val ribbonPaths = Array(RIBBON.size) { Path() }
+    val means = FloatArray(RIBBON.size)
+    var connected = false
+    for (index in bars.indices) {
+        val candle = bars[index]
+        if (candle == null) {
+            connected = false
             continue
         }
-        val start = index
-        while (index < trace.size && trace[index] != null) index++
-        envelope.reset()
-        peak.reset()
-        mean.reset()
-        for (point in start until index) {
-            val sample = trace[point] ?: continue
-            val px = x(point)
-            val hi = y(sample.high.toFloat())
-            val avg = y(sample.mean)
-            if (point == start) {
-                envelope.moveTo(px, hi)
-                peak.moveTo(px, hi)
-                mean.moveTo(px, avg)
-            } else {
-                envelope.lineTo(px, hi)
-                peak.lineTo(px, hi)
-                mean.lineTo(px, avg)
-            }
+        val px = x(index)
+        for (line in RIBBON.indices) {
+            means[line] = if (connected) means[line] + (candle.mean - means[line]) * RIBBON_SMOOTHING[line]
+                else candle.mean
+            val py = y(means[line])
+            if (connected) ribbonPaths[line].lineTo(px, py) else ribbonPaths[line].moveTo(px, py)
         }
-        for (point in index - 1 downTo start) {
-            val sample = trace[point] ?: continue
-            envelope.lineTo(x(point), y(sample.low.toFloat()))
-        }
-        envelope.close()
-        drawPath(envelope, AMBER.copy(alpha = 0.18f))
-        drawPath(mean, CYAN, style = Stroke(1.25.dp.toPx()))
-        drawPath(peak, EMBER, style = Stroke(1.5.dp.toPx()))
-        if (index - start == 1) {
-            trace[start]?.let { drawCircle(EMBER, 2.dp.toPx(), Offset(x(start), y(it.high.toFloat()))) }
+        connected = true
+        val barWidth = (step * .66f).coerceAtLeast(1f)
+        val height = 11.dp.toPx() * candle.contacts / maxContacts
+        val activityBottom = size.height - 11.dp.toPx()
+        drawRect(AMBER.copy(alpha = .48f), Offset(px - barWidth / 2, activityBottom - height), Size(barWidth, height))
+        if (candle.discoveries > 0) {
+            val newHeight = 11.dp.toPx() * candle.discoveries.coerceAtMost(maxContacts) / maxContacts
+            drawRect(EMBER, Offset(px - barWidth / 2, activityBottom - newHeight), Size(barWidth, newHeight))
         }
     }
-    caption(text, "OLDER", left, bottom + 3.dp.toPx(), MUTED, 9)
-    caption(text, "NOW", right - 20.dp.toPx(), bottom + 3.dp.toPx(), MUTED, 9)
-    caption(text, "dBm", 0f, bottom + 3.dp.toPx(), MUTED, 9)
+    for (line in RIBBON.indices.reversed()) {
+        drawPath(ribbonPaths[line], RIBBON[line].copy(alpha = .11f), style = Stroke(5.dp.toPx()))
+        drawPath(ribbonPaths[line], RIBBON[line], style = Stroke(1.dp.toPx()))
+    }
+    val bodyWidth = (step * .59f).coerceAtLeast(1f)
+    for (index in bars.indices) {
+        val candle = bars[index] ?: continue
+        val px = x(index)
+        val open = y(candle.open.toFloat())
+        val close = y(candle.close.toFloat())
+        val tint = if (candle.close >= candle.open) INK else MUTED
+        drawLine(tint.copy(alpha = .68f), Offset(px, y(candle.high.toFloat())), Offset(px, y(candle.low.toFloat())))
+        val position = Offset(px - bodyWidth / 2, minOf(open, close))
+        val body = Size(bodyWidth, kotlin.math.abs(open - close).coerceAtLeast(1.4.dp.toPx()))
+        if (candle.close >= candle.open) drawRect(tint, position, body)
+        else drawRect(tint, position, body, style = Stroke(.75.dp.toPx()))
+    }
+    if (bars.lastOrNull() != null) {
+        val current = bars.lastOrNull() ?: return
+        val py = y(current.close.toFloat())
+        plotTag(text, "${current.close}", Offset(right, py), profileRight, py - 5.dp.toPx(), INK, 22)
+    }
+    drawLine(GRID, Offset(left, size.height - 11.dp.toPx()), Offset(right, size.height - 11.dp.toPx()))
+    caption(text, "−26s", left, size.height - 11.dp.toPx(), MUTED, 7)
+    caption(text, "−13s", right * .48f, size.height - 11.dp.toPx(), MUTED, 7)
+    caption(text, "NOW", right - 17.dp.toPx(), size.height - 11.dp.toPx(), MUTED, 7)
+    caption(text, "CONTACTS", right + 6.dp.toPx(), size.height - 12.dp.toPx(), GOLD, 7)
 }
 
 @Composable
-private fun ScopeRankPanel(text: TextMeasurer, ranked: List<PhoneScanRow>) {
+private fun ScopeRankPanel(text: TextMeasurer, ranked: List<PhoneScanRow>, height: Int) {
     val description = ranked.joinToString { "${it.label.ifBlank { it.id }}, ${it.rssi} dBm" }
-    ScopePanel(text, "04  STRONGEST SIGNALS", "WI-FI AND BLE · TOP $RANK_LIMIT", 197,
+    ScopePanel(text, "◆  CONTACTS", "RSSI", height,
         "Strongest signals. ${description.ifEmpty { "No contacts yet." }}") {
         if (ranked.isEmpty()) caption(text, "NO CONTACTS YET", 2.dp.toPx(), 4.dp.toPx(), MUTED, 10)
-        val rowHeight = 23.dp.toPx()
-        val meterX = size.width * 0.47f
-        val valueWidth = 60.dp.toPx()
+        val rowHeight = (size.height / RANK_LIMIT).coerceAtMost(18.dp.toPx())
+        val meterX = size.width * .44f
+        val valueWidth = 26.dp.toPx()
         val meterWidth = (size.width - meterX - valueWidth - 8.dp.toPx()).coerceAtLeast(0f)
         for ((index, signal) in ranked.withIndex()) {
             val y = rowHeight * index
             val level = strength(signal.rssi.toFloat())
-            val tint = heat(level)
-            drawLine(GRID, Offset(0f, y + rowHeight), Offset(size.width, y + rowHeight))
-            caption(text, signal.label.ifBlank { signal.id }, 2.dp.toPx(), y + 3.dp.toPx(), INK, 11,
+            val tint = RIBBON.reversed()[index]
+            if (index % 2 == 0) drawRect(HEADER, Offset(0f, y), Size(size.width, rowHeight))
+            caption(text, signal.label.ifBlank { signal.id }, 2.dp.toPx(), y + 1.dp.toPx(), tint, 8,
                 meterX - 7.dp.toPx())
-            drawRect(GRID, Offset(meterX, y + 9.dp.toPx()), Size(meterWidth, 5.dp.toPx()))
-            drawRect(tint, Offset(meterX, y + 9.dp.toPx()), Size(meterWidth * level.coerceAtLeast(0.04f), 5.dp.toPx()))
-            caption(text, "${signal.rssi} dBm", size.width - valueWidth, y + 3.dp.toPx(), tint, 10)
+            drawRect(GRID, Offset(meterX, y + rowHeight * .42f), Size(meterWidth, 3.dp.toPx()))
+            drawRect(tint, Offset(meterX, y + rowHeight * .42f), Size(meterWidth * level.coerceAtLeast(0.04f), 3.dp.toPx()))
+            caption(text, "${signal.rssi}", size.width - valueWidth, y + 1.dp.toPx(), INK, 8)
         }
     }
 }
 
 @Composable
-private fun ScopeFeedPanel(text: TextMeasurer, feed: List<ScopeHit>) {
+private fun ScopeFeedPanel(text: TextMeasurer, feed: List<ScopeHit>, height: Int) {
     val description = feed.joinToString {
         "${it.time}, ${it.row.scopeBand().tag}, ${it.row.label.ifBlank { it.row.id }}, ${it.row.rssi} dBm"
     }
-    ScopePanel(text, "05  DETECTION FEED", "NEW CONTACTS · NEWEST FIRST", 233,
+    ScopePanel(text, "◆  LIVE FEED", "TAIL", height,
         "Detection feed. ${description.ifEmpty { "Waiting for new contacts." }}") {
         if (feed.isEmpty()) caption(text, "WAITING FOR NEW CONTACTS", 2.dp.toPx(), 4.dp.toPx(), MUTED, 10)
-        val rowHeight = 22.dp.toPx()
-        val bandX = 56.dp.toPx()
-        val labelX = 91.dp.toPx()
-        val valueWidth = 60.dp.toPx()
-        for ((index, hit) in feed.withIndex()) {
+        val rowHeight = 11.dp.toPx()
+        val bandX = 38.dp.toPx()
+        val labelX = 61.dp.toPx()
+        val valueWidth = 26.dp.toPx()
+        val visible = ((size.height - 10.dp.toPx()) / rowHeight).toInt().coerceIn(0, FEED_LIMIT)
+        for ((index, hit) in feed.take(visible).withIndex()) {
             val y = rowHeight * index
             val row = hit.row
             val band = row.scopeBand()
             if (index % 2 == 0) drawRect(HEADER, Offset(0f, y), Size(size.width, rowHeight))
-            caption(text, hit.time, 2.dp.toPx(), y + 4.dp.toPx(), MUTED, 9, bandX - 4.dp.toPx())
-            drawRect(band.tint.copy(alpha = 0.15f), Offset(bandX, y + 3.dp.toPx()), Size(29.dp.toPx(), 15.dp.toPx()))
-            caption(text, band.tag, bandX + 3.dp.toPx(), y + 4.dp.toPx(), band.tint, 9, 26.dp.toPx(), true)
-            caption(text, row.label.ifBlank { row.id }, labelX, y + 3.dp.toPx(), INK, 10,
-                size.width - labelX - valueWidth - 4.dp.toPx())
-            caption(text, "${row.rssi} dBm", size.width - valueWidth, y + 3.dp.toPx(),
-                heat(strength(row.rssi.toFloat())), 10)
+            caption(text, hit.time, 1.dp.toPx(), y, MUTED, 7, bandX - 2.dp.toPx())
+            drawRect(band.tint, Offset(bandX, y + 1.dp.toPx()), Size(20.dp.toPx(), 9.dp.toPx()))
+            caption(text, band.tag, bandX + 2.dp.toPx(), y, BG, 7, 18.dp.toPx(), true)
+            caption(text, row.label.ifBlank { row.id }, labelX, y, INK, 7,
+                size.width - labelX - valueWidth - 1.dp.toPx())
+            caption(text, "${row.rssi}", size.width - valueWidth, y, heat(strength(row.rssi.toFloat())), 7)
         }
+        caption(text, "›  phone.scan | tail", 2.dp.toPx(), size.height - 9.dp.toPx(), GREEN, 7)
     }
 }
