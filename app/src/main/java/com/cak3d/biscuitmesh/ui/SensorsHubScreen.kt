@@ -63,9 +63,7 @@ fun SensorsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
     val sections = listOf(
         HubSection("Sense & Navigate", listOf(
             HubEntry("Live Scope", "A live waveform of the RF around you — highs, lows & bands", Icons.Default.Insights, "scope", Color(0xFF5FD36A)),
-            HubEntry("Locator", "Home in on a device by signal — hot/cold + buzz", Icons.Default.MyLocation, "locator", Color(0xFF34D399)),
-            HubEntry("Radar", "A live radar of the Wi-Fi & BT devices around you", Icons.Default.Radar, "radar", Color(0xFF22D3EE)),
-            HubEntry("Compass", "A live 3D compass — always know which way you're heading", Icons.Default.Explore, "compass", Color(0xFFFFD166)),
+            HubEntry("Navigate", "Compass, Radar & Locator — flip between them in one view", Icons.Default.Explore, "radar", Color(0xFF22D3EE)),
             HubEntry("Background Collect", "Phone-only — keep catching Wi-Fi & BT with the screen off", Icons.Default.Sensors, "collect", Color(0xFF5FD36A)),
             HubEntry("Tracker Check", "Is a BLE tracker following you? Best-effort anti-stalking", Icons.Default.PersonSearch, "trackers", Color(0xFFFF5470)),
             HubEntry("Watchlist", "Flag MACs or names and spot them in range", Icons.Default.Visibility, "watchlist", Color(0xFF34D399)),
