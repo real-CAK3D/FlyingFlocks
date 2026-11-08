@@ -14,6 +14,11 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import com.cak3d.biscuitmesh.wardrive.SampleKind
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Turns the phone itself into a wardrive sensor using its own Wi-Fi and BLE
@@ -28,29 +33,47 @@ class PhoneSensors(context: Context, private val adapter: BluetoothAdapter?) {
 
     data class Hit(val kind: SampleKind, val id: String, val label: String, val rssi: Int, val channel: Int = 0, val security: String = "", val standard: String = "")
 
-    private var onHit: ((Hit) -> Unit)? = null
-    private var scanningWifi = false
+    @Volatile private var onHit: ((Hit) -> Unit)? = null
+    @Volatile private var scanningWifi = false
     private var scanningBle = false
 
     private val mainHandler = Handler(Looper.getMainLooper())
+    // All scan-result parsing runs here, never on the main thread. The broadcast
+    // receiver and the poller both fire on the main thread, so doing the per-AP
+    // work inline would hammer the UI thread in a dense area.
+    private val scanScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    // Coalesce: if a burst of SCAN_RESULTS broadcasts lands while we're still
+    // parsing the last one, drop the extras instead of queuing a job per broadcast.
+    private val emitting = AtomicBoolean(false)
 
     private val wifiReceiver = object : BroadcastReceiver() {
         override fun onReceive(c: Context?, i: Intent?) {
-            emitWifi()
-            // Re-arm. Modern Android throttles startScan(), but the cached
-            // results still refresh as the phone moves.
-            if (scanningWifi) runCatching { @Suppress("DEPRECATION") wifi?.startScan() }
+            // Just parse the fresh cached results off the main thread. Do NOT re-arm
+            // startScan() here: a SCAN_RESULTS broadcast triggering another scan is a
+            // self-feeding loop that, on phones that don't throttle, floods the main
+            // thread with broadcasts until it ANRs. The poller re-arms on a fixed timer.
+            scheduleEmit()
         }
     }
 
-    // Belt-and-suspenders: the SCAN_RESULTS broadcast can be throttled or dropped on
-    // newer Android, so also poll the cached results on a timer while scanning.
+    // The broadcast can be throttled or dropped on newer Android, so poll the cached
+    // results and re-arm the scan on a fixed 6s timer — the single place a scan is
+    // re-triggered, which caps how often results churn.
     private val wifiPoller = object : Runnable {
         override fun run() {
             if (!scanningWifi) return
-            emitWifi()
-            runCatching { @Suppress("DEPRECATION") wifi?.startScan() }
+            scheduleEmit()
+            scanScope.launch { runCatching { @Suppress("DEPRECATION") wifi?.startScan() } }
             mainHandler.postDelayed(this, 6000)
+        }
+    }
+
+    /** Parse the latest cached scan results on a background thread, coalescing bursts. */
+    private fun scheduleEmit() {
+        if (!scanningWifi) return
+        if (!emitting.compareAndSet(false, true)) return
+        scanScope.launch {
+            try { emitWifi() } finally { emitting.set(false) }
         }
     }
 
@@ -81,8 +104,8 @@ class PhoneSensors(context: Context, private val adapter: BluetoothAdapter?) {
                     appContext.registerReceiver(wifiReceiver, filter)
                 }
             }
-            emitWifi() // seed from the last cached scan right away
-            runCatching { @Suppress("DEPRECATION") wifi?.startScan() }
+            scheduleEmit() // seed from the last cached scan right away (off the main thread)
+            scanScope.launch { runCatching { @Suppress("DEPRECATION") wifi?.startScan() } }
             mainHandler.postDelayed(wifiPoller, 6000)
         }
         if (bleOn && !scanningBle) {
