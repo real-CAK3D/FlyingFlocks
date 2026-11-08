@@ -79,6 +79,7 @@ import com.cak3d.biscuitmesh.ui.NavigateScreen
 import com.cak3d.biscuitmesh.ui.NavMode
 import com.cak3d.biscuitmesh.ui.GlobeScreen
 import com.cak3d.biscuitmesh.ui.GlobalStatsScreen
+import com.cak3d.biscuitmesh.ui.ScopeScreen
 import com.cak3d.biscuitmesh.ui.CrewScreen
 import com.cak3d.biscuitmesh.ui.DeadZonesScreen
 import com.cak3d.biscuitmesh.ui.LabBenchScreen
@@ -354,6 +355,7 @@ private fun MainShell(vm: MainViewModel) {
                 }
                 composable("globe") { GlobeScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("globalstats") { GlobalStatsScreen(vm = vm, onBack = { nav.popBackStack() }) }
+                composable("scope") { ScopeScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("collect") { BackgroundCollectScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("games") { GamesScreen(onBack = { nav.popBackStack() }, onOpen = { nav.navigate(it) }) }
                 composable("game/signalhunt") { SignalHuntScreen(vm = vm, onBack = { nav.popBackStack() }) }
