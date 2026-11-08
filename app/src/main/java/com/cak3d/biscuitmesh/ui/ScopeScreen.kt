@@ -51,8 +51,10 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.cak3d.biscuitmesh.MainViewModel
+import com.cak3d.biscuitmesh.sensors.GnssSnapshot
 import com.cak3d.biscuitmesh.sensors.PhoneScanRow
 import com.cak3d.biscuitmesh.wardrive.SampleKind
+import com.cak3d.biscuitmesh.wardrive.WardriveSample
 import kotlinx.coroutines.delay
 import kotlin.math.exp
 import kotlin.math.roundToInt
@@ -106,6 +108,91 @@ private fun channelCenterBin(channel: Int, band: ScopeBand): Float = when (band)
 private fun strength(rssi: Float): Float =
     ((rssi - MIN_DBM) / (MAX_DBM - MIN_DBM)).coerceIn(0f, 1f)
 
+// ---- Full-spectrum mapping: every signal placed by its real frequency -------------
+/** Centre frequency (MHz) of a Wi-Fi channel, or 0 if unknown. */
+private fun wifiMhz(channel: Int): Float = when {
+    channel == 14 -> 2484f
+    channel in 1..13 -> 2412f + (channel - 1) * 5f
+    channel in 32..177 -> 5000f + channel * 5f
+    channel >= 1000 -> 5950f + (channel - 1000) * 5f   // 6 GHz (stored as real ch + 1000)
+    else -> 0f
+}
+
+/** Rough L1 frequency (MHz) for a GNSS constellation. */
+private fun gnssMhz(constellation: String): Float = when (constellation.uppercase()) {
+    "GLONASS" -> 1602f
+    "BEIDOU" -> 1561f
+    else -> 1575f   // GPS / Galileo / QZSS / SBAS L1
+}
+
+/**
+ * Segmented frequency axis (returns a bin 0 until BINS): sub-GHz on the left, then GPS,
+ * 2.4 GHz, 5 GHz and 6 GHz, each given a readable share with gaps between the bands.
+ */
+private fun freqBin(mhz: Float): Float {
+    val p = when {
+        mhz < 1000f -> (mhz - 300f) / 628f * 0.20f                 // sub-GHz 0.3–0.93: 0.00–0.20
+        mhz < 1700f -> 0.22f + (mhz - 1150f) / 500f * 0.08f        // GNSS ~1.15–1.65: 0.22–0.30
+        mhz < 2500f -> 0.33f + (mhz - 2400f) / 100f * 0.17f        // 2.4 GHz: 0.33–0.50
+        mhz < 5900f -> 0.52f + (mhz - 5000f) / 900f * 0.26f        // 5 GHz: 0.52–0.78
+        else -> 0.80f + (mhz - 5900f) / 1300f * 0.20f              // 6 GHz: 0.80–1.00
+    }
+    return p.coerceIn(0f, 1f) * (BINS - 1)
+}
+
+/**
+ * Build one full-spectrum terrain row from every signal the phone (and a board, if any)
+ * can see: Wi-Fi + BT from the scan, GNSS satellites, and sub-GHz RF pings. Each is spread
+ * across its spectral width so the surface rolls into terrain, with a textured floor. The
+ * returned peak marks the strongest radio (device) for the call-out.
+ */
+private fun buildSpectrum(
+    rows: List<PhoneScanRow>,
+    gnss: GnssSnapshot,
+    rf: Collection<WardriveSample>?,
+): Pair<FloatArray, ScopePeak?> {
+    val bins = FloatArray(BINS)
+    fun add(mhz: Float, level: Float) {
+        if (mhz <= 0f) return
+        val center = freqBin(mhz)
+        val sigma = 2.8f
+        val lo = (center - sigma * 3f).toInt().coerceAtLeast(0)
+        val hi = (center + sigma * 3f).toInt().coerceAtMost(BINS - 1)
+        for (j in lo..hi) {
+            val d = j - center
+            bins[j] += level * exp(-(d * d) / (2f * sigma * sigma))
+        }
+    }
+    var peakRssi = Int.MIN_VALUE
+    var peakMhz = 0f
+    for (r in rows) {
+        if (r.rssi >= 0) continue
+        val mhz = if (r.kind == SampleKind.BT) 2440f else wifiMhz(r.channel)
+        add(mhz, strength(r.rssi.toFloat()))
+        if (mhz > 0f && r.rssi > peakRssi) { peakRssi = r.rssi; peakMhz = mhz }
+    }
+    for (s in gnss.sats) if (s.cn0 > 0f) add(gnssMhz(s.constellation), (s.cn0 / 48f).coerceIn(0f, 1f))
+    rf?.forEach { s ->
+        if (s.kind == SampleKind.RF) {
+            val mhz = s.label.removeSuffix(" MHz").trim().toFloatOrNull()
+            if (mhz != null) add(mhz, strength(s.rssi.toFloat()))
+        }
+    }
+    for (j in bins.indices) {
+        bins[j] = (bins[j] + 0.05f + 0.03f * (0.5f + 0.5f * sin(j * 0.7f))).coerceIn(0f, 1f)
+    }
+    val surface = FloatArray(BINS)
+    for (j in bins.indices) {
+        val a = bins[(j - 1).coerceAtLeast(0)]
+        val b = bins[j]
+        val c = bins[(j + 1).coerceAtMost(BINS - 1)]
+        surface[j] = (a + 2f * b + c) / 4f
+    }
+    val peak = if (peakRssi > Int.MIN_VALUE && peakMhz > 0f)
+        ScopePeak(freqBin(peakMhz).roundToInt().coerceIn(0, BINS - 1), peakRssi) else null
+    return surface to peak
+}
+
 private fun heat(level: Float): Color =
     if (level < 0.55f) lerp(GREEN, AMBER, level / 0.55f)
     else lerp(AMBER, EMBER, (level - 0.55f) / 0.45f)
@@ -148,7 +235,8 @@ fun ScopeScreen(vm: MainViewModel, onBack: () -> Unit) {
 
     DisposableEffect(vm) {
         vm.startPhoneScan(wifi = true, ble = true)
-        onDispose { vm.stopPhoneScan() }
+        vm.startGnss()
+        onDispose { vm.stopPhoneScan(); vm.stopGnss() }
     }
 
     LaunchedEffect(vm) {
@@ -184,10 +272,13 @@ fun ScopeScreen(vm: MainViewModel, onBack: () -> Unit) {
             while (arrivals.firstOrNull()?.let { now - it.tickMs >= 1_000L } == true) {
                 rate -= arrivals.removeFirst().count
             }
+            // Full-spectrum terrain from every source we can see, rebuilt each tick so it
+            // keeps scrolling even when the Wi-Fi list hasn't changed (GNSS/RF still move).
+            val spectrum = buildSpectrum(rows, vm.gnssState.value, vm.wardriveSamples?.value?.values)
             Snapshot.withMutableSnapshot {
-                current = next
+                current = next.copy(channelPeak = spectrum.second)
                 newPerSecond = rate
-                terrain.appendCapped(next.bins, TERRAIN_LIMIT)
+                terrain.appendCapped(spectrum.first, TERRAIN_LIMIT)
                 trace.appendCapped(next.trace, TRACE_LIMIT)
                 newHits?.let {
                     feed.clear()
@@ -209,9 +300,9 @@ fun ScopeScreen(vm: MainViewModel, onBack: () -> Unit) {
                 item { ScopeStats(text, current.contacts, newPerSecond, current.trace?.high) }
                 item {
                     ScopePanel(
-                        text, "01  SPECTRAL TERRAIN", "CHANNEL × TIME × RSSI",
+                        text, "01  SPECTRAL TERRAIN", "FULL SPECTRUM · SUB-GHZ → 6 GHZ · WI-FI / BT / GPS / RF",
                         height = if (wide) 384 else 290,
-                        description = "Wi-Fi channel and signal history. Newest at the front.",
+                        description = "Full radio spectrum — sub-GHz, GPS, Wi-Fi, Bluetooth. Newest at the front.",
                     ) { drawSurface(text, terrain, current.channelPeak, waterfall = false) }
                 }
                 if (wide) {
@@ -425,8 +516,8 @@ private fun DrawScope.drawSurface(
         val depth = line / 10f
         drawLine(GRID, project(0, depth, 0f), project(BINS - 1, depth, 0f))
     }
-    for (bin in listOf(29, 77)) {
-        drawLine(CYAN.copy(alpha = 0.26f), project(bin, 0f, 0f), project(bin, 1f, 0f))
+    for (bin in listOf(18, 28, 45, 70)) {
+        drawLine(CYAN.copy(alpha = 0.22f), project(bin, 0f, 0f), project(bin, 1f, 0f))
     }
 
     val palette = if (waterfall) WATERFALL_COLORS else TERRAIN_COLORS
@@ -482,9 +573,11 @@ private fun DrawScope.drawSurface(
         caption(text, "NO CURRENT WI-FI CHANNELS", 9.dp.toPx(), 8.dp.toPx(), MUTED, 10)
     }
     val axisY = height - 17.dp.toPx()
-    caption(text, "2.4 GHz", width * 0.09f, axisY, GREEN, 10)
-    caption(text, "5 GHz", width * 0.52f, axisY, CYAN, 10)
-    caption(text, "6 GHz", width * 0.84f, axisY, AMBER, 10)
+    caption(text, "SUB-GHZ", width * 0.02f, axisY, AMBER, 9)
+    caption(text, "GPS", width * 0.24f, axisY, GREEN, 9)
+    caption(text, "2.4", width * 0.40f, axisY, GREEN, 9)
+    caption(text, "5 GHz", width * 0.60f, axisY, CYAN, 9)
+    caption(text, "6", width * 0.86f, axisY, AMBER, 9)
 }
 
 @Composable
