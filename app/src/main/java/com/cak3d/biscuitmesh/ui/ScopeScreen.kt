@@ -118,11 +118,13 @@ fun ScopeScreen(vm: MainViewModel, onBack: () -> Unit) {
         var lastTotal = 0
         while (true) {
             val snap: List<PhoneScanRow> = vm.phoneScanResults.value
-            val nets = snap.filter { it.kind == SampleKind.AP || it.kind == SampleKind.STATION }
-            val bt = snap.count { it.kind == SampleKind.BT }
+            // Drop unknown-RSSI rows (Android reports 127 / 0x7F when it has no reading).
+            val valid = snap.filter { it.rssi in -119..-1 }
+            val nets = valid.filter { it.kind == SampleKind.AP || it.kind == SampleKind.STATION }
+            val bt = valid.count { it.kind == SampleKind.BT }
 
             // Waveform: envelope + mean of this tick's signal strengths.
-            val strengths = snap.map { strengthOf(it.rssi) }
+            val strengths = valid.map { strengthOf(it.rssi) }
             val hi = strengths.maxOrNull() ?: 0f
             val lo = strengths.minOrNull() ?: 0f
             val avg = if (strengths.isEmpty()) 0f else strengths.average().toFloat()
@@ -132,7 +134,7 @@ fun ScopeScreen(vm: MainViewModel, onBack: () -> Unit) {
             // Terrain: per-column max strength of the Wi-Fi networks this tick.
             val row = FloatArray(COLS)
             for (n in nets) {
-                if (n.channel <= 0) continue
+                if (n.channel <= 0) continue  // nets already excludes unknown-RSSI rows
                 val c = colOf(n.channel)
                 val s = strengthOf(n.rssi)
                 if (s > row[c]) row[c] = s
@@ -145,14 +147,14 @@ fun ScopeScreen(vm: MainViewModel, onBack: () -> Unit) {
             band5 = nets.count { it.channel in 32..177 }
             band6 = nets.count { it.channel >= 1000 }
             bandBt = bt
-            val curMax = snap.maxOfOrNull { it.rssi } ?: -120
+            val curMax = valid.maxOfOrNull { it.rssi } ?: -120
             peakDbm = curMax
             rate = max(0, snap.size - lastTotal).toFloat()
 
             // Feed: note fresh arrivals and the strongest contact.
             if (snap.size > lastTotal) {
                 val t = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US).format(java.util.Date())
-                val strongest = snap.maxByOrNull { it.rssi }
+                val strongest = valid.maxByOrNull { it.rssi }
                 val isBt = strongest?.kind == SampleKind.BT
                 val tag = when {
                     isBt -> "BT"

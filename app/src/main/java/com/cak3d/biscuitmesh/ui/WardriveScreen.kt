@@ -1188,11 +1188,11 @@ fun sourceColor(src: String): Int =
 // washed out over the map) so shared sightings read as "confirmed by the fleet".
 private const val SHARED_COLOR: Int = 0xFFFFC400.toInt()
 
-private fun colorForSample(s: WardriveSample): Int =
+internal fun colorForSample(s: WardriveSample): Int =
     if (s.sources.size > 1) SHARED_COLOR
     else sourceColor(s.sources.firstOrNull() ?: PHONE_SOURCE)
 
-private fun sizeForKind(kind: SampleKind): Int = when (kind) {
+internal fun sizeForKind(kind: SampleKind): Int = when (kind) {
     SampleKind.AP -> 11
     SampleKind.STATION -> 8
     SampleKind.BT -> 10
@@ -1261,7 +1261,7 @@ private fun dot(color: Int, sizeDp: Int): GradientDrawable =
  * overlay no matter how many points there are and only paints the ones currently
  * on screen; tap near a dot to read what it was.
  */
-private class DotsOverlay(private val dots: List<Dot>) : Overlay() {
+internal class DotsOverlay(private val dots: List<Dot>) : Overlay() {
     class Dot(val point: GeoPoint, val color: Int, val radiusPx: Float, val title: String)
 
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)

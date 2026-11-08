@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.SatelliteAlt
 import androidx.compose.material.icons.filled.Science
+import androidx.compose.material.icons.filled.SpaceDashboard
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Place
@@ -46,6 +47,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -80,6 +82,7 @@ import com.cak3d.biscuitmesh.ui.NavMode
 import com.cak3d.biscuitmesh.ui.GlobeScreen
 import com.cak3d.biscuitmesh.ui.GlobalStatsScreen
 import com.cak3d.biscuitmesh.ui.ScopeScreen
+import com.cak3d.biscuitmesh.ui.DashboardScreen
 import com.cak3d.biscuitmesh.ui.CrewScreen
 import com.cak3d.biscuitmesh.ui.DeadZonesScreen
 import com.cak3d.biscuitmesh.ui.LabBenchScreen
@@ -185,6 +188,19 @@ private fun MainShell(vm: MainViewModel) {
     val onMap = currentRoute == "wardrive"
     val scanning by vm.scanning.collectAsStateWithLifecycle()
 
+    // On a wide screen — a Fold opened flat — jump straight to the dashboard once, so
+    // unfolding the phone lands you on the full map + tools + device view. Opens only
+    // from the home screen and only once per unfold, so it never fights your navigation.
+    val wideScreen = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp >= 640
+    val autoOpened = remember { mutableStateOf(false) }
+    LaunchedEffect(wideScreen, currentRoute) {
+        if (wideScreen && currentRoute == "fleet" && !autoOpened.value) {
+            autoOpened.value = true
+            nav.navigate("dashboard")
+        }
+        if (!wideScreen) autoOpened.value = false
+    }
+
     Scaffold(
         containerColor = Color.Transparent,
         topBar = {
@@ -202,6 +218,9 @@ private fun MainShell(vm: MainViewModel) {
                     },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                     actions = {
+                        IconButton(onClick = { nav.navigate("dashboard") }) {
+                            Icon(Icons.Default.SpaceDashboard, contentDescription = "Dashboard")
+                        }
                         IconButton(onClick = { nav.navigate("places") }) {
                             Icon(Icons.Default.Place, contentDescription = "Places")
                         }
@@ -356,6 +375,7 @@ private fun MainShell(vm: MainViewModel) {
                 composable("globe") { GlobeScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("globalstats") { GlobalStatsScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("scope") { ScopeScreen(vm = vm, onBack = { nav.popBackStack() }) }
+                composable("dashboard") { DashboardScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("collect") { BackgroundCollectScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("games") { GamesScreen(onBack = { nav.popBackStack() }, onOpen = { nav.navigate(it) }) }
                 composable("game/signalhunt") { SignalHuntScreen(vm = vm, onBack = { nav.popBackStack() }) }
