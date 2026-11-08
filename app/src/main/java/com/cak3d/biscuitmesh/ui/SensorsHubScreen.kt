@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -28,6 +27,7 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Nightlight
+import androidx.compose.material.icons.filled.PersonSearch
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Radar
 import androidx.compose.material.icons.filled.SatelliteAlt
@@ -48,37 +48,50 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 private data class HubEntry(val title: String, val sub: String, val icon: ImageVector, val route: String, val tint: Color)
+private data class HubSection(val title: String, val entries: List<HubEntry>)
 
-/** A small hub for the live sensing / sky tools, so they don't crowd the top bar. */
+/** A hub for the live sensing / sky tools, grouped so the long list doesn't crowd the screen. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SensorsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
-    val entries = listOf(
-        HubEntry("Locator", "Home in on a device by signal — hot/cold + buzz", Icons.Default.MyLocation, "locator", Color(0xFF34D399)),
-        HubEntry("Background Collect", "Phone-only — keep catching Wi-Fi & BT with the screen off", Icons.Default.Sensors, "collect", Color(0xFF5FD36A)),
-        HubEntry("Tracker Check", "Is a BLE tracker following you? Best-effort anti-stalking", Icons.Default.Radar, "trackers", Color(0xFFFF5470)),
-        HubEntry("Compass", "A live 3D compass — always know which way you're heading", Icons.Default.Explore, "compass", Color(0xFFFFD166)),
-        HubEntry("Radar", "A live radar of the Wi-Fi & BT devices around you", Icons.Default.Radar, "radar", Color(0xFF22D3EE)),
-        HubEntry("Live Scope", "A live waveform of the RF around you — highs, lows & bands", Icons.Default.Insights, "scope", Color(0xFF5FD36A)),
-        HubEntry("Aurora", "Live space weather — can you see the northern lights tonight?", Icons.Default.Nightlight, "aurora", Color(0xFFA855F7)),
-        HubEntry("GPS Satellites", "Which satellites your GPS is locked onto", Icons.Default.SatelliteAlt, "satellites", Color(0xFF22D3EE)),
-        HubEntry("Orbit", "A live 3D globe of the satellites overhead", Icons.Default.Public, "globe", Color(0xFF38BDF8)),
-        HubEntry("Aircraft Overhead", "Live ADS-B — planes in the air near you", Icons.Default.Flight, "aircraft", Color(0xFF38BDF8)),
-        HubEntry("Caw", "Chat over your Meshtastic mesh — off-grid, no internet", Icons.Default.Forum, "meshchat", Color(0xFF00E5A0)),
-        HubEntry("Squawk", "Open chat with anyone running the app — online", Icons.Default.Campaign, "squawk", Color(0xFF5FD36A)),
-        HubEntry("Chirps", "Private 1:1 chirps — leave a feather, swap Band & Meshtastic info", Icons.Default.Lock, "whisper", Color(0xFF86EFAC)),
-        HubEntry("Flock", "Ring a band, see the wings you tail live on the map", Icons.Default.Groups, "crew", Color(0xFF34D399)),
-        HubEntry("Global Stats", "The whole flock's totals and the leaderboard", Icons.Default.Leaderboard, "globalstats", Color(0xFF22D3EE)),
-        HubEntry("Hunts", "Bounty board — challenges that tick up as you drive", Icons.Default.EmojiEvents, "hunts", Color(0xFFFFD166)),
-        HubEntry("Games", "Mini-games — hunt a signal, spot species, beat the clock", Icons.Default.SportsEsports, "games", Color(0xFF34D399)),
-        HubEntry("Watchlist", "Flag MACs or names and spot them in range", Icons.Default.Visibility, "watchlist", Color(0xFF34D399)),
-        HubEntry("Tire Pressure", "Learn your car's TPMS sensors, watch live pressure", Icons.Default.DirectionsCar, "tiredash", Color(0xFF38BDF8)),
-        HubEntry("Device Ledger", "Regulars vs transients across all your drives", Icons.Default.ReceiptLong, "ledger", Color(0xFF22D3EE)),
-        HubEntry("Lab Bench", "MAC decoder, signal→distance, crack-time, quiz", Icons.Default.Science, "labbench", Color(0xFFF59E0B)),
+    val sections = listOf(
+        HubSection("Sense & Navigate", listOf(
+            HubEntry("Live Scope", "A live waveform of the RF around you — highs, lows & bands", Icons.Default.Insights, "scope", Color(0xFF5FD36A)),
+            HubEntry("Locator", "Home in on a device by signal — hot/cold + buzz", Icons.Default.MyLocation, "locator", Color(0xFF34D399)),
+            HubEntry("Radar", "A live radar of the Wi-Fi & BT devices around you", Icons.Default.Radar, "radar", Color(0xFF22D3EE)),
+            HubEntry("Compass", "A live 3D compass — always know which way you're heading", Icons.Default.Explore, "compass", Color(0xFFFFD166)),
+            HubEntry("Background Collect", "Phone-only — keep catching Wi-Fi & BT with the screen off", Icons.Default.Sensors, "collect", Color(0xFF5FD36A)),
+            HubEntry("Tracker Check", "Is a BLE tracker following you? Best-effort anti-stalking", Icons.Default.PersonSearch, "trackers", Color(0xFFFF5470)),
+            HubEntry("Watchlist", "Flag MACs or names and spot them in range", Icons.Default.Visibility, "watchlist", Color(0xFF34D399)),
+        )),
+        HubSection("Sky", listOf(
+            HubEntry("Aurora", "Live space weather — can you see the northern lights tonight?", Icons.Default.Nightlight, "aurora", Color(0xFFA855F7)),
+            HubEntry("GPS Satellites", "Which satellites your GPS is locked onto", Icons.Default.SatelliteAlt, "satellites", Color(0xFF22D3EE)),
+            HubEntry("Orbit", "A live 3D globe of the satellites overhead", Icons.Default.Public, "globe", Color(0xFF38BDF8)),
+            HubEntry("Aircraft Overhead", "Live ADS-B — planes in the air near you", Icons.Default.Flight, "aircraft", Color(0xFF38BDF8)),
+        )),
+        HubSection("Comms", listOf(
+            HubEntry("Caw", "Chat over your Meshtastic mesh — off-grid, no internet", Icons.Default.Forum, "meshchat", Color(0xFF00E5A0)),
+            HubEntry("Squawk", "Open chat with anyone running the app — online", Icons.Default.Campaign, "squawk", Color(0xFF5FD36A)),
+            HubEntry("Chirps", "Private 1:1 chirps — leave a feather, swap Band & Meshtastic info", Icons.Default.Lock, "whisper", Color(0xFF86EFAC)),
+            HubEntry("Flock", "Ring a band, see the wings you tail live on the map", Icons.Default.Groups, "crew", Color(0xFF34D399)),
+        )),
+        HubSection("Play & Stats", listOf(
+            HubEntry("Global Stats", "The whole flock's totals and the leaderboard", Icons.Default.Leaderboard, "globalstats", Color(0xFF22D3EE)),
+            HubEntry("Hunts", "Bounty board — challenges that tick up as you drive", Icons.Default.EmojiEvents, "hunts", Color(0xFFFFD166)),
+            HubEntry("Games", "Mini-games — hunt a signal, spot species, beat the clock", Icons.Default.SportsEsports, "games", Color(0xFF34D399)),
+            HubEntry("Device Ledger", "Regulars vs transients across all your drives", Icons.Default.ReceiptLong, "ledger", Color(0xFF22D3EE)),
+        )),
+        HubSection("Tools", listOf(
+            HubEntry("Tire Pressure", "Learn your car's TPMS sensors, watch live pressure", Icons.Default.DirectionsCar, "tiredash", Color(0xFF38BDF8)),
+            HubEntry("Lab Bench", "MAC decoder, signal→distance, crack-time, quiz", Icons.Default.Science, "labbench", Color(0xFFF59E0B)),
+        )),
     )
     Scaffold(
         topBar = {
@@ -93,24 +106,37 @@ fun SensorsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
         LazyColumn(
             Modifier.fillMaxSize().padding(padding),
             contentPadding = PaddingValues(14.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            items(entries, key = { it.route }) { e ->
-                Card(
-                    onClick = { onOpen(e.route) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                ) {
-                    Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                        Icon(e.icon, contentDescription = null, tint = e.tint, modifier = Modifier.size(28.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(e.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                            Text(e.sub, style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f))
+            sections.forEach { section ->
+                item(key = "sec-${section.title}") {
+                    Text(
+                        section.title.uppercase(),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.5.sp,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(start = 4.dp, top = 8.dp, bottom = 2.dp),
+                    )
+                }
+                items(section.entries, key = { it.route }) { e ->
+                    Card(
+                        onClick = { onOpen(e.route) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    ) {
+                        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                            Icon(e.icon, contentDescription = null, tint = e.tint, modifier = Modifier.size(28.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(e.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                                Text(e.sub, style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f))
+                            }
+                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
                         }
-                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
                     }
                 }
             }

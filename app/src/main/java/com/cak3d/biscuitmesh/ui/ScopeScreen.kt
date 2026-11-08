@@ -105,7 +105,7 @@ fun ScopeScreen(vm: MainViewModel, onBack: () -> Unit) {
     val waveLo = remember { mutableStateListOf<Float>() }   // weakest signal per tick
     val waveAvg = remember { mutableStateListOf<Float>() }  // mean signal per tick
     val terrain = remember { mutableStateListOf<FloatArray>() } // newest first; each = COLS heights
-    val feed = remember { mutableStateListOf<String>() }
+    val feed = remember { mutableStateListOf<FeedItem>() }
     var total by remember { mutableStateOf(0) }
     var rate by remember { mutableStateOf(0f) }
     var band24 by remember { mutableStateOf(0) }
@@ -153,9 +153,16 @@ fun ScopeScreen(vm: MainViewModel, onBack: () -> Unit) {
             if (snap.size > lastTotal) {
                 val t = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US).format(java.util.Date())
                 val strongest = snap.maxByOrNull { it.rssi }
-                val tag = if (strongest?.kind == SampleKind.BT) "BT " else "WIFI"
+                val isBt = strongest?.kind == SampleKind.BT
+                val tag = when {
+                    isBt -> "BT"
+                    (strongest?.channel ?: 0) >= 1000 -> "6E"
+                    (strongest?.channel ?: 0) in 32..177 -> "5G"
+                    else -> "2G4"
+                }
+                val tagColor = when (tag) { "BT" -> RED; "6E" -> AMBER; "5G" -> CYAN; else -> GREEN }
                 val lbl = strongest?.let { it.label.ifBlank { it.id } } ?: "—"
-                feed.add("$t  $tag  +${snap.size - lastTotal}  ${curMax}dBm  ${lbl.take(18)}")
+                feed.add(FeedItem(t, tag, tagColor, strengthOf(curMax), "+${snap.size - lastTotal}  ${curMax}dBm  ${lbl.take(16)}"))
                 if (feed.size > 80) feed.removeAt(0)
             }
             lastTotal = snap.size
@@ -230,11 +237,24 @@ private fun ScopePanel(title: String, sub: String, content: @Composable () -> Un
     }
 }
 
+// Rainbow ribbon palette (fast → slow), red through violet like the reference EMA ribbon.
+private val RIBBON = listOf(
+    Color(0xFFFF5470), Color(0xFFFF8A3D), Color(0xFFF0B429),
+    Color(0xFF5FD36A), Color(0xFF22D3EE), Color(0xFF7C5CFF),
+)
+
+/** Exponential moving average of a series with smoothing factor [a] (0..1, smaller = smoother). */
+private fun ema(src: List<Float>, a: Float): FloatArray {
+    val out = FloatArray(src.size)
+    var acc = src.firstOrNull() ?: 0f
+    for (i in src.indices) { acc += a * (src[i] - acc); out[i] = acc }
+    return out
+}
+
 @Composable
 private fun WaveformCanvas(hi: List<Float>, lo: List<Float>, avg: List<Float>) {
-    Canvas(Modifier.fillMaxWidth().height(150.dp)) {
+    Canvas(Modifier.fillMaxWidth().height(160.dp)) {
         val w = size.width; val h = size.height
-        // baseline grid
         for (i in 0..4) {
             val y = h * i / 4f
             drawLine(GRID, Offset(0f, y), Offset(w, y), 1f)
@@ -243,57 +263,81 @@ private fun WaveformCanvas(hi: List<Float>, lo: List<Float>, avg: List<Float>) {
         if (n < 2) return@Canvas
         fun x(i: Int) = w * i / (n - 1f)
         fun y(v: Float) = h - v.coerceIn(0f, 1f) * h
-        // Fill the high/low envelope.
+        // High/low envelope fill.
         val env = Path().apply {
             moveTo(x(0), y(hi[0]))
             for (i in 1 until n) lineTo(x(i), y(hi[i]))
             for (i in n - 1 downTo 0) lineTo(x(i), y(lo[i]))
             close()
         }
-        drawPath(env, GREEN.copy(alpha = 0.16f))
-        // High line (hot) and mean line.
-        fun line(series: List<Float>, color: Color, stroke: Float) {
+        drawPath(env, GREEN.copy(alpha = 0.12f))
+        fun drawSeries(series: FloatArray, color: Color, stroke: Float) {
             val p = Path().apply {
                 moveTo(x(0), y(series[0]))
-                for (i in 1 until n) lineTo(x(i), y(series[i]))
+                for (i in 1 until series.size) lineTo(x(i), y(series[i]))
             }
             drawPath(p, color, style = Stroke(stroke))
         }
-        line(hi, EMBER, 2.5f)
-        line(avg, CYAN, 1.5f)
+        // Rainbow EMA ribbon over the mean — fast (bright) to slow (smooth).
+        val alphas = listOf(0.60f, 0.42f, 0.28f, 0.18f, 0.11f, 0.06f)
+        for (k in alphas.indices.reversed()) {
+            drawSeries(ema(avg, alphas[k]), RIBBON[k].copy(alpha = 0.9f), 2f)
+        }
+        // Strongest-signal line on top, hot.
+        drawSeries(hi.toFloatArray(), EMBER, 2.4f)
     }
 }
 
 @Composable
 private fun TerrainCanvas(terrain: List<FloatArray>) {
-    Canvas(Modifier.fillMaxWidth().height(200.dp)) {
+    Canvas(Modifier.fillMaxWidth().height(230.dp)) {
         val w = size.width; val h = size.height
         val rows = terrain.size
         if (rows == 0) return@Canvas
-        val topPad = h * 0.10f
-        val bandH = h * 0.5f          // vertical travel from back row to front row
-        val amp = h * 0.42f           // peak height
-        val colW = w / (COLS - 1f)
-        // Draw back-to-front so nearer ridges overlap older ones (painter's algorithm).
+        val amp = h * 0.34f          // peak height
+        val cx = w / 2f
+        // Perspective projection: back rows sit higher, converge toward centre, and fade.
+        // depth: 0 = newest/front (wide, low), 1 = oldest/back (narrow, high).
+        fun project(col: Int, depth: Float, height: Float): Offset {
+            val persp = 1f - depth * 0.52f                       // back rows narrower
+            val nx = (col / (COLS - 1f)) - 0.5f
+            val x = cx + nx * w * 0.96f * persp
+            val yBase = h * 0.86f - depth * (h * 0.52f)          // back rows higher on screen
+            val y = yBase - height * amp * (1f - depth * 0.35f)  // nearer peaks taller
+            return Offset(x, y)
+        }
+        // Faint floor grid (depth lines) first, so ridges draw over it.
+        for (c in 0 until COLS step 3) {
+            val p = Path()
+            for (r in rows - 1 downTo 0) {
+                val o = project(c, r / (ROWS - 1f), 0f)
+                if (r == rows - 1) p.moveTo(o.x, o.y) else p.lineTo(o.x, o.y)
+            }
+            drawPath(p, GRID, style = Stroke(1f))
+        }
+        // Ridge lines, back-to-front (painter's algorithm) so near ridges overlap far ones.
         for (r in rows - 1 downTo 0) {
             val row = terrain[r]
-            val depth = r / (ROWS - 1f)                 // 0 = newest/front, 1 = oldest/back
-            val yBase = topPad + bandH * (1f - depth)   // front rows lower on screen
-            val fade = 0.25f + (1f - depth) * 0.75f
-            val path = Path()
+            val depth = r / (ROWS - 1f)
+            val fade = 0.18f + (1f - depth) * 0.82f
+            val ridge = Path()
             for (c in 0 until COLS) {
-                val x = c * colW
-                val y = yBase + bandH - row[c] * amp
-                if (c == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                val o = project(c, depth, row[c])
+                if (c == 0) ridge.moveTo(o.x, o.y) else ridge.lineTo(o.x, o.y)
             }
-            // stroke coloured by this row's peak
             val peak = row.maxOrNull() ?: 0f
-            drawPath(path, ramp(peak).copy(alpha = fade), style = Stroke(1.6f))
+            // soft under-glow then the hot ridge line
+            drawPath(ridge, ramp(peak).copy(alpha = fade * 0.22f), style = Stroke(5f))
+            drawPath(ridge, ramp(peak).copy(alpha = fade), style = Stroke(1.6f))
         }
-        // channel band separators
-        for (f in listOf(0.28f, 0.80f)) {
-            val x = w * f
-            drawLine(GRID, Offset(x, 0f), Offset(x, h), 1f)
+        // Depth "walls" at the band edges (2.4 | 5 | 6 GHz), front-to-back.
+        for (edgeCol in listOf((COLS * 0.28f).toInt(), (COLS * 0.80f).toInt())) {
+            val p = Path()
+            for (r in rows - 1 downTo 0) {
+                val o = project(edgeCol, r / (ROWS - 1f), 0f)
+                if (r == rows - 1) p.moveTo(o.x, o.y) else p.lineTo(o.x, o.y)
+            }
+            drawPath(p, CYAN.copy(alpha = 0.18f), style = Stroke(1.2f))
         }
     }
 }
@@ -325,17 +369,34 @@ private fun Bar(label: String, value: Int, maxv: Int, color: Color) {
     }
 }
 
+private data class FeedItem(val t: String, val tag: String, val color: Color, val strength: Float, val text: String)
+
 @Composable
-private fun FeedPanel(feed: List<String>) {
+private fun FeedPanel(feed: List<FeedItem>) {
     val listState = rememberLazyListState()
     LaunchedEffect(feed.size) { if (feed.isNotEmpty()) listState.animateScrollToItem(feed.size - 1) }
     LazyColumn(
-        Modifier.fillMaxWidth().height(160.dp).background(Color.Black.copy(alpha = 0.35f), RoundedCornerShape(8.dp))
+        Modifier.fillMaxWidth().height(172.dp).background(Color.Black.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
             .padding(8.dp),
         state = listState,
+        verticalArrangement = Arrangement.spacedBy(3.dp),
     ) {
-        items(feed) { line ->
-            Text(line, color = GREEN.copy(alpha = 0.85f), fontFamily = MONO, fontSize = 11.sp, maxLines = 1)
+        items(feed) { item ->
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(item.t, color = Color.White.copy(alpha = 0.4f), fontFamily = MONO, fontSize = 10.sp)
+                Box(
+                    Modifier.background(item.color.copy(alpha = 0.22f), RoundedCornerShape(3.dp))
+                        .padding(horizontal = 4.dp),
+                ) {
+                    Text(item.tag, color = item.color, fontFamily = MONO, fontWeight = FontWeight.Bold, fontSize = 9.sp)
+                }
+                // per-line load bar from signal strength
+                Box(Modifier.width(54.dp).height(8.dp).background(Color.White.copy(alpha = 0.06f), RoundedCornerShape(2.dp))) {
+                    Box(Modifier.fillMaxWidth(item.strength).height(8.dp)
+                        .background(item.color.copy(alpha = 0.8f), RoundedCornerShape(2.dp)))
+                }
+                Text(item.text, color = GREEN.copy(alpha = 0.85f), fontFamily = MONO, fontSize = 10.sp, maxLines = 1)
+            }
         }
     }
 }
