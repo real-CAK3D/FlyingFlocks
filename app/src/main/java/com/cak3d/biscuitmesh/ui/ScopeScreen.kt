@@ -53,8 +53,10 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.cak3d.biscuitmesh.MainViewModel
+import com.cak3d.biscuitmesh.sensors.GnssSnapshot
 import com.cak3d.biscuitmesh.sensors.PhoneScanRow
 import com.cak3d.biscuitmesh.wardrive.SampleKind
+import com.cak3d.biscuitmesh.wardrive.WardriveSample
 import kotlinx.coroutines.delay
 
 private val BG = Color(0xFF05080A)
@@ -72,8 +74,8 @@ private val WALL_GRID = Color(0xFF451E22)
 private val GOLD = Color(0xFFFFDC8D)
 private val MONO = FontFamily.Monospace
 
-private const val BINS = 48
-private const val BLE_BIN = 45
+private const val BINS = 60
+private const val BLE_BIN = 35
 private const val CANDLE_TICKS = 3
 private const val TERRAIN_LIMIT = 40
 private const val TRACE_LIMIT = 120
@@ -97,12 +99,35 @@ private fun PhoneScanRow.scopeBand(): ScopeBand = when {
     else -> ScopeBand.Other
 }
 
+// Full-spectrum lane layout (0 until BINS): sub-GHz 0–11, GPS 14–18, 2.4 GHz 22–33,
+// BLE 35, 5 GHz 38–49, 6 GHz 52–59.
 private fun channelBin(channel: Int, band: ScopeBand): Int = when (band) {
-    ScopeBand.WiFi24 -> channel - 1
-    ScopeBand.WiFi5 -> 15 + (channel - 32) * 15 / 145
-    ScopeBand.WiFi6 -> 32 + (channel - 1000).coerceIn(0, 233) * 9 / 233
+    ScopeBand.WiFi24 -> 22 + (channel - 1).coerceIn(0, 13) * 11 / 13
+    ScopeBand.WiFi5 -> 38 + (channel - 32).coerceIn(0, 145) * 11 / 145
+    ScopeBand.WiFi6 -> 52 + (channel - 1000).coerceIn(0, 233) * 7 / 233
     ScopeBand.Ble -> BLE_BIN // The phone reports RSSI but no BLE channel. This is a separate lane.
     ScopeBand.Other -> -1
+}
+
+/** Sub-GHz frequency (MHz) → bin in the 0–11 lane (300–960 MHz). */
+private fun subGhzBin(mhz: Float): Int = (((mhz - 300f) / 660f) * 11f).toInt().coerceIn(0, 11)
+
+/** GNSS constellation → bin in the 14–18 GPS lane. */
+private fun gnssBin(constellation: String): Int = when (constellation.uppercase()) {
+    "GLONASS" -> 17
+    "BEIDOU" -> 15
+    else -> 16 // GPS / Galileo / QZSS / SBAS
+}
+
+/** Paint a signal into [bins] at [center], widened ±2 for legibility within [first]..[last]. */
+private fun placeWide(bins: FloatArray, center: Int, first: Int, last: Int, level: Float) {
+    for (offset in -2..2) {
+        val column = center + offset
+        if (column in first..last) {
+            val fade = when (offset) { 0 -> 1f; -1, 1 -> .62f; else -> .24f }
+            bins[column] = maxOf(bins[column], level * fade)
+        }
+    }
 }
 
 private fun strength(rssi: Float): Float =
@@ -166,7 +191,8 @@ fun ScopeScreen(vm: MainViewModel, onBack: () -> Unit) {
 
     DisposableEffect(vm) {
         vm.startPhoneScan(wifi = true, ble = true)
-        onDispose { vm.stopPhoneScan() }
+        vm.startGnss()
+        onDispose { vm.stopPhoneScan(); vm.stopGnss() }
     }
 
     LaunchedEffect(vm) {
@@ -184,7 +210,7 @@ fun ScopeScreen(vm: MainViewModel, onBack: () -> Unit) {
             if (rows !== previous) {
                 previous = rows
                 val newest = feed.mapTo(ArrayList(FEED_LIMIT + 1)) { it.row }
-                next = summarize(rows) { row ->
+                next = summarize(rows, vm.gnssState.value, vm.wardriveSamples?.value?.values) { row ->
                     if (row.lastSeenMs >= enteredAt && seen.add(row.id)) {
                         discovered++
                         val index = newest.indexOfFirst { it.lastSeenMs < row.lastSeenMs }
@@ -251,7 +277,12 @@ fun ScopeScreen(vm: MainViewModel, onBack: () -> Unit) {
     }
 }
 
-private inline fun summarize(rows: List<PhoneScanRow>, onValid: (PhoneScanRow) -> Unit): ScopeSnapshot {
+private inline fun summarize(
+    rows: List<PhoneScanRow>,
+    gnss: GnssSnapshot,
+    rf: Collection<WardriveSample>?,
+    onValid: (PhoneScanRow) -> Unit,
+): ScopeSnapshot {
     val bins = FloatArray(BINS)
     val profile = IntArray(PROFILE_BINS)
     val ranked = ArrayList<PhoneScanRow>(RANK_LIMIT)
@@ -279,29 +310,34 @@ private inline fun summarize(rows: List<PhoneScanRow>, onValid: (PhoneScanRow) -
         if (bin >= 0) {
             val level = strength(rssi.toFloat()).coerceAtLeast(0.06f)
             val first = when (band) {
-                ScopeBand.WiFi24 -> 0
-                ScopeBand.WiFi5 -> 15
-                ScopeBand.WiFi6 -> 32
-                else -> 43
+                ScopeBand.WiFi24 -> 22
+                ScopeBand.WiFi5 -> 38
+                ScopeBand.WiFi6 -> 52
+                else -> 34
             }
             val last = when (band) {
-                ScopeBand.WiFi24 -> 13
-                ScopeBand.WiFi5 -> 30
-                ScopeBand.WiFi6 -> 41
-                else -> 47
+                ScopeBand.WiFi24 -> 33
+                ScopeBand.WiFi5 -> 49
+                ScopeBand.WiFi6 -> 59
+                else -> 36
             }
-            // Widen the marker for legibility within its band. This is not measured bandwidth.
-            for (offset in -2..2) {
-                val column = bin + offset
-                if (column in first..last) {
-                    val fade = when (offset) { 0 -> 1f; -1, 1 -> .62f; else -> .24f }
-                    bins[column] = maxOf(bins[column], level * fade)
-                }
-            }
+            placeWide(bins, bin, first, last, level)
             if (channelPeak == null || rssi > channelPeak.rssi) {
                 channelPeak = ScopePeak(bin, rssi, band, row.channel)
             }
         }
+    }
+    // Sub-GHz pings from a connected board (label carries the MHz) in the 0–11 lane.
+    rf?.forEach { s ->
+        if (s.kind == SampleKind.RF) {
+            val mhz = s.label.removeSuffix(" MHz").trim().toFloatOrNull() ?: return@forEach
+            placeWide(bins, subGhzBin(mhz), 0, 11, strength(s.rssi.toFloat()).coerceAtLeast(.06f))
+        }
+    }
+    // GPS / GNSS satellites in the 14–18 lane, height from carrier-to-noise.
+    for (sat in gnss.sats) {
+        if (sat.cn0 <= 0f) continue
+        placeWide(bins, gnssBin(sat.constellation), 14, 18, (sat.cn0 / 48f).coerceIn(.06f, 1f))
     }
     val trace = if (count == 0) null else ScopeTrace(high, low, total.toFloat() / count, count)
     return ScopeSnapshot(bins, trace, channelPeak, profile, ranked, count, bands)
@@ -492,7 +528,7 @@ private fun DrawScope.drawDepth(text: TextMeasurer, terrain: List<ScopeSlice>) {
     } else {
         caption(text, "WAITING FOR PHONE SCAN", width * .33f, height * .55f, MUTED, 9)
     }
-    caption(text, "2.4 / 5 / 6 GHz · BLE LANE", 3.dp.toPx(), axis, MUTED, 7)
+    caption(text, "SUB-GHZ · GPS · 2.4 · 5 · 6 GHz", 3.dp.toPx(), axis, MUTED, 7)
 }
 
 private fun DrawScope.plotTag(
