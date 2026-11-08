@@ -73,7 +73,7 @@ private val GRID = Color(0xFF243638)
 private val HEADER = Color(0xFF11191D)
 private val MONO = FontFamily.Monospace
 
-private const val BINS = 90
+private const val BINS = 96
 private const val TERRAIN_LIMIT = 40
 private const val TRACE_LIMIT = 120
 private const val PROFILE_BINS = 16
@@ -130,12 +130,13 @@ private fun gnssMhz(constellation: String): Float = when (constellation.uppercas
  * 2.4 GHz, 5 GHz and 6 GHz, each given a readable share with gaps between the bands.
  */
 private fun freqBin(mhz: Float): Float {
+    // Continuous (no gaps) so the terrain fills edge to edge like a spectrum analyzer.
     val p = when {
-        mhz < 1000f -> (mhz - 300f) / 628f * 0.20f                 // sub-GHz 0.3–0.93: 0.00–0.20
-        mhz < 1700f -> 0.22f + (mhz - 1150f) / 500f * 0.08f        // GNSS ~1.15–1.65: 0.22–0.30
-        mhz < 2500f -> 0.33f + (mhz - 2400f) / 100f * 0.17f        // 2.4 GHz: 0.33–0.50
-        mhz < 5900f -> 0.52f + (mhz - 5000f) / 900f * 0.26f        // 5 GHz: 0.52–0.78
-        else -> 0.80f + (mhz - 5900f) / 1300f * 0.20f              // 6 GHz: 0.80–1.00
+        mhz < 960f -> (mhz - 300f) / 660f * 0.18f                // sub-GHz: 0.00–0.18
+        mhz < 2400f -> 0.18f + (mhz - 960f) / 1440f * 0.24f      // incl GPS ~1.5 GHz: 0.18–0.42
+        mhz < 2500f -> 0.42f + (mhz - 2400f) / 100f * 0.10f      // 2.4 GHz: 0.42–0.52
+        mhz < 5900f -> 0.52f + (mhz - 2500f) / 3400f * 0.28f     // incl 5 GHz: 0.52–0.80
+        else -> 0.80f + (mhz - 5900f) / 1300f * 0.20f            // 6 GHz: 0.80–1.00
     }
     return p.coerceIn(0f, 1f) * (BINS - 1)
 }
@@ -150,12 +151,21 @@ private fun buildSpectrum(
     rows: List<PhoneScanRow>,
     gnss: GnssSnapshot,
     rf: Collection<WardriveSample>?,
+    tick: Float,
 ): Pair<FloatArray, ScopePeak?> {
-    val bins = FloatArray(BINS)
+    // A textured spectrum-analyzer noise floor across the whole width, so the surface reads
+    // as a continuous rolling range rather than isolated spikes. It drifts with `tick` so the
+    // terrain flows as it scrolls back. Real signals pile on top as taller, brighter peaks.
+    val bins = FloatArray(BINS) { j ->
+        (0.20f +
+            0.085f * sin(j * 0.21f + tick) +
+            0.055f * sin(j * 0.57f - tick * 1.3f) +
+            0.040f * sin(j * 1.17f + tick * 0.6f)).coerceAtLeast(0.05f)
+    }
     fun add(mhz: Float, level: Float) {
         if (mhz <= 0f) return
         val center = freqBin(mhz)
-        val sigma = 2.8f
+        val sigma = 2.6f
         val lo = (center - sigma * 3f).toInt().coerceAtLeast(0)
         val hi = (center + sigma * 3f).toInt().coerceAtMost(BINS - 1)
         for (j in lo..hi) {
@@ -178,14 +188,11 @@ private fun buildSpectrum(
             if (mhz != null) add(mhz, strength(s.rssi.toFloat()))
         }
     }
-    for (j in bins.indices) {
-        bins[j] = (bins[j] + 0.05f + 0.03f * (0.5f + 0.5f * sin(j * 0.7f))).coerceIn(0f, 1f)
-    }
     val surface = FloatArray(BINS)
     for (j in bins.indices) {
-        val a = bins[(j - 1).coerceAtLeast(0)]
-        val b = bins[j]
-        val c = bins[(j + 1).coerceAtMost(BINS - 1)]
+        val a = bins[(j - 1).coerceAtLeast(0)].coerceIn(0f, 1f)
+        val b = bins[j].coerceIn(0f, 1f)
+        val c = bins[(j + 1).coerceAtMost(BINS - 1)].coerceIn(0f, 1f)
         surface[j] = (a + 2f * b + c) / 4f
     }
     val peak = if (peakRssi > Int.MIN_VALUE && peakMhz > 0f)
@@ -197,8 +204,16 @@ private fun heat(level: Float): Color =
     if (level < 0.55f) lerp(GREEN, AMBER, level / 0.55f)
     else lerp(AMBER, EMBER, (level - 0.55f) / 0.45f)
 
+/** Orange spectrum-analyzer heat ramp: dark ember valleys → red → orange → pale yellow → bright peaks. */
+private fun terrainHeat(level: Float): Color = when {
+    level < 0.25f -> lerp(Color(0xFF1E0D06), Color(0xFFA32916), level / 0.25f)
+    level < 0.52f -> lerp(Color(0xFFA32916), Color(0xFFFA6E22), (level - 0.25f) / 0.27f)
+    level < 0.80f -> lerp(Color(0xFFFA6E22), Color(0xFFFFD98F), (level - 0.52f) / 0.28f)
+    else -> lerp(Color(0xFFFFD98F), Color(0xFFFFF6E2), (level - 0.80f) / 0.20f)
+}
+
 private const val PALETTE_STEPS = 32
-private val TERRAIN_COLORS = Array(PALETTE_STEPS + 1) { heat(it / PALETTE_STEPS.toFloat()) }
+private val TERRAIN_COLORS = Array(PALETTE_STEPS + 1) { terrainHeat(it / PALETTE_STEPS.toFloat()) }
 private val WATERFALL_COLORS = Array(PALETTE_STEPS + 1) {
     val level = it / PALETTE_STEPS.toFloat()
     if (level < 0.66f) lerp(Color(0xFF0A2843), CYAN, level / 0.66f)
@@ -245,6 +260,7 @@ fun ScopeScreen(vm: MainViewModel, onBack: () -> Unit) {
         val timeFormat = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
         var previous: List<PhoneScanRow>? = null
         var rate = 0
+        var tick = 0f
         while (true) {
             val rows = vm.phoneScanResults.value
             val now = System.nanoTime() / 1_000_000L
@@ -274,7 +290,8 @@ fun ScopeScreen(vm: MainViewModel, onBack: () -> Unit) {
             }
             // Full-spectrum terrain from every source we can see, rebuilt each tick so it
             // keeps scrolling even when the Wi-Fi list hasn't changed (GNSS/RF still move).
-            val spectrum = buildSpectrum(rows, vm.gnssState.value, vm.wardriveSamples?.value?.values)
+            tick += 0.17f
+            val spectrum = buildSpectrum(rows, vm.gnssState.value, vm.wardriveSamples?.value?.values, tick)
             Snapshot.withMutableSnapshot {
                 current = next.copy(channelPeak = spectrum.second)
                 newPerSecond = rate
@@ -516,9 +533,6 @@ private fun DrawScope.drawSurface(
         val depth = line / 10f
         drawLine(GRID, project(0, depth, 0f), project(BINS - 1, depth, 0f))
     }
-    for (bin in listOf(18, 28, 45, 70)) {
-        drawLine(CYAN.copy(alpha = 0.22f), project(bin, 0f, 0f), project(bin, 1f, 0f))
-    }
 
     val palette = if (waterfall) WATERFALL_COLORS else TERRAIN_COLORS
     val cell = Path()
@@ -548,8 +562,8 @@ private fun DrawScope.drawSurface(
             cell.lineTo(p3.x, p3.y)
             cell.lineTo(p4.x, p4.y)
             cell.close()
-            drawPath(cell, tint.copy(alpha = opacity * (0.24f + level * 0.68f)))
-            drawLine(tint.copy(alpha = opacity * 0.76f), p4, p3)
+            drawPath(cell, tint.copy(alpha = opacity * (0.50f + level * 0.50f)))
+            drawLine(tint.copy(alpha = opacity * 0.9f), p4, p3)
         }
         if (index == terrain.lastIndex) {
             for (bin in row.indices) {
@@ -573,11 +587,11 @@ private fun DrawScope.drawSurface(
         caption(text, "NO CURRENT WI-FI CHANNELS", 9.dp.toPx(), 8.dp.toPx(), MUTED, 10)
     }
     val axisY = height - 17.dp.toPx()
-    caption(text, "SUB-GHZ", width * 0.02f, axisY, AMBER, 9)
-    caption(text, "GPS", width * 0.24f, axisY, GREEN, 9)
-    caption(text, "2.4", width * 0.40f, axisY, GREEN, 9)
-    caption(text, "5 GHz", width * 0.60f, axisY, CYAN, 9)
-    caption(text, "6", width * 0.86f, axisY, AMBER, 9)
+    caption(text, "SUB-GHZ", width * 0.02f, axisY, MUTED, 9)
+    caption(text, "GPS", width * 0.25f, axisY, MUTED, 9)
+    caption(text, "2.4", width * 0.43f, axisY, MUTED, 9)
+    caption(text, "5 GHz", width * 0.64f, axisY, MUTED, 9)
+    caption(text, "6", width * 0.86f, axisY, MUTED, 9)
 }
 
 @Composable
