@@ -581,6 +581,27 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val flockHandle: Flow<String> = appRef.settingsStore.flockHandleFlow
     fun setFlockHandle(name: String) = viewModelScope.launch { runCatching { appRef.crew.setHandle(name) } }
 
+    init {
+        // Report lifetime totals to the flock whenever a saved drive changes the numbers — not
+        // only while the Flock screen happens to be open. Gated on Flock being enabled, and
+        // deduped by a signature so it pushes only when a total actually moves.
+        viewModelScope.launch {
+            var lastSig = ""
+            kotlinx.coroutines.flow.combine(flockEnabled, drivesState) { on, d -> on to d }
+                .collect { (on, drives) ->
+                    if (!on || drives.isEmpty()) return@collect
+                    val wifi = drives.sumOf { it.wifiCount.toLong() }
+                    val bt = drives.sumOf { it.btCount.toLong() }
+                    val cameras = drives.sumOf { it.cameraCount.toLong() }
+                    val km = drives.sumOf { it.distanceM } / 1000.0
+                    val sig = "$wifi/$bt/$cameras/${drives.size}/$km"
+                    if (sig == lastSig) return@collect
+                    lastSig = sig
+                    runCatching { appRef.crew.pushStats(wifi, bt, cameras, drives.size.toLong(), km) }
+                }
+        }
+    }
+
     /** Start the online layer (idempotent) so the flock chat polls even when sharing is off. */
     fun activateCrew() = appRef.crew.activate()
     fun sendFlockChat(text: String) = viewModelScope.launch { runCatching { appRef.crew.sendMessage(text) } }

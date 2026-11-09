@@ -262,9 +262,13 @@ class CrewManager(
     // --- Flock chat (global room) -----------------------------------------
     private fun parseTs(s: String): Long = runCatching {
         java.time.OffsetDateTime.parse(s).toInstant().toEpochMilli()
-    }.getOrElse {
-        runCatching { Instant.parse(s).toEpochMilli() }.getOrElse { System.currentTimeMillis() }
-    }
+    }.recoverCatching {
+        Instant.parse(s).toEpochMilli()
+    }.recoverCatching {
+        // A Postgres `timestamp` (no zone), e.g. "2024-01-01T12:00:00" — treat as UTC rather
+        // than stamping every such message with "now".
+        java.time.LocalDateTime.parse(s).toInstant(java.time.ZoneOffset.UTC).toEpochMilli()
+    }.getOrElse { System.currentTimeMillis() }
 
     private suspend fun chatMessages(): List<ChatMessage> {
         val s = ensure()
@@ -318,8 +322,12 @@ class CrewManager(
     /** The whisper thread between you and [otherId], oldest → newest. RLS already limits to your rows. */
     suspend fun dmThread(otherId: String): List<DmMessage> {
         val s = ensure()
+        // Scope to exactly the you<->otherId thread rather than every row touching otherId, so a
+        // loosened RLS policy can't surface other people's whispers involving the same contact.
+        val me = s.userId
         val q = "select=id,sender,recipient,body,created_at" +
-            "&or=(sender.eq.$otherId,recipient.eq.$otherId)&order=created_at.asc&limit=200"
+            "&or=(and(sender.eq.$me,recipient.eq.$otherId),and(sender.eq.$otherId,recipient.eq.$me))" +
+            "&order=created_at.asc&limit=200"
         val arr = JSONArray(SupabaseClient.select("ff_dm", q, s.accessToken))
         val out = ArrayList<DmMessage>(arr.length())
         for (i in 0 until arr.length()) {

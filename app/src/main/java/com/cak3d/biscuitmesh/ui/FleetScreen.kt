@@ -104,7 +104,9 @@ fun FleetScreen(vm: MainViewModel, onOpen: (String) -> Unit = {}) {
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(12.dp),
+                // Extra bottom room so the Scan/Stop FAB never sits on top of a device
+                // card's Connect/Disconnect button — you can always scroll the card clear.
+                contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 96.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 if (usb.isNotEmpty()) item("usb") { UsbBanner(usb, vm) }

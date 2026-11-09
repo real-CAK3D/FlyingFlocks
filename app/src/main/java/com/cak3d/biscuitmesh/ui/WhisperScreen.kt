@@ -190,7 +190,15 @@ fun WhisperThreadScreen(vm: MainViewModel, otherId: String, otherHandle: String,
                     if (field.isNotBlank()) {
                         val t = field; field = ""
                         vm.sendWhisper(otherId, t)
-                        scope.launch { delay(400); messages = runCatching { vm.crew.dmThread(otherId) }.getOrDefault(messages) }
+                        // Reload a few times over ~3s instead of once at 400ms — the send is
+                        // fire-and-forget, so on a slow connection the single early reload missed
+                        // the just-sent message and it appeared to vanish until the 5s poll.
+                        scope.launch {
+                            repeat(5) {
+                                delay(600)
+                                runCatching { vm.crew.dmThread(otherId) }.getOrNull()?.let { messages = it }
+                            }
+                        }
                     }
                 }, enabled = field.isNotBlank()) {
                     Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", tint = MaterialTheme.colorScheme.primary)

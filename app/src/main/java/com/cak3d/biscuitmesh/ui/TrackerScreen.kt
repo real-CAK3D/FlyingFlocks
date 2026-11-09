@@ -67,9 +67,12 @@ fun TrackerScreen(vm: MainViewModel, onBack: () -> Unit) {
         val la = lat; val lo = lon
         if (la != null && lo != null && results.isNotEmpty()) {
             val now = System.currentTimeMillis()
-            results.asSequence().filter { it.kind == SampleKind.BT }.forEach {
-                vm.recordTrackerSighting(it.id, it.label, it.rssi, la, lo, now)
-            }
+            // Only record devices actually seen in the last ~20s. The scan list never ages
+            // rows out, so without this every BLE device you ever passed gets re-stamped at
+            // each new location and is falsely flagged as "following you".
+            results.asSequence()
+                .filter { it.kind == SampleKind.BT && now - it.lastSeenMs < 20_000 }
+                .forEach { vm.recordTrackerSighting(it.id, it.label, it.rssi, la, lo, now) }
         }
     }
 

@@ -293,10 +293,12 @@ fun BandBlitzScreen(vm: MainViewModel, onBack: () -> Unit) {
     var seen by remember { mutableStateOf(setOf<String>()) }
     var lastScore by remember { mutableIntStateOf(-1) }
 
+    // Reset FIRST (declared before the accumulate effect) so the devices already on screen at
+    // the start aren't wiped after being counted. The old order added them, then cleared the set.
+    LaunchedEffect(running) { if (running) { seen = emptySet(); remaining = 60 } }
     LaunchedEffect(running, results) { if (running) seen = seen + results.map { it.id } }
     LaunchedEffect(running) {
         if (running) {
-            remaining = 60; seen = emptySet()
             while (remaining > 0 && running) { delay(1000); remaining-- }
             if (running) { lastScore = seen.size; running = false; buzz(context, 100) }
         }

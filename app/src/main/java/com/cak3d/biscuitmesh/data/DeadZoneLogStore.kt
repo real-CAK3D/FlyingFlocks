@@ -44,7 +44,10 @@ class DeadZoneLogStore(private val context: Context) {
         val all = parse(context.deadZoneLogDataStore.data.first()[key] ?: "{}").toMutableMap()
         val byMac = LinkedHashMap<String, DeadZoneDevice>()
         all[zoneId]?.forEach { byMac[it.mac] = it }
-        devices.forEach { byMac[it.mac] = it }
+        // remove-then-put so a re-seen device moves to the END (LinkedHashMap keeps
+        // insertion order, not access order) — otherwise takeLast(cap) would drop devices
+        // by first-seen time and could evict ones that are actually the most recently active.
+        devices.forEach { byMac.remove(it.mac); byMac[it.mac] = it }
         all[zoneId] = byMac.values.toList().takeLast(cap)
         context.deadZoneLogDataStore.edit { it[key] = toJson(all) }
     }

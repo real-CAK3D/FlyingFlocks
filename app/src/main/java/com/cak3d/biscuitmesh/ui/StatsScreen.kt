@@ -59,24 +59,29 @@ fun StatsScreen(vm: MainViewModel, onBack: () -> Unit) {
         .sumOf { it.count }
     val bt = progress.radios.firstOrNull { it.track == com.cak3d.biscuitmesh.progress.ProgressTrack.BLUETOOTH }?.count ?: 0
 
-    fun writeTo(uri: android.net.Uri?, text: String, label: String) {
+    // Build the content AND write it off the UI thread — a full backup over many drives is a
+    // lot of JSON and a disk write, which would jank/ANR the UI if done on the main thread.
+    fun writeTo(uri: android.net.Uri?, text: () -> String, label: String) {
         if (uri == null) return
-        scope.launch {
+        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
             val ok = runCatching {
-                context.contentResolver.openOutputStream(uri)?.use { it.write(text.toByteArray()) }
+                val content = text()
+                context.contentResolver.openOutputStream(uri)?.use { it.write(content.toByteArray()) }
             }.isSuccess
-            android.widget.Toast.makeText(context, if (ok) "Exported $label" else "Export failed",
-                android.widget.Toast.LENGTH_SHORT).show()
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                android.widget.Toast.makeText(context, if (ok) "Exported $label" else "Export failed",
+                    android.widget.Toast.LENGTH_SHORT).show()
+            }
         }
     }
     val csvPicker = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) {
-        writeTo(it, vm.camerasCsv(), "cameras CSV")
+        writeTo(it, { vm.camerasCsv() }, "cameras CSV")
     }
     val kmlPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/vnd.google-earth.kml+xml")
-    ) { writeTo(it, vm.camerasKml(), "cameras KML") }
+    ) { writeTo(it, { vm.camerasKml() }, "cameras KML") }
     val jsonPicker = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) {
-        writeTo(it, vm.backupJson(), "full backup")
+        writeTo(it, { vm.backupJson() }, "full backup")
     }
 
     Scaffold(

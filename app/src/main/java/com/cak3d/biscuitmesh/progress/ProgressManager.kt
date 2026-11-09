@@ -127,10 +127,11 @@ class ProgressManager(
 
     private fun award(track: ProgressTrack, id: String, bonus: Int): Boolean {
         if (!awarded.add(id)) return false
-        if (awarded.size > store.awardedCap) {
-            val it = awarded.iterator()
-            if (it.hasNext()) { it.next(); it.remove() }
-        }
+        // NOTE: deliberately no size-cap eviction here. awardSamples re-scans the whole live
+        // sample set every ~2s, so evicting a still-live id would let it be re-added and
+        // re-awarded next pass — inflating XP/counts without bound on a device-dense drive.
+        // The contract is "score each find exactly once, ever", so the set must not forget a
+        // live id. Each id is a short string, so the set is cheap to keep whole.
         xp[track] = (xp[track] ?: 0) + track.xpPerFind + bonus
         count[track] = (count[track] ?: 0) + 1
         return true
