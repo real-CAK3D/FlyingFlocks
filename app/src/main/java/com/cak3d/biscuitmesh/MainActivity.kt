@@ -236,8 +236,8 @@ private fun MainShell(vm: MainViewModel) {
                         IconButton(onClick = { nav.navigate("sensors") }) {
                             Icon(Icons.Default.SatelliteAlt, contentDescription = "Sensors & Sky")
                         }
-                        IconButton(onClick = { nav.navigate("live") }) {
-                            Icon(Icons.Default.Terminal, contentDescription = "Live data")
+                        IconButton(onClick = { nav.navigate("scope") }) {
+                            Icon(Icons.Default.Terminal, contentDescription = "Live Scope")
                         }
                         IconButton(onClick = { nav.navigate("settings") }) {
                             Icon(Icons.Default.Settings, contentDescription = "Settings")

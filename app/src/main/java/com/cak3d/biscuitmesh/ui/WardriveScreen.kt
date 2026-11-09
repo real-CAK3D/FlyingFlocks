@@ -44,6 +44,7 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Explore
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Place
@@ -262,6 +263,7 @@ fun WardriveScreen(vm: MainViewModel) {
     var showPlaces by remember { mutableStateOf(true) }
     var showBoards by remember { mutableStateOf(true) }
     var controlsExpanded by remember { mutableStateOf(true) }
+    var chromeHidden by remember { mutableStateOf(false) } // "plain map" — hide all overlays
     var mapStyle by remember { mutableStateOf(MapStyle.DARK) }
     // Restore the remembered map style, and follow the vehicle while navigating.
     LaunchedEffect(savedMapStyle) {
@@ -511,7 +513,7 @@ fun WardriveScreen(vm: MainViewModel) {
         }
 
         // View switcher: default (everything) plus the themed single-purpose views.
-        Row(
+        if (!chromeHidden) Row(
             Modifier.align(Alignment.TopCenter).padding(top = 6.dp)
                 .horizontalScroll(rememberScrollState()).padding(horizontal = 56.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -522,7 +524,7 @@ fun WardriveScreen(vm: MainViewModel) {
             }
         }
 
-        Column(
+        if (!chromeHidden) Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -574,7 +576,7 @@ fun WardriveScreen(vm: MainViewModel) {
         }
 
         // Turn-by-turn banner across the top while navigating.
-        navState?.let { nav ->
+        if (!chromeHidden) navState?.let { nav ->
             if (!nav.arrived) {
                 NavBanner(
                     nav,
@@ -583,7 +585,7 @@ fun WardriveScreen(vm: MainViewModel) {
             }
         }
 
-        // Top-right stack: heading-up compass + follow-the-vehicle toggle.
+        // Top-right stack: plain-map toggle (always shown), then heading-up / follow / HUD.
         Column(
             Modifier.align(Alignment.TopEnd).padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -593,22 +595,29 @@ fun WardriveScreen(vm: MainViewModel) {
                 containerColor = MaterialTheme.colorScheme.surface,
                 checkedContainerColor = MaterialTheme.colorScheme.primary,
             )
+            // Collapse every overlay to a plain map — and bring them back. Stays visible.
             FilledIconToggleButton(
-                checked = headingUp, onCheckedChange = { headingUp = it },
+                checked = chromeHidden, onCheckedChange = { chromeHidden = it },
                 modifier = Modifier.size(44.dp), colors = mapBtnColors,
-            ) { Icon(Icons.Default.Explore, contentDescription = if (headingUp) "Heading up" else "North up") }
-            FilledIconToggleButton(
-                checked = followMode, onCheckedChange = { followMode = it },
-                modifier = Modifier.size(44.dp), colors = mapBtnColors,
-            ) { Icon(Icons.Default.MyLocation, contentDescription = if (followMode) "Following" else "Follow vehicle") }
-            FilledIconToggleButton(
-                checked = hudOn, onCheckedChange = { vm.setHudEnabled(it) },
-                modifier = Modifier.size(44.dp), colors = mapBtnColors,
-            ) { Icon(Icons.Default.Speed, contentDescription = if (hudOn) "Hide HUD" else "Show HUD") }
+            ) { Icon(Icons.Default.Map, contentDescription = if (chromeHidden) "Show controls" else "Plain map") }
+            if (!chromeHidden) {
+                FilledIconToggleButton(
+                    checked = headingUp, onCheckedChange = { headingUp = it },
+                    modifier = Modifier.size(44.dp), colors = mapBtnColors,
+                ) { Icon(Icons.Default.Explore, contentDescription = if (headingUp) "Heading up" else "North up") }
+                FilledIconToggleButton(
+                    checked = followMode, onCheckedChange = { followMode = it },
+                    modifier = Modifier.size(44.dp), colors = mapBtnColors,
+                ) { Icon(Icons.Default.MyLocation, contentDescription = if (followMode) "Following" else "Follow vehicle") }
+                FilledIconToggleButton(
+                    checked = hudOn, onCheckedChange = { vm.setHudEnabled(it) },
+                    modifier = Modifier.size(44.dp), colors = mapBtnColors,
+                ) { Icon(Icons.Default.Speed, contentDescription = if (hudOn) "Hide HUD" else "Show HUD") }
+            }
         }
 
         // Top-left: hamburger menu + telemetry HUD.
-        Column(
+        if (!chromeHidden) Column(
             Modifier.align(Alignment.TopStart).padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {

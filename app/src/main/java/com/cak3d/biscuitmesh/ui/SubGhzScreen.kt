@@ -141,7 +141,7 @@ fun SubGhzScreen(vm: MainViewModel, onOpenMap: () -> Unit) {
     // Capability cards go LIVE as real decodes arrive from the node (TPMS/weather/keyfob
     // decoders all live in the firmware now); a card stays "SOON" only until its first hit.
     val capabilities = listOf(
-        Capability("Band activity monitor", "Which sub-GHz bands are busy and how strong — live from the node's CC1101.", Icons.Default.GraphicEq) to true,
+        Capability("Band activity monitor", "Which sub-GHz bands are busy and how strong — live from the node's CC1101.", Icons.Default.GraphicEq) to hits.isNotEmpty(),
         Capability("TPMS reader", "FSK tire-pressure sensors, positively identified as cars pass: sensor ID, pressure, temperature.", Icons.Default.DirectionsCar) to tpms.isNotEmpty(),
         Capability("Weather & 433 sensors", "433/868 MHz temperature, humidity and rain stations in range.", Icons.Default.Thermostat) to weather.isNotEmpty(),
         Capability("OOK bursts · keyfobs · remotes", "433 OOK bursts — keyfobs, doorbells, garage openers (and OOK TPMS, which read the same).", Icons.Default.SettingsRemote) to keyfobs.isNotEmpty(),
@@ -151,13 +151,10 @@ fun SubGhzScreen(vm: MainViewModel, onOpenMap: () -> Unit) {
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        // Header + sweep control.
-        Card(
-            Modifier.fillMaxWidth(),
-            shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        ) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        // Header + sweep control — ThemedCard so it gets the same glowing/running-light edge
+        // as the other pages' banners (plain Card had only the rounded shape).
+        com.cak3d.biscuitmesh.ui.theme.ThemedCard(Modifier.fillMaxWidth()) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Icon(Icons.Default.SettingsInputAntenna, contentDescription = null, tint = RF_AMBER, modifier = Modifier.size(30.dp))
                     Column(Modifier.weight(1f)) {
