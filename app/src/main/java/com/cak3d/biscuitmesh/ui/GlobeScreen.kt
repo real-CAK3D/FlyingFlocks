@@ -66,6 +66,28 @@ private fun constColorG(c: String): Color = when (c) {
     else -> Color(0xFF9CA3AF)
 }
 
+// Very coarse continent outlines (lat, lon) so the wire-frame globe reads as Earth — drawn
+// faded and only on the front hemisphere, to sit quietly under the theme.
+private val COASTLINES: List<List<Pair<Double, Double>>> = listOf(
+    listOf(71.0 to -156.0, 69.0 to -141.0, 60.0 to -140.0, 55.0 to -131.0, 48.0 to -124.0, 40.0 to -124.0,
+        34.0 to -120.0, 23.0 to -110.0, 20.0 to -105.0, 18.0 to -95.0, 21.0 to -90.0, 25.0 to -97.0,
+        29.0 to -94.0, 30.0 to -88.0, 25.0 to -81.0, 31.0 to -81.0, 35.0 to -76.0, 41.0 to -74.0,
+        45.0 to -67.0, 47.0 to -60.0, 52.0 to -56.0, 60.0 to -65.0, 63.0 to -78.0, 68.0 to -85.0,
+        69.0 to -100.0, 71.0 to -125.0, 71.0 to -156.0), // North America
+    listOf(11.0 to -72.0, 5.0 to -52.0, -5.0 to -35.0, -23.0 to -41.0, -34.0 to -54.0, -52.0 to -69.0,
+        -40.0 to -74.0, -20.0 to -70.0, -5.0 to -81.0, 5.0 to -78.0, 11.0 to -72.0), // South America
+    listOf(37.0 to 10.0, 32.0 to 23.0, 31.0 to 33.0, 12.0 to 43.0, 10.0 to 51.0, -1.0 to 42.0, -17.0 to 40.0,
+        -26.0 to 33.0, -34.0 to 26.0, -34.0 to 19.0, -23.0 to 14.0, -5.0 to 9.0, 5.0 to 3.0, 5.0 to -8.0,
+        15.0 to -17.0, 21.0 to -17.0, 32.0 to -9.0, 37.0 to 10.0), // Africa
+    listOf(36.0 to -6.0, 43.0 to 3.0, 51.0 to 2.0, 58.0 to 5.0, 70.0 to 25.0, 69.0 to 60.0, 73.0 to 80.0,
+        73.0 to 110.0, 71.0 to 140.0, 66.0 to 170.0, 60.0 to 160.0, 53.0 to 140.0, 45.0 to 135.0,
+        39.0 to 122.0, 30.0 to 122.0, 22.0 to 114.0, 10.0 to 105.0, 8.0 to 98.0, 15.0 to 95.0, 22.0 to 90.0,
+        20.0 to 73.0, 8.0 to 77.0, 25.0 to 66.0, 25.0 to 57.0, 30.0 to 49.0, 30.0 to 33.0, 36.0 to 36.0,
+        41.0 to 29.0, 40.0 to 18.0, 44.0 to 12.0, 36.0 to -6.0), // Eurasia
+    listOf(-11.0 to 132.0, -12.0 to 142.0, -20.0 to 149.0, -34.0 to 151.0, -38.0 to 145.0, -32.0 to 134.0,
+        -35.0 to 118.0, -22.0 to 114.0, -17.0 to 122.0, -14.0 to 127.0, -11.0 to 132.0), // Australia
+)
+
 // A 3D point on the unit sphere, with the spin + tilt applied, projected to screen.
 private class P3(val x: Float, val y: Float, val z: Float)
 
@@ -272,6 +294,23 @@ private fun GlobeCanvas(sats: List<Sat>, spin: Float, modifier: Modifier, onSele
                 prev = p; l2 += 12
             }
             plat += 30
+        }
+
+        // Faded continent outlines so the globe reads as Earth (front hemisphere only).
+        val land = Color(0xFF3FBE86)
+        COASTLINES.forEach { poly ->
+            var prevLand: P3? = null
+            poly.forEach { (lat, lon) ->
+                val la = Math.toRadians(lat); val lo = Math.toRadians(lon)
+                val x = (cos(la) * sin(lo)).toFloat(); val y = sin(la).toFloat(); val z = (cos(la) * cos(lo)).toFloat()
+                val p = project(x, y, z, cosS, sinS, cosT, sinT)
+                val pr = prevLand
+                if (pr != null) {
+                    val d = (depth(p) + depth(pr)) / 2f
+                    if (d > 0.46f) drawLine(land.copy(alpha = 0.08f + (d - 0.46f) * 0.5f), scr(pr), scr(p), 1.3f)
+                }
+                prevLand = p
+            }
         }
 
         // Observer at the north pole (local zenith = +Y), and the satellite dome above it.

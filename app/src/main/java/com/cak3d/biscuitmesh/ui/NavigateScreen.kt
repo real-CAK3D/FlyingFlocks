@@ -142,6 +142,19 @@ fun NavigateScreen(vm: MainViewModel, onBack: () -> Unit, startMode: NavMode, st
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
+                actions = {
+                    HelpButton(
+                        mode.label,
+                        when (mode) {
+                            NavMode.COMPASS -> "A live compass from the phone's magnetometer — which way you're " +
+                                "facing. Hold the phone flat and away from metal for the steadiest heading."
+                            NavMode.RADAR -> "A sweeping radar of the Wi-Fi/BLE devices around you, placed by signal " +
+                                "strength (closer = stronger). It's a rough proximity view, not a true bearing."
+                            NavMode.LOCATOR -> "Pick one device and home in on it — the ring tightens and the phone " +
+                                "buzzes faster as the signal strengthens. Great for finding a specific tag or board."
+                        },
+                    )
+                },
             )
         },
     ) { padding ->
