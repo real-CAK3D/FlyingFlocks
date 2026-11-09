@@ -387,6 +387,15 @@ private fun DeviceCard(
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                     )
+                    // What the board actually is — its self-reported type/model.
+                    device.typeLabel()?.let {
+                        Text(
+                            it,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
                     Text(
                         device.address,
                         style = MaterialTheme.typography.bodySmall,
@@ -398,13 +407,20 @@ private fun DeviceCard(
             }
 
             val meta = buildList {
-                device.model?.let { add(it) }
                 device.firmware?.let { add("fw $it") }
                 if (device.inRange || device.isLive) add("${device.rssi} dBm")
                 device.status?.battery?.let { add("$it%") }
             }.joinToString("  ·  ")
             if (meta.isNotEmpty()) {
                 Text(meta, style = MaterialTheme.typography.bodyMedium)
+            }
+
+            if (device.needsLink) {
+                Text(
+                    "🔒 Link required — open the board to enter its code",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
             }
 
             device.lastError?.takeIf { device.state == ConnectionState.FAILED }?.let {

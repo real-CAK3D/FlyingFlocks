@@ -42,6 +42,13 @@ data class BiscuitDevice(
             state == ConnectionState.CONNECTING ||
             state == ConnectionState.PROVISIONING
 
+    /** What kind of board this is (for the fleet card subtitle): the firmware's
+     *  self-reported model, else the GATT model/firmware strings. */
+    fun typeLabel(): String? = status?.model ?: model ?: firmware
+
+    /** True when the board reports a link-code gate that hasn't been satisfied yet. */
+    val needsLink: Boolean get() = status?.link == "required"
+
     /** A short human status line for the card. */
     fun statusLabel(): String = when {
         state == ConnectionState.READY -> "Connected"
@@ -64,5 +71,7 @@ data class DeviceStatus(
     val temperatureC: Double? = null,
     val sdMounted: Boolean? = null,
     val activeOp: String? = null,     // e.g. "pktmon" / "eapol" during capture
+    val model: String? = null,        // firmware's self-reported model, e.g. "T-Embed-CC1101"
+    val link: String? = null,         // link-code gate: "required" | "ok" | null
     val rawJson: String = "",
 )

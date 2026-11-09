@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
@@ -39,6 +40,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.cak3d.biscuitmesh.MainViewModel
@@ -81,6 +83,15 @@ fun DeviceDetailScreen(vm: MainViewModel, address: String?, onBack: () -> Unit) 
     var input by remember { mutableStateOf("") }
     val canSend = device.state == ConnectionState.READY
 
+    // Link-code gate (T-Embed): the board is "locked" until the 6-digit code shown on
+    // its screen is entered. Link state comes from the STATUS "link" field and DATA:LINK.
+    val linkMsg = remember(lines) {
+        lines.lastOrNull { it.type == BiscuitMessage.Type.DATA && it.subtype == "LINK" }?.payload
+    }
+    val linked = device.status?.link == "ok" || linkMsg == "ok"
+    val needsLink = canSend && !linked && (device.needsLink || linkMsg == "need" || linkMsg == "bad")
+    var code by remember { mutableStateOf("") }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -105,6 +116,45 @@ fun DeviceDetailScreen(vm: MainViewModel, address: String?, onBack: () -> Unit) 
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 12.dp)) {
             StatusCard(device)
+
+            if (needsLink) {
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                    shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f)),
+                ) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("🔒 LINK REQUIRED", style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.error)
+                        Text(
+                            "This board is locked. Read the link code shown on its screen and enter it here to link it.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                        )
+                        Row(verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(
+                                value = code,
+                                onValueChange = { code = it.filter { c -> c.isDigit() }.take(6) },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true,
+                                label = { Text("Link code") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            )
+                            OutlinedButton(
+                                onClick = { vm.send(address, "link:$code"); code = "" },
+                                enabled = code.length >= 4,
+                            ) { Text("Link") }
+                        }
+                        if (linkMsg == "bad") {
+                            Text("That code didn't match — check the screen and try again.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error)
+                        }
+                    }
+                }
+            }
 
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 when (device.state) {

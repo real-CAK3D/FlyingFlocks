@@ -297,6 +297,8 @@ class DeviceConnection(
                     o.optDouble("temperatureC") else null,
                 sdMounted = if (o.has("sd")) o.optBoolean("sd") else null,
                 activeOp = o.optString("op").takeIf { it.isNotEmpty() },
+                model = o.optString("model").takeIf { it.isNotEmpty() },
+                link = o.optString("link").takeIf { it.isNotEmpty() },
                 rawJson = json,
             )
         }.getOrNull() ?: DeviceStatus(rawJson = json)
