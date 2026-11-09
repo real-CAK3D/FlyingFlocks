@@ -20,7 +20,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BluetoothSearching
 import androidx.compose.material.icons.filled.DeveloperBoard
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Router
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Usb
 import androidx.compose.material3.AlertDialog
@@ -72,6 +74,9 @@ fun FleetScreen(vm: MainViewModel, onOpen: (String) -> Unit = {}) {
     val devices by devicesFlow.collectAsStateWithLifecycle()
     val scanning by vm.scanning.collectAsStateWithLifecycle()
     val usb by vm.usbDevices.collectAsStateWithLifecycle(initialValue = emptyList())
+    val meshNodes by vm.meshNodes.collectAsStateWithLifecycle()
+    val homeBase by vm.homeBase.collectAsStateWithLifecycle()
+    var showHomeLoc by remember { mutableStateOf(false) }
 
     // Scan the whole time the Connect page is open, so a powered board nearby
     // moves to "In range" on its own instead of sitting at "out of range" until
@@ -91,8 +96,10 @@ fun FleetScreen(vm: MainViewModel, onOpen: (String) -> Unit = {}) {
 
     var renaming by remember { mutableStateOf<BiscuitDevice?>(null) }
 
+    val hasMesh = meshNodes.isNotEmpty() || homeBase != null
+
     Box(Modifier.fillMaxSize()) {
-        if (all.isEmpty()) {
+        if (all.isEmpty() && !hasMesh) {
             EmptyState(Modifier.fillMaxSize(), scanning, usb, vm)
         } else {
             LazyColumn(
@@ -100,33 +107,204 @@ fun FleetScreen(vm: MainViewModel, onOpen: (String) -> Unit = {}) {
                 contentPadding = PaddingValues(12.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                item("header") {
-                    Text(
-                        "$liveCount LIVE · ${all.size} KNOWN".let { "> $it" },
-                        style = MaterialTheme.typography.labelMedium,
-                        fontFamily = FontFamily.Monospace,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                }
                 if (usb.isNotEmpty()) item("usb") { UsbBanner(usb, vm) }
-                if (connectableInRange > 0 || connected.isNotEmpty()) {
-                    item {
-                        BroadcastBar(
-                            connectableInRange = connectableInRange,
-                            liveCount = connected.size,
-                            onConnectAll = { vm.connectAll() },
-                            onDisconnectAll = { vm.disconnectAll() },
+                if (all.isNotEmpty()) {
+                    item("header") {
+                        Text(
+                            "$liveCount LIVE · ${all.size} KNOWN".let { "> $it" },
+                            style = MaterialTheme.typography.labelMedium,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.primary,
                         )
                     }
+                    if (connectableInRange > 0 || connected.isNotEmpty()) {
+                        item {
+                            BroadcastBar(
+                                connectableInRange = connectableInRange,
+                                liveCount = connected.size,
+                                onConnectAll = { vm.connectAll() },
+                                onDisconnectAll = { vm.disconnectAll() },
+                            )
+                        }
+                    }
+                    section("Connected", connected, vm, onOpen) { renaming = it }
+                    section("In range", inRange, vm, onOpen) { renaming = it }
+                    section("Saved · out of range", saved, vm, onOpen) { renaming = it }
                 }
-                section("Connected", connected, vm, onOpen) { renaming = it }
-                section("In range", inRange, vm, onOpen) { renaming = it }
-                section("Saved · out of range", saved, vm, onOpen) { renaming = it }
+                meshFleetSection(
+                    nodes = meshNodes,
+                    home = homeBase,
+                    onSetHome = { node ->
+                        vm.setHomeBaseNode(node.num, node.name.ifBlank { "Node ${node.num}" })
+                    },
+                    onSetHomeLocation = { showHomeLoc = true },
+                    onClearHome = { vm.clearHomeBase() },
+                )
             }
         }
     }
 
     renaming?.let { RenameDialog(it, vm) { renaming = null } }
+    if (showHomeLoc && homeBase != null) HomeLocationDialog(vm) { showHomeLoc = false }
+}
+
+private fun androidx.compose.foundation.lazy.LazyListScope.meshFleetSection(
+    nodes: List<com.cak3d.biscuitmesh.mesh.MeshNode>,
+    home: com.cak3d.biscuitmesh.data.HomeBase?,
+    onSetHome: (com.cak3d.biscuitmesh.mesh.MeshNode) -> Unit,
+    onSetHomeLocation: () -> Unit,
+    onClearHome: () -> Unit,
+) {
+    if (nodes.isEmpty() && home == null) return
+    item(key = "mesh-header") {
+        Text(
+            "MESH RADIOS",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(top = 6.dp, bottom = 2.dp),
+        )
+    }
+    home?.let { hb ->
+        item(key = "mesh-home") {
+            MeshHomeCard(hb, nodes.firstOrNull { it.num == hb.num }, onSetHomeLocation, onClearHome)
+        }
+    }
+    val others = nodes.filter { home == null || it.num != home.num }
+    items(others, key = { "mesh-${it.num}" }) { node ->
+        MeshNodeCard(node, onSetHome = { onSetHome(node) })
+    }
+}
+
+@Composable
+private fun MeshNodeCard(node: com.cak3d.biscuitmesh.mesh.MeshNode, onSetHome: () -> Unit) {
+    val tint = MaterialTheme.colorScheme.secondary
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(14.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Surface(shape = CircleShape, color = tint.copy(alpha = 0.15f), modifier = Modifier.size(44.dp)) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(Icons.Default.Router, contentDescription = null, tint = tint, modifier = Modifier.size(24.dp))
+                }
+            }
+            Column(Modifier.weight(1f)) {
+                Text(
+                    node.name.ifBlank { "Node ${node.num}" },
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                val meta = buildList {
+                    add("#${node.num}")
+                    node.battery?.let { add("$it%") }
+                    add(if (node.lat != null && node.lon != null) "GPS fix" else "no GPS")
+                }.joinToString("  ·  ")
+                Text(
+                    meta,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                )
+            }
+            TextButton(onClick = onSetHome) { Text("Set as home") }
+        }
+    }
+}
+
+@Composable
+private fun MeshHomeCard(
+    home: com.cak3d.biscuitmesh.data.HomeBase,
+    live: com.cak3d.biscuitmesh.mesh.MeshNode?,
+    onSetLocation: () -> Unit,
+    onClear: () -> Unit,
+) {
+    val amber = Color(0xFFF0B429)
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Surface(shape = CircleShape, color = amber.copy(alpha = 0.15f), modifier = Modifier.size(44.dp)) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(Icons.Default.Home, contentDescription = null, tint = amber, modifier = Modifier.size(24.dp))
+                    }
+                }
+                Column(Modifier.weight(1f)) {
+                    Text(home.label, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text("HOME BASE  ·  #${home.num}", style = MaterialTheme.typography.labelMedium, color = amber)
+                }
+            }
+            val la = home.lat
+            val lo = home.lon
+            Text(
+                if (la != null && lo != null) "Pinned at %.5f, %.5f".format(la, lo)
+                else "No location set — pin it so it always shows on the map",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+            )
+            if (live != null) {
+                val s = buildList {
+                    live.battery?.let { add("$it%") }
+                    add(if (live.lat != null && live.lon != null) "reporting GPS" else "no GPS")
+                }.joinToString("  ·  ")
+                Text("Heard now  ·  $s", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+            } else {
+                Text("Not currently heard", style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilledTonalButton(onClick = onSetLocation, modifier = Modifier.weight(1f)) { Text("Set location") }
+                OutlinedButton(onClick = onClear, modifier = Modifier.weight(1f)) { Text("Clear") }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun HomeLocationDialog(vm: MainViewModel, onDismiss: () -> Unit) {
+    val fix by vm.currentFix.collectAsStateWithLifecycle()
+    var lat by remember { mutableStateOf("") }
+    var lon by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Set home base location") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                val f = fix
+                if (f != null) {
+                    Text("Current location: %.5f, %.5f".format(f.first, f.second),
+                        style = MaterialTheme.typography.bodySmall)
+                    OutlinedButton(
+                        onClick = { lat = f.first.toString(); lon = f.second.toString() },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text("Use current location") }
+                } else {
+                    Text("Getting current location…", style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                }
+                OutlinedTextField(value = lat, onValueChange = { lat = it }, singleLine = true,
+                    label = { Text("Latitude") })
+                OutlinedTextField(value = lon, onValueChange = { lon = it }, singleLine = true,
+                    label = { Text("Longitude") })
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                val la = lat.trim().toDoubleOrNull()
+                val lo = lon.trim().toDoubleOrNull()
+                if (la != null && lo != null) vm.setHomeBaseLocation(la, lo)
+                onDismiss()
+            }) { Text("Save") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }
 
 private fun androidx.compose.foundation.lazy.LazyListScope.section(

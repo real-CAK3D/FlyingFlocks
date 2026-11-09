@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -162,6 +163,25 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun placeMeshNode(num: Long, lat: Double, lon: Double) {
         viewModelScope.launch { appRef.meshPlacementStore.place(num, lat, lon) }
     }
+
+    // --- Home base node ----------------------------------------------------
+    val homeBase: StateFlow<com.cak3d.biscuitmesh.data.HomeBase?> =
+        appRef.homeBaseStore.homeBase.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    fun setHomeBaseNode(num: Long, label: String) {
+        viewModelScope.launch { appRef.homeBaseStore.setNode(num, label) }
+    }
+    fun setHomeBaseLocation(lat: Double, lon: Double) {
+        viewModelScope.launch { appRef.homeBaseStore.setLocation(lat, lon) }
+    }
+    fun clearHomeBase() { viewModelScope.launch { appRef.homeBaseStore.clear() } }
+
+    /** Live phone fix (lat, lon) — only active while something subscribes (e.g. a "use current
+     *  location" dialog), so it doesn't hold GPS open the rest of the time. */
+    val currentFix: StateFlow<Pair<Double, Double>?> =
+        appRef.locationProvider.locationUpdates()
+            .map { it.latitude to it.longitude }
+            .catch { }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     /**
      * Imports a What the Flock backup file's text: parses it and drops every located

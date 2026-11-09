@@ -136,6 +136,11 @@ class BiscuitMeshApp : Application() {
         com.cak3d.biscuitmesh.data.MeshPlacementStore(this)
     }
 
+    /** The designated home-base mesh node + its fixed, always-on-map location. */
+    val homeBaseStore: com.cak3d.biscuitmesh.data.HomeBaseStore by lazy {
+        com.cak3d.biscuitmesh.data.HomeBaseStore(this)
+    }
+
     private val rareBirdStore: RareBirdStore by lazy { RareBirdStore(this) }
 
     val rareBirds: RareBirdManager by lazy { RareBirdManager(appScope, rareBirdStore, wardrive) }

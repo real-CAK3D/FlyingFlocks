@@ -133,6 +133,7 @@ fun WardriveScreen(vm: MainViewModel) {
     val savedMapStyle by vm.mapStyle.collectAsStateWithLifecycle()
     val meshNodes by vm.meshNodes.collectAsStateWithLifecycle()
     val meshPlacements by vm.meshPlacements.collectAsStateWithLifecycle()
+    val homeBase by vm.homeBase.collectAsStateWithLifecycle()
     // Live Flock: wings you're tailing (people who gave you their band), shown on the map.
     val flockPins by vm.crew.flock.collectAsStateWithLifecycle()
     // Territory: claimed cells near you, refreshed while the Territory view is open.
@@ -456,6 +457,21 @@ fun WardriveScreen(vm: MainViewModel) {
                         m.title = hazardLabel(hz.kind) + if (hz.name.isNotBlank()) " · ${hz.name}" else ""
                         // Tap a camera to remove it (confirm first) — clears stray test pins.
                         m.setOnMarkerClickListener { _, _ -> pendingDeleteCam = hz; true }
+                        map.overlays.add(m)
+                    }
+                }
+
+                // Home base: a fixed, always-on pin at the base node's pinned location,
+                // drawn in every view so the stationary home is always on the map.
+                homeBase?.let { hb ->
+                    val hbLat = hb.lat
+                    val hbLon = hb.lon
+                    if (hbLat != null && hbLon != null) {
+                        val m = Marker(map)
+                        m.position = GeoPoint(hbLat, hbLon)
+                        m.icon = ring(AndroidColor.parseColor("#F0B429"), 22)
+                        m.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                        m.title = hb.label + "  ·  home base"
                         map.overlays.add(m)
                     }
                 }
