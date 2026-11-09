@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.cak3d.biscuitmesh.MainViewModel
+import com.cak3d.biscuitmesh.model.BiscuitDevice
 import com.cak3d.biscuitmesh.wardrive.SampleKind
 import com.cak3d.biscuitmesh.wardrive.WardriveSample
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -57,6 +58,11 @@ import org.osmdroid.views.overlay.TilesOverlay
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen(vm: MainViewModel, onBack: () -> Unit) {
+    // GPS + cell for the status strip (phone Wi-Fi/BT scan is started by the embedded radar).
+    DisposableEffect(Unit) {
+        vm.startGnss(); vm.startCell()
+        onDispose { vm.stopGnss(); vm.stopCell() }
+    }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -64,27 +70,41 @@ fun DashboardScreen(vm: MainViewModel, onBack: () -> Unit) {
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
+                actions = {
+                    HelpButton(
+                        "Dashboard",
+                        "Everything at a glance: a live status strip (Wi-Fi / BT / sub-GHz / GPS lock / cell), the " +
+                            "map with your track and finds, the radar/compass/locator tools, fleet + mesh health, and " +
+                            "the live device list. On an unfolded screen the panes sit side by side.",
+                    )
+                },
             )
         },
     ) { padding ->
         BoxWithConstraints(Modifier.fillMaxSize().padding(padding)) {
             val wide = maxWidth >= 640.dp
             if (wide) {
-                Row(Modifier.fillMaxSize()) {
-                    MapPane(vm, Modifier.weight(1.35f).fillMaxHeight())
-                    Column(Modifier.weight(1f).fillMaxHeight()) {
-                        Box(Modifier.weight(1f).fillMaxWidth()) {
-                            NavigateScreen(vm = vm, onBack = onBack, startMode = NavMode.RADAR)
+                Column(Modifier.fillMaxSize()) {
+                    StatusStrip(vm, Modifier.fillMaxWidth())
+                    Row(Modifier.weight(1f).fillMaxWidth()) {
+                        MapPane(vm, Modifier.weight(1.35f).fillMaxHeight())
+                        Column(Modifier.weight(1f).fillMaxHeight()) {
+                            Box(Modifier.weight(1.1f).fillMaxWidth()) {
+                                NavigateScreen(vm = vm, onBack = onBack, startMode = NavMode.RADAR)
+                            }
+                            FleetHealthPane(vm, Modifier.weight(0.7f).fillMaxWidth())
+                            DevicePane(vm, Modifier.weight(1f).fillMaxWidth())
                         }
-                        DevicePane(vm, Modifier.weight(1f).fillMaxWidth())
                     }
                 }
             } else {
                 Column(Modifier.fillMaxSize()) {
+                    StatusStrip(vm, Modifier.fillMaxWidth())
                     MapPane(vm, Modifier.fillMaxWidth().weight(1.2f))
                     Box(Modifier.fillMaxWidth().weight(1f)) {
                         NavigateScreen(vm = vm, onBack = onBack, startMode = NavMode.RADAR)
                     }
+                    FleetHealthPane(vm, Modifier.fillMaxWidth().weight(0.8f))
                     DevicePane(vm, Modifier.fillMaxWidth().weight(1f))
                 }
             }
@@ -189,6 +209,78 @@ private fun DevicePane(vm: MainViewModel, modifier: Modifier) {
                         fontWeight = FontWeight.Bold, fontSize = 12.sp)
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun StatusStrip(vm: MainViewModel, modifier: Modifier) {
+    val results by vm.phoneScanResults.collectAsStateWithLifecycle(initialValue = emptyList())
+    val gnss by vm.gnssState.collectAsStateWithLifecycle()
+    val cell by vm.cellState.collectAsStateWithLifecycle()
+    val samplesFlow = vm.wardriveSamples
+    val samplesState = remember(samplesFlow) { samplesFlow ?: MutableStateFlow(emptyMap<String, WardriveSample>()) }
+    val samples by samplesState.collectAsStateWithLifecycle(initialValue = emptyMap())
+
+    val wifi = results.count { it.kind == SampleKind.AP || it.kind == SampleKind.STATION }
+    val bt = results.count { it.kind == SampleKind.BT }
+    val rf = samples.values.count { it.kind == SampleKind.RF }
+    Row(
+        modifier.background(MaterialTheme.colorScheme.surface).padding(vertical = 8.dp, horizontal = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        StatTile("WIFI", "$wifi", Color(0xFF5FD36A), Modifier.weight(1f))
+        StatTile("BT", "$bt", Color(0xFFFF5470), Modifier.weight(1f))
+        StatTile("SUB-G", "$rf", Color(0xFFF0B429), Modifier.weight(1f))
+        StatTile("GPS", "${gnss.usedCount}/${gnss.visibleCount}", Color(0xFF22D3EE), Modifier.weight(1f))
+        StatTile("CELL", "${cell.cells.size}", Color(0xFF8566E8), Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun StatTile(label: String, value: String, tint: Color, modifier: Modifier) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(value, color = tint, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+        Text(label, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+            fontFamily = FontFamily.Monospace, fontSize = 9.sp)
+    }
+}
+
+@Composable
+private fun FleetHealthPane(vm: MainViewModel, modifier: Modifier) {
+    val devicesFlow = vm.devices
+    val devicesState = remember(devicesFlow) { devicesFlow ?: MutableStateFlow(emptyMap<String, BiscuitDevice>()) }
+    val devices by devicesState.collectAsStateWithLifecycle(initialValue = emptyMap())
+    val meshNodes by vm.meshNodes.collectAsStateWithLifecycle()
+    val homeBase by vm.homeBase.collectAsStateWithLifecycle()
+    val live = remember(devices) { devices.values.filter { it.isLive } }
+    Column(
+        modifier.background(MaterialTheme.colorScheme.surface).padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(
+            "FLEET · ${live.size} live · ${meshNodes.size} mesh",
+            style = MaterialTheme.typography.labelMedium, fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary,
+        )
+        live.take(5).forEach { d ->
+            Row(
+                Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(d.displayName, style = MaterialTheme.typography.bodySmall, maxLines = 1,
+                    modifier = Modifier.weight(1f))
+                Text(d.status?.battery?.let { "$it%" } ?: "—", style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+            }
+        }
+        homeBase?.let {
+            Text("Home base · ${it.label}", style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+        }
+        if (live.isEmpty() && meshNodes.isEmpty()) {
+            Text("No boards or mesh nodes connected", style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
         }
     }
 }
