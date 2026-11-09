@@ -3,6 +3,7 @@ package com.cak3d.biscuitmesh.ui
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -28,6 +29,7 @@ import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -90,6 +92,9 @@ private const val MAX_DBM = -20
 private enum class ScopeBand(val tag: String, val tint: Color) {
     WiFi24("2.4", GREEN), WiFi5("5G", CYAN), WiFi6("6G", AMBER), Ble("BLE", RED), Other("—", MUTED),
 }
+
+/** Source filter for the scope — mirrors the concept's Wi-Fi / BLE / SDR tabs. */
+private enum class ScopeMode(val label: String) { ALL("ALL"), WIFI("WI-FI"), BT("BT"), SUBGHZ("SUB-GHZ") }
 
 private fun PhoneScanRow.scopeBand(): ScopeBand = when {
     kind == SampleKind.BT -> ScopeBand.Ble
@@ -246,6 +251,7 @@ fun ScopeScreen(vm: MainViewModel, onBack: () -> Unit) {
     val signals = remember(vm) { mutableStateListOf<ScopeSignal>() }
     var current by remember(vm) { mutableStateOf(ScopeSnapshot()) }
     var newPerSecond by remember(vm) { mutableStateOf(0) }
+    var mode by remember(vm) { mutableStateOf(ScopeMode.ALL) }
     val enteredAt = remember(vm) { System.currentTimeMillis() }
     val text = rememberTextMeasurer(cacheSize = 96)
 
@@ -263,8 +269,18 @@ fun ScopeScreen(vm: MainViewModel, onBack: () -> Unit) {
         var previous: List<PhoneScanRow>? = null
         var rate = 0
         var tick = 0
+        var lastMode = ScopeMode.ALL
         while (true) {
             tick++
+            if (mode != lastMode) {
+                // Source switched — wipe the accumulated terrain/trace so the new source
+                // fills in fresh instead of blending with the old one.
+                lastMode = mode
+                Snapshot.withMutableSnapshot {
+                    terrain.clear(); trace.clear(); feed.clear(); signals.clear()
+                }
+                seen.clear(); previous = null; rate = 0; arrivals.clear()
+            }
             val rows = vm.phoneScanResults.value
             val now = System.nanoTime() / 1_000_000L
             var next = current
@@ -276,7 +292,7 @@ fun ScopeScreen(vm: MainViewModel, onBack: () -> Unit) {
                 previous = rows
                 val newest = feed.mapTo(ArrayList(FEED_LIMIT + 1)) { it.row }
                 next = summarize(rows, vm.gnssState.value, vm.wardriveSamples?.value?.values,
-                    vm.cellState.value, tick) { row ->
+                    vm.cellState.value, tick, mode) { row ->
                     if (row.lastSeenMs >= enteredAt && seen.add(row.id)) {
                         discovered++
                         if (row.rssi > strongNew) { strongNew = row.rssi; strongNewBand = row.scopeBand() }
@@ -331,6 +347,7 @@ fun ScopeScreen(vm: MainViewModel, onBack: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 item { ScopeStats(text, current, newPerSecond) }
+                item { ScopeModeTabs(text, mode) { mode = it } }
                 item {
                     ScopePanel(text, "◆  3D DEPTH VISUALIZER", "CH / RSSI / HISTORY", heroHeight.value.toInt(),
                         "RF depth, Wi-Fi channels and a separate Bluetooth lane. Newest at the front.") {
@@ -361,6 +378,7 @@ private inline fun summarize(
     rf: Collection<WardriveSample>?,
     cell: CellSnapshot,
     seed: Int,
+    mode: ScopeMode,
     onValid: (PhoneScanRow) -> Unit,
 ): ScopeSnapshot {
     val bins = FloatArray(BINS)
@@ -377,6 +395,14 @@ private inline fun summarize(
     for (row in rows) {
         val rssi = row.rssi
         if (rssi >= 0) continue // Includes the scanner's 127 sentinel.
+        val band = row.scopeBand()
+        val inMode = when (mode) {
+            ScopeMode.ALL -> true
+            ScopeMode.WIFI -> band == ScopeBand.WiFi24 || band == ScopeBand.WiFi5 || band == ScopeBand.WiFi6
+            ScopeMode.BT -> band == ScopeBand.Ble
+            ScopeMode.SUBGHZ -> false
+        }
+        if (!inMode) continue
         onValid(row)
         high = maxOf(high, rssi)
         low = minOf(low, rssi)
@@ -386,7 +412,6 @@ private inline fun summarize(
         if (ranked.size < RANK_LIMIT) ranked.add(row)
         val bucket = (strength(rssi.toFloat()) * PROFILE_BINS).toInt().coerceAtMost(PROFILE_BINS - 1)
         profile[bucket]++
-        val band = row.scopeBand()
         bands[band.ordinal]++
         val bin = channelBin(row.channel, band)
         if (bin >= 0) {
@@ -415,12 +440,20 @@ private inline fun summarize(
     rf?.forEach { s ->
         when (s.kind) {
             SampleKind.RF -> {
+                if (mode != ScopeMode.ALL && mode != ScopeMode.SUBGHZ) return@forEach
                 val mhz = s.label.removeSuffix(" MHz").trim().toFloatOrNull() ?: return@forEach
                 placeWide(bins, subGhzBin(mhz), 0, 11, strength(s.rssi.toFloat()).coerceAtLeast(.06f))
                 sources[2]++
             }
             SampleKind.AP, SampleKind.STATION, SampleKind.BT -> {
                 val band = wardriveBand(s.kind, s.channel)
+                val inMode = when (mode) {
+                    ScopeMode.ALL -> true
+                    ScopeMode.WIFI -> band != ScopeBand.Ble
+                    ScopeMode.BT -> band == ScopeBand.Ble
+                    ScopeMode.SUBGHZ -> false
+                }
+                if (!inMode) return@forEach
                 val bin = channelBin(s.channel, band)
                 if (bin >= 0) {
                     val (first, last) = laneRange(band)
@@ -430,17 +463,18 @@ private inline fun summarize(
             }
         }
     }
-    // GPS / GNSS satellites in the 14–18 lane, height from carrier-to-noise.
-    for (sat in gnss.sats) {
-        if (sat.cn0 <= 0f) continue
-        placeWide(bins, gnssBin(sat.constellation), 14, 18, (sat.cn0 / 48f).coerceIn(.06f, 1f))
-        sources[3]++
-    }
-    // Cell sectors in the 19–21 lane, bucketed low / mid / high band.
-    for (tower in cell.cells) {
-        placeWide(bins, (CELL_FIRST + tower.tier).coerceIn(CELL_FIRST, CELL_LAST),
-            CELL_FIRST, CELL_LAST, cellStrength(tower.dbm))
-        sources[4]++
+    // GPS / GNSS satellites (14–18 lane) + cell sectors (19–21 lane) — only in the ALL view.
+    if (mode == ScopeMode.ALL) {
+        for (sat in gnss.sats) {
+            if (sat.cn0 <= 0f) continue
+            placeWide(bins, gnssBin(sat.constellation), 14, 18, (sat.cn0 / 48f).coerceIn(.06f, 1f))
+            sources[3]++
+        }
+        for (tower in cell.cells) {
+            placeWide(bins, (CELL_FIRST + tower.tier).coerceIn(CELL_FIRST, CELL_LAST),
+                CELL_FIRST, CELL_LAST, cellStrength(tower.dbm))
+            sources[4]++
+        }
     }
     // += so the board Wi-Fi/BLE counts tallied above aren't overwritten by the phone's.
     sources[0] += bands[0] + bands[1] + bands[2]
@@ -503,6 +537,30 @@ private fun ScopeStats(text: TextMeasurer, snapshot: ScopeSnapshot, rate: Int) {
             val x = cell * index
             if (index > 0) drawLine(GRID, Offset(x, 0f), Offset(x, size.height))
             caption(text, fields[index], x + 3.dp.toPx(), 5.dp.toPx(), colors[index], 8, cell - 5.dp.toPx(), true)
+        }
+        drawLine(AMBER.copy(alpha = .45f), Offset(0f, size.height - 1), Offset(size.width, size.height - 1))
+    }
+}
+
+@Composable
+private fun ScopeModeTabs(text: TextMeasurer, mode: ScopeMode, onPick: (ScopeMode) -> Unit) {
+    val modes = ScopeMode.entries
+    Canvas(
+        Modifier.fillMaxWidth().height(24.dp).pointerInput(Unit) {
+            detectTapGestures { tap ->
+                val idx = (tap.x / (size.width.toFloat() / modes.size)).toInt().coerceIn(0, modes.size - 1)
+                onPick(modes[idx])
+            }
+        },
+    ) {
+        drawRect(HEADER)
+        val w = size.width / modes.size
+        modes.forEachIndexed { i, m ->
+            val on = m == mode
+            val x = w * i
+            if (on) drawRect(EMBER.copy(alpha = .20f), Offset(x, 0f), Size(w, size.height))
+            if (i > 0) drawLine(GRID, Offset(x, 0f), Offset(x, size.height))
+            caption(text, m.label, x + 6.dp.toPx(), 5.dp.toPx(), if (on) GOLD else MUTED, 9, w - 9.dp.toPx(), on)
         }
         drawLine(AMBER.copy(alpha = .45f), Offset(0f, size.height - 1), Offset(size.width, size.height - 1))
     }
@@ -584,6 +642,18 @@ private fun DrawScope.drawDepth(text: TextMeasurer, terrain: List<ScopeSlice>) {
         drawLine(WALL_GRID, project(0, depth, 0f), project(BINS - 1, depth, 0f))
     }
     drawMesh(terrain, TERRAIN_COLORS, ::project, rainbow = false)
+
+    // Current-peak highlight column (cyan) at the strongest frequency — the concept's CURRENT PEAK.
+    val frameNow = terrain.lastOrNull()
+    val peakNow = frameNow?.peak
+    if (peakNow != null) {
+        val lvl = frameNow.bins[peakNow.bin]
+        val baseFront = project(peakNow.bin, 0f, 0f)
+        val topFront = project(peakNow.bin, 0f, lvl)
+        drawLine(CYAN.copy(alpha = .20f), project(peakNow.bin, 1f, 0f), baseFront, 10.dp.toPx())
+        drawLine(CYAN.copy(alpha = .85f), baseFront, topFront, 3.dp.toPx())
+        drawCircle(CYAN, 3.dp.toPx(), topFront)
+    }
 
     val ridge = Path()
     var connected = false
