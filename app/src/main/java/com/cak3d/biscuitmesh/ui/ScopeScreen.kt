@@ -126,6 +126,23 @@ private fun gnssBin(constellation: String): Int = when (constellation.uppercase(
 /** Cell dBm (~-120..-50) → terrain height. */
 private fun cellStrength(dbm: Int): Float = ((dbm + 120f) / 75f).coerceIn(.12f, 1f)
 
+/** Band for a board-sourced wardrive sample (same lane mapping as the phone's own rows). */
+private fun wardriveBand(kind: SampleKind, channel: Int): ScopeBand = when {
+    kind == SampleKind.BT -> ScopeBand.Ble
+    channel in 1..14 -> ScopeBand.WiFi24
+    channel in 32..177 -> ScopeBand.WiFi5
+    channel >= 1000 -> ScopeBand.WiFi6
+    else -> ScopeBand.Other
+}
+
+/** First/last bin of a band's lane, for clipping placeWide. */
+private fun laneRange(band: ScopeBand): Pair<Int, Int> = when (band) {
+    ScopeBand.WiFi24 -> 22 to 33
+    ScopeBand.WiFi5 -> 38 to 49
+    ScopeBand.WiFi6 -> 52 to 59
+    else -> 34 to 36
+}
+
 // A wide, soft falloff so a single contact raises a rolling hill, not a spike. maxOf
 // blends overlapping signals into connected ridges — mountains, not sharp triangles.
 private val SPREAD = floatArrayOf(1f, .88f, .64f, .40f, .20f, .09f)
@@ -392,12 +409,25 @@ private inline fun summarize(
             }
         }
     }
-    // Sub-GHz pings from a connected board (label carries the MHz) in the 0–11 lane.
+    // Board-sourced samples (Wi-Fi / BLE / sub-GHz the connected boards pick up). Wi-Fi and
+    // BLE paint the same lanes as the phone's own radios, so the terrain shows everything the
+    // whole fleet hears, not just the phone; sub-GHz goes in the 0–11 lane by its MHz label.
     rf?.forEach { s ->
-        if (s.kind == SampleKind.RF) {
-            val mhz = s.label.removeSuffix(" MHz").trim().toFloatOrNull() ?: return@forEach
-            placeWide(bins, subGhzBin(mhz), 0, 11, strength(s.rssi.toFloat()).coerceAtLeast(.06f))
-            sources[2]++
+        when (s.kind) {
+            SampleKind.RF -> {
+                val mhz = s.label.removeSuffix(" MHz").trim().toFloatOrNull() ?: return@forEach
+                placeWide(bins, subGhzBin(mhz), 0, 11, strength(s.rssi.toFloat()).coerceAtLeast(.06f))
+                sources[2]++
+            }
+            SampleKind.AP, SampleKind.STATION, SampleKind.BT -> {
+                val band = wardriveBand(s.kind, s.channel)
+                val bin = channelBin(s.channel, band)
+                if (bin >= 0) {
+                    val (first, last) = laneRange(band)
+                    placeWide(bins, bin, first, last, strength(s.rssi.toFloat()).coerceAtLeast(.06f))
+                    if (band == ScopeBand.Ble) sources[1]++ else sources[0]++
+                }
+            }
         }
     }
     // GPS / GNSS satellites in the 14–18 lane, height from carrier-to-noise.
@@ -412,8 +442,9 @@ private inline fun summarize(
             CELL_FIRST, CELL_LAST, cellStrength(tower.dbm))
         sources[4]++
     }
-    sources[0] = bands[0] + bands[1] + bands[2]
-    sources[1] = bands[3]
+    // += so the board Wi-Fi/BLE counts tallied above aren't overwritten by the phone's.
+    sources[0] += bands[0] + bands[1] + bands[2]
+    sources[1] += bands[3]
     // Round the whole surface into rolling mountains rather than sharp per-channel spikes.
     smoothBins(bins, 2)
     val trace = if (count == 0) null else ScopeTrace(high, low, total.toFloat() / count, count)

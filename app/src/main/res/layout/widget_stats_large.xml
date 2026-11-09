@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/ws_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center_vertical"
+    android:padding="16dp"
+    android:background="@drawable/widget_bg">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:fontFamily="monospace"
+        android:textSize="10sp"
+        android:textColor="#8FA189"
+        android:text="FLYING FLOCKS" />
+
+    <TextView
+        android:id="@+id/ws_rank"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="3dp"
+        android:textColor="#5FD36A"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:maxLines="1"
+        android:text="Flock rank" />
+
+    <TextView
+        android:id="@+id/ws_finds"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:fontFamily="monospace"
+        android:textSize="13sp"
+        android:textColor="#8FA189"
+        android:maxLines="1"
+        android:text="—" />
+
+    <TextView
+        android:id="@+id/ws_detail"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:fontFamily="monospace"
+        android:textSize="11sp"
+        android:textColor="#8FA189"
+        android:maxLines="1"
+        android:text="" />
+</LinearLayout>
