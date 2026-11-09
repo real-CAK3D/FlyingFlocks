@@ -69,10 +69,7 @@ fun SensorsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
             HubEntry("Watchlist", "Flag MACs or names and spot them in range", Icons.Default.Visibility, "watchlist", Color(0xFF34D399)),
         )),
         HubSection("Sky", listOf(
-            HubEntry("Aurora", "Live space weather — can you see the northern lights tonight?", Icons.Default.Nightlight, "aurora", Color(0xFFA855F7)),
-            HubEntry("GPS Satellites", "Which satellites your GPS is locked onto", Icons.Default.SatelliteAlt, "satellites", Color(0xFF22D3EE)),
-            HubEntry("Orbit", "A live 3D globe of the satellites overhead", Icons.Default.Public, "globe", Color(0xFF38BDF8)),
-            HubEntry("Aircraft Overhead", "Live ADS-B — planes in the air near you", Icons.Default.Flight, "aircraft", Color(0xFF38BDF8)),
+            HubEntry("Orbit", "Satellites, aircraft & space weather — flip between the three in one view", Icons.Default.Public, "orbit", Color(0xFF38BDF8)),
         )),
         HubSection("Comms", listOf(
             HubEntry("Caw", "Chat over your Meshtastic mesh — off-grid, no internet", Icons.Default.Forum, "meshchat", Color(0xFF00E5A0)),

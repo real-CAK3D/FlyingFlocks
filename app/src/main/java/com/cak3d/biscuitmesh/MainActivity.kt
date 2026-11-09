@@ -80,6 +80,7 @@ import com.cak3d.biscuitmesh.ui.SignalHuntScreen
 import com.cak3d.biscuitmesh.ui.NavigateScreen
 import com.cak3d.biscuitmesh.ui.NavMode
 import com.cak3d.biscuitmesh.ui.GlobeScreen
+import com.cak3d.biscuitmesh.ui.OrbitScreen
 import com.cak3d.biscuitmesh.ui.GlobalStatsScreen
 import com.cak3d.biscuitmesh.ui.ScopeScreen
 import com.cak3d.biscuitmesh.ui.DashboardScreen
@@ -373,6 +374,7 @@ private fun MainShell(vm: MainViewModel) {
                     SatellitesScreen(vm = vm, onBack = { nav.popBackStack() }, onOpenGlobe = { nav.navigate("globe") })
                 }
                 composable("globe") { GlobeScreen(vm = vm, onBack = { nav.popBackStack() }) }
+                composable("orbit") { OrbitScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("globalstats") { GlobalStatsScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("scope") { ScopeScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("dashboard") { DashboardScreen(vm = vm, onBack = { nav.popBackStack() }) }
