@@ -17,7 +17,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -29,7 +28,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -82,17 +80,6 @@ fun DeviceDetailScreen(vm: MainViewModel, address: String?, onBack: () -> Unit) 
 
     var input by remember { mutableStateOf("") }
     val canSend = device.state == ConnectionState.READY
-    // A pending gated attack awaiting confirmation: (label, cmd).
-    var attack by remember { mutableStateOf<Pair<String, String>?>(null) }
-    // Live Marauder recon tallies parsed from this board's DATA:STA / DATA:PROBE stream.
-    val staSeen = remember(lines) {
-        lines.filter { it.type == BiscuitMessage.Type.DATA && it.subtype == "STA" }
-            .mapNotNull { it.payload.split(",").firstOrNull()?.takeIf { s -> s.isNotBlank() } }.toSet()
-    }
-    val probeSeen = remember(lines) {
-        lines.filter { it.type == BiscuitMessage.Type.DATA && it.subtype == "PROBE" }
-            .mapNotNull { it.payload.split(",").firstOrNull()?.takeIf { s -> s.isNotBlank() } }.toSet()
-    }
 
     Scaffold(
         topBar = {
@@ -151,41 +138,6 @@ fun DeviceDetailScreen(vm: MainViewModel, address: String?, onBack: () -> Unit) 
                 }
             }
 
-            // Marauder Wi-Fi recon — benign sniffs stream DATA:STA / DATA:PROBE into the
-            // console below; the two attacks are gated behind a confirmation (own networks only).
-            Text(
-                "WI-FI RECON" + if (staSeen.isNotEmpty() || probeSeen.isNotEmpty())
-                    "   ·   ${staSeen.size} stations · ${probeSeen.size} probed SSIDs" else "",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
-            )
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 6.dp)) {
-                listOf(
-                    "Stations" to "stationlist", "Probes" to "probesniff",
-                    "AP list" to "aplist", "Packet mon" to "pktmon",
-                ).forEach { (label, cmd) ->
-                    AssistChip(onClick = { vm.send(address, cmd) }, label = { Text(label) }, enabled = canSend)
-                }
-            }
-            Text(
-                "ATTACKS · OWN NETWORKS ONLY",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(bottom = 4.dp),
-            )
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 6.dp)) {
-                listOf("Deauth" to "deauth", "Beacon spam" to "beaconspam").forEach { (label, cmd) ->
-                    AssistChip(
-                        onClick = { attack = label to cmd },
-                        label = { Text(label) },
-                        enabled = canSend,
-                        colors = androidx.compose.material3.AssistChipDefaults.assistChipColors(
-                            labelColor = MaterialTheme.colorScheme.error),
-                    )
-                }
-            }
-
             Card(
                 modifier = Modifier.fillMaxWidth().weight(1f),
                 shape = RoundedCornerShape(12.dp),
@@ -227,25 +179,6 @@ fun DeviceDetailScreen(vm: MainViewModel, address: String?, onBack: () -> Unit) 
                         Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send")
                     }
                 },
-            )
-        }
-
-        attack?.let { (label, cmd) ->
-            AlertDialog(
-                onDismissRequest = { attack = null },
-                title = { Text("$label — your own network?") },
-                text = {
-                    Text(
-                        "This runs a Wi-Fi $label from the board against its currently selected AP list " +
-                            "(run an AP-list scan first to pick targets). Only ever do this on networks you " +
-                            "own or are explicitly authorised to test — deauthing or spamming others' " +
-                            "networks is illegal.",
-                    )
-                },
-                confirmButton = {
-                    TextButton(onClick = { vm.send(address, cmd); attack = null }) { Text("I'm authorised — run") }
-                },
-                dismissButton = { TextButton(onClick = { attack = null }) { Text("Cancel") } },
             )
         }
     }

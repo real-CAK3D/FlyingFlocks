@@ -243,7 +243,9 @@ fun MiscScreen(onOpenTool: (String) -> Unit) {
     TabbedToolScreen(
         title = "Misc Tools",
         leadingIcon = Icons.Default.Dashboard,
-        tabs = listOf("Tools" to ToolCatalog.misc),
+        // MaurCAK3D = the ESP32-Marauder-on-C5 Biscuit build; its options live here, and
+        // the T-Embed CC1101 image will get its own tab here once that firmware lands.
+        tabs = listOf("Tools" to ToolCatalog.misc, "MaurCAK3D" to ToolCatalog.marauder),
         onOpenTool = onOpenTool,
     )
 }

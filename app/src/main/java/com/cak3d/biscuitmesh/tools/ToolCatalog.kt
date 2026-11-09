@@ -82,8 +82,21 @@ object ToolCatalog {
         Tool("dronescan", "Drone Detection", "Drones via RemoteID", "dronescan", documented = false),
     )
 
+    // --- MaurCAK3D (ESP32 Marauder on the XIAO C5, Biscuit-BLE bridge) --------
+    // These map to the biscuit-bridge CMD contract: benign sniffs stream
+    // DATA:STA / DATA:PROBE / DATA:AP; the two attacks are offensive-gated.
+    val marauder = listOf(
+        Tool("mc_stations", "Station Sniff", "Client stations near APs → DATA:STA", "stationlist"),
+        Tool("mc_probes", "Probe Sniff", "SSIDs clients are probing for → DATA:PROBE", "probesniff"),
+        Tool("mc_aplist", "AP List", "Access points with vendor + packet counts → DATA:AP", "aplist"),
+        Tool("mc_pktmon", "Packet Monitor", "Raw 802.11 packet monitor", "pktmon"),
+        Tool("mc_stop", "Stop", "Stop all scans and attacks", "stopscan"),
+        Tool("mc_deauth", "Deauth", "Deauth the board's selected AP list — own networks only", "deauth", offensive = true),
+        Tool("mc_beaconspam", "Beacon Spam", "Flood fake beacons — own networks only", "beaconspam", offensive = true),
+    )
+
     val all: List<Tool> =
-        wifiSniffing + wifiAttacks + wifiScanners + btScanning + btAttacks + misc
+        wifiSniffing + wifiAttacks + wifiScanners + btScanning + btAttacks + misc + marauder
 
     fun byKey(key: String): Tool? = all.firstOrNull { it.key == key }
 }
