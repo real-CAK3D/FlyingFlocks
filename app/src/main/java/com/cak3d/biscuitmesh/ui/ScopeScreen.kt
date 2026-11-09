@@ -811,7 +811,7 @@ private fun ScopeSignalsPanel(
     trace: List<ScopeTrace?>, height: Int,
 ) {
     val recent = signals.asReversed().joinToString { "${it.kind} ${it.detail}" }
-    ScopePanel(text, "◆  FACTOR SIGNALS", "LEVEL · HI/LO/AVG", height,
+    ScopePanel(text, "◆  RF EVENTS", "LEVEL · HI/LO/AVG", height,
         "Notable RF events, and a live meter of signal level with its trend and running high, low and average. ${recent.ifEmpty { "Listening." }}") {
         val w = size.width
         val h = size.height
@@ -890,8 +890,8 @@ private fun ScopeSignalsPanel(
 
 @Composable
 private fun ScopeTracePanel(text: TextMeasurer, trace: List<ScopeTrace?>, profile: IntArray, height: Int) {
-    ScopePanel(text, "◆  RSSI · WI-FI / BLE", "CANDLES / PROFILE", height,
-        "RSSI candles, six smoothed averages, current signal distribution, and contact activity.") {
+    ScopePanel(text, "◆  FACTOR SIGNALS", "EMA RIBBON · VPVR · VOL", height,
+        "RSSI candles, a six-line moving-average ribbon, a volume-at-level profile with POC, a white live-level line, and contact activity.") {
         drawTrace(text, trace, profile)
     }
 }
@@ -1005,7 +1005,16 @@ private fun DrawScope.drawTrace(text: TextMeasurer, trace: List<ScopeTrace?>, pr
     if (bars.lastOrNull() != null) {
         val current = bars.lastOrNull() ?: return
         val py = y(current.close.toFloat())
-        plotTag(text, "${current.close}", Offset(right, py), profileRight, py - 5.dp.toPx(), INK, 22)
+        // White live-level line riding up/down with the current RSSI, dashed across to the
+        // profile — the "white bar on the right" from the reference, tagged with the value.
+        var sx = left
+        val dash = 5.dp.toPx(); val gap = 3.dp.toPx()
+        while (sx < profileRight) {
+            drawLine(Color.White.copy(alpha = .85f), Offset(sx, py),
+                Offset((sx + dash).coerceAtMost(profileRight), py), 1.2.dp.toPx())
+            sx += dash + gap
+        }
+        plotTag(text, "${current.close}", Offset(right, py), profileRight, py - 5.dp.toPx(), Color.White, 24)
     }
     drawLine(GRID, Offset(left, size.height - 11.dp.toPx()), Offset(right, size.height - 11.dp.toPx()))
     caption(text, "−26s", left, size.height - 11.dp.toPx(), MUTED, 7)
