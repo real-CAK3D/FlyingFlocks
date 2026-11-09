@@ -83,6 +83,14 @@ fun AuroraScreen(vm: MainViewModel, onBack: () -> Unit) {
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
+                actions = {
+                    HelpButton(
+                        "Aurora / space weather",
+                        "Live space weather from NOAA. The planetary Kp index (0–9) measures geomagnetic activity; " +
+                            "higher means auroras are visible further from the poles. The verdict estimates your chance " +
+                            "of seeing the lights tonight from your latitude — look toward the nearest pole.",
+                    )
+                },
             )
         },
     ) { padding ->

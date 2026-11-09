@@ -12,6 +12,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Flight
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -20,6 +21,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -53,6 +55,7 @@ fun AircraftScreen(vm: MainViewModel, onBack: () -> Unit) {
     var aircraft by remember { mutableStateOf<List<Aircraft>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
+    var selected by remember { mutableStateOf<Aircraft?>(null) }
 
     // Keep a current fix.
     androidx.compose.runtime.LaunchedEffect(Unit) {
@@ -81,6 +84,13 @@ fun AircraftScreen(vm: MainViewModel, onBack: () -> Unit) {
                 title = { Text("Aircraft Overhead") },
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
+                },
+                actions = {
+                    HelpButton(
+                        "Aircraft Overhead",
+                        "Live ADS-B — aircraft broadcasting their position within ~150 nm, via airplanes.live. Each " +
+                            "row shows callsign, type, altitude, speed, heading and distance. Tap a plane for full details.",
+                    )
                 },
             )
         },
@@ -116,15 +126,56 @@ fun AircraftScreen(vm: MainViewModel, onBack: () -> Unit) {
                 }
             }
             // hex can be blank/shared for TIS-B/MLAT targets, so index guarantees a unique key.
-            items(aircraft.size, key = { "${aircraft[it].hex}-$it" }) { AircraftRow(aircraft[it]) }
+            items(aircraft.size, key = { "${aircraft[it].hex}-$it" }) {
+                val a = aircraft[it]
+                AircraftRow(a) { selected = a }
+            }
         }
     }
+    selected?.let { AircraftDetailDialog(it) { selected = null } }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AircraftDetailDialog(a: Aircraft, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Icon(Icons.Default.Flight, contentDescription = null, tint = SKY,
+                    modifier = Modifier.graphicsLayer { rotationZ = a.trackDeg.toFloat() })
+                Text(a.flight.ifBlank { a.hex.uppercase() }, fontWeight = FontWeight.SemiBold)
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                AircraftStat("Type", a.type.ifBlank { "—" })
+                AircraftStat("ICAO hex", a.hex.uppercase().ifBlank { "—" })
+                AircraftStat("Altitude", "${a.altFt} ft")
+                AircraftStat("Ground speed", "${a.gsKt} kt")
+                AircraftStat("Heading", "${a.trackDeg}°")
+                AircraftStat("Distance", "${"%.1f".format(a.distanceKm)} km")
+                AircraftStat("Bearing", "${a.bearingDeg.toInt()}° ${compass(a.bearingDeg)}")
+            }
+        },
+    )
 }
 
 @Composable
-private fun AircraftRow(a: Aircraft) {
+private fun AircraftStat(label: String, value: String) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+        Text(value, style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AircraftRow(a: Aircraft, onClick: () -> Unit) {
     Card(
-        Modifier.fillMaxWidth(), shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(), shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically,

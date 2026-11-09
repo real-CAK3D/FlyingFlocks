@@ -106,6 +106,14 @@ fun GlobeScreen(vm: MainViewModel, onBack: () -> Unit) {
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
+                actions = {
+                    HelpButton(
+                        "Orbit",
+                        "A live 3D globe of the GNSS satellites your phone can see right now. Each dot is a " +
+                            "satellite, coloured by constellation (GPS, GLONASS, Galileo, BeiDou…). Filled dots are " +
+                            "locked into your position fix. Tap any satellite for its signal strength, elevation and azimuth.",
+                    )
+                },
             )
         },
     ) { padding ->
