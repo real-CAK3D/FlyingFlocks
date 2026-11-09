@@ -138,8 +138,9 @@ fun SubGhzScreen(vm: MainViewModel, onOpenMap: () -> Unit) {
             .associateBy { it.id }.values.sortedByDescending { it.timeMs }
     }
     val now = System.currentTimeMillis()
-    // Capability cards go LIVE as real decodes arrive from the node (TPMS/weather/keyfob
-    // decoders all live in the firmware now); a card stays "SOON" only until its first hit.
+    // Capability cards go LIVE as real decodes arrive from the node; a card reads "WAITING"
+    // until its first hit. A channel only produces data once the node's firmware runs that
+    // decoder — Band is raw CC1101 RSSI, the others need TPMS/weather/OOK decoders on-board.
     val capabilities = listOf(
         Capability("Band activity monitor", "Which sub-GHz bands are busy and how strong — live from the node's CC1101.", Icons.Default.GraphicEq) to hits.isNotEmpty(),
         Capability("TPMS reader", "FSK tire-pressure sensors, positively identified as cars pass: sensor ID, pressure, temperature.", Icons.Default.DirectionsCar) to tpms.isNotEmpty(),
@@ -260,9 +261,29 @@ fun SubGhzScreen(vm: MainViewModel, onOpenMap: () -> Unit) {
             }
         }
 
-        // Capability roadmap.
+        // Capability roadmap — each channel is wired and live; "WAITING" means the app is
+        // listening but the node hasn't sent a decoded frame for it yet.
         Text("CAPABILITIES", style = MaterialTheme.typography.labelMedium, color = RF_AMBER,
             fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+
+        // Board diagnostic: tell the user whether the gap is "no RF at all" (node not
+        // connected / CC1101 not wired) or "raw RF only" (firmware isn't running the
+        // TPMS / weather / OOK decoders) — the real reason the decoded rows stay empty.
+        val anyDecoded = tpms.isNotEmpty() || weather.isNotEmpty() || keyfobs.isNotEmpty()
+        val diag = when {
+            hits.isEmpty() ->
+                "No RF from the node yet. Connect the wtBLEep C5, check the CC1101 is wired, and make sure its firmware is streaming DATA:RF."
+            !anyDecoded ->
+                "The CC1101 is reporting raw band RSSI (Band is live), but no decoded TPMS / weather / OOK frames have arrived. Those decoders run on the node's firmware — if this stays empty while Band is live, the wtBLEep C5 isn't decoding them yet, not the app."
+            else -> null
+        }
+        if (diag != null) {
+            Card(Modifier.fillMaxWidth(), shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
+                colors = CardDefaults.cardColors(containerColor = RF_AMBER.copy(alpha = 0.10f))) {
+                Text(diag, Modifier.padding(14.dp), style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f))
+            }
+        }
         capabilities.forEach { (cap, live) -> CapabilityRow(cap, live) }
 
         // Raw RF log.
@@ -482,7 +503,7 @@ private fun StatusChip(live: Boolean) {
     Box(
         Modifier.clip(RoundedCornerShape(8.dp)).background(color.copy(alpha = 0.16f)).padding(horizontal = 10.dp, vertical = 5.dp),
     ) {
-        Text(if (live) "LIVE" else "SOON", style = MaterialTheme.typography.labelSmall,
+        Text(if (live) "LIVE" else "WAITING", style = MaterialTheme.typography.labelSmall,
             fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, color = color)
     }
 }

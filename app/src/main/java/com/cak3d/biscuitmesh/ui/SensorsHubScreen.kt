@@ -20,7 +20,6 @@ import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.Groups
-import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.Leaderboard
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Lock
@@ -62,7 +61,6 @@ private data class HubSection(val title: String, val entries: List<HubEntry>)
 fun SensorsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
     val sections = listOf(
         HubSection("Sense & Navigate", listOf(
-            HubEntry("Live Scope", "A live waveform of the RF around you — highs, lows & bands", Icons.Default.Insights, "scope", Color(0xFF5FD36A)),
             HubEntry("Navigate", "Compass, Radar & Locator — flip between them in one view", Icons.Default.Explore, "radar", Color(0xFF22D3EE)),
             HubEntry("Background Collect", "Phone-only — keep catching Wi-Fi & BT with the screen off", Icons.Default.Sensors, "collect", Color(0xFF5FD36A)),
             HubEntry("Tracker Check", "Is a BLE tracker following you? Best-effort anti-stalking", Icons.Default.PersonSearch, "trackers", Color(0xFFFF5470)),

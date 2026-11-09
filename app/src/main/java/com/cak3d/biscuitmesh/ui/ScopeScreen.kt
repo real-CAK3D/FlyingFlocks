@@ -355,7 +355,7 @@ fun ScopeScreen(vm: MainViewModel, onBack: () -> Unit) {
                     }
                 }
                 item { ScopeTracePanel(text, trace, current.profile, traceHeight.value.toInt()) }
-                item { ScopeSignalsPanel(text, signals, current, signalsHeight.value.toInt()) }
+                item { ScopeSignalsPanel(text, signals, current, trace, signalsHeight.value.toInt()) }
                 item {
                     Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                         Column(Modifier.weight(1.05f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -805,17 +805,17 @@ private fun ScopeWaterfallPanel(text: TextMeasurer, terrain: List<ScopeSlice>, h
     }
 }
 
-private val SOURCE_LABELS = listOf("WIFI", "BLE", "SUBG", "GPS", "CELL")
-private val SOURCE_TINTS = listOf(GREEN, RED, AMBER, CYAN, Color(0xFF8566E8))
-
 @Composable
-private fun ScopeSignalsPanel(text: TextMeasurer, signals: List<ScopeSignal>, snap: ScopeSnapshot, height: Int) {
+private fun ScopeSignalsPanel(
+    text: TextMeasurer, signals: List<ScopeSignal>, snap: ScopeSnapshot,
+    trace: List<ScopeTrace?>, height: Int,
+) {
     val recent = signals.asReversed().joinToString { "${it.kind} ${it.detail}" }
-    ScopePanel(text, "◆  FACTOR SIGNALS", "SOURCES / LOAD", height,
-        "Notable RF events and per-source load. ${recent.ifEmpty { "Listening." }}") {
+    ScopePanel(text, "◆  FACTOR SIGNALS", "LEVEL · HI/LO/AVG", height,
+        "Notable RF events, and a live meter of signal level with its trend and running high, low and average. ${recent.ifEmpty { "Listening." }}") {
         val w = size.width
         val h = size.height
-        val splitX = w * .50f
+        val splitX = w * .44f
         // Left: factor-signal events, newest at top.
         if (signals.isEmpty()) caption(text, "LISTENING…", 3.dp.toPx(), 4.dp.toPx(), MUTED, 9)
         val rowH = 12.dp.toPx()
@@ -827,28 +827,64 @@ private fun ScopeSignalsPanel(text: TextMeasurer, signals: List<ScopeSignal>, sn
             drawRect(s.tint.copy(alpha = .13f * fade), Offset(0f, y + 1.dp.toPx()),
                 Size(splitX - 5.dp.toPx(), rowH - 2.dp.toPx()))
             drawRect(s.tint.copy(alpha = fade), Offset(0f, y + 1.dp.toPx()), Size(2.dp.toPx(), rowH - 2.dp.toPx()))
-            caption(text, s.kind, 6.dp.toPx(), y + .5.dp.toPx(), s.tint.copy(alpha = fade), 8, 36.dp.toPx(), true)
-            caption(text, s.detail, 42.dp.toPx(), y + .5.dp.toPx(), INK.copy(alpha = fade), 7, splitX - 46.dp.toPx())
+            caption(text, s.kind, 6.dp.toPx(), y + .5.dp.toPx(), s.tint.copy(alpha = fade), 8, 34.dp.toPx(), true)
+            caption(text, s.detail, 40.dp.toPx(), y + .5.dp.toPx(), INK.copy(alpha = fade), 7, splitX - 44.dp.toPx())
         }
         drawLine(GRID, Offset(splitX, 2.dp.toPx()), Offset(splitX, h - 2.dp.toPx()))
-        // Right: per-source load bars + ceiling / floor tape.
-        val maxSrc = (snap.sources.maxOrNull() ?: 0).coerceAtLeast(1)
-        val barLeft = splitX + 32.dp.toPx()
-        val barMax = (w - barLeft - 18.dp.toPx()).coerceAtLeast(1f)
-        val srcRowH = (h - 14.dp.toPx()) / 5f
-        for (i in 0 until 5) {
-            val y = i * srcRowH + 1.dp.toPx()
-            caption(text, SOURCE_LABELS[i], splitX + 4.dp.toPx(), y, SOURCE_TINTS[i], 7, 28.dp.toPx(), true)
-            drawRect(GRID, Offset(barLeft, y + 1.5.dp.toPx()), Size(barMax, 4.dp.toPx()))
-            val raw = barMax * snap.sources[i] / maxSrc
-            val len = if (snap.sources[i] > 0) raw.coerceAtLeast(2.dp.toPx()) else 0f
-            drawRect(SOURCE_TINTS[i], Offset(barLeft, y + 1.5.dp.toPx()), Size(len, 4.dp.toPx()))
-            caption(text, "${snap.sources[i]}", w - 16.dp.toPx(), y, INK, 7)
+
+        // Right: a live level meter. Each recent tick is a bar; a gold trend line runs
+        // through the bar tops; the current reading is a WHITE bar with a caret on the
+        // right edge that rides up and down with the live level; HI/LO/AVG along the base.
+        val mLeft = splitX + 5.dp.toPx()
+        val mRight = w - 30.dp.toPx()
+        val mTop = 3.dp.toPx()
+        val mBot = h - 10.dp.toPx()
+        val chartH = (mBot - mTop).coerceAtLeast(1f)
+        val valid = trace.filterNotNull()
+        fun yOf(rssi: Float) = mBot - strength(rssi) * chartH
+        if (valid.isEmpty() || mRight <= mLeft) {
+            caption(text, "NO SIGNAL", splitX + 6.dp.toPx(), mTop + 2.dp.toPx(), MUTED, 8)
+        } else {
+            val maxCols = ((mRight - mLeft) / 2.4.dp.toPx()).toInt().coerceIn(1, 72)
+            val window = valid.takeLast(maxCols)
+            val colW = (mRight - mLeft) / window.size
+            val barW = (colW - 1.2.dp.toPx()).coerceAtLeast(1f)
+            drawLine(GRID, Offset(mLeft, mBot), Offset(mRight, mBot))
+            // bars (current one white, the rest heat-tinted)
+            window.forEachIndexed { i, t ->
+                val top = yOf(t.mean)
+                val x = mLeft + i * colW
+                val cur = i == window.lastIndex
+                drawRect(if (cur) Color.White else heat(strength(t.mean)).copy(alpha = .5f),
+                    Offset(x, top), Size(barW, (mBot - top).coerceAtLeast(0f)))
+            }
+            // trend line through the bar tops (the curve)
+            val path = Path()
+            window.forEachIndexed { i, t ->
+                val x = mLeft + i * colW + barW / 2f
+                val y = yOf(t.mean)
+                if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+            }
+            drawPath(path, GOLD, style = Stroke(1.3.dp.toPx()))
+            // current reading: white guide line across + caret riding the right edge
+            val cur = window.last()
+            val curY = yOf(cur.mean)
+            drawLine(Color.White.copy(alpha = .45f), Offset(mLeft, curY), Offset(w - 5.dp.toPx(), curY))
+            val tri = Path().apply {
+                moveTo(w - 5.dp.toPx(), curY)
+                lineTo(mRight + 3.dp.toPx(), curY - 3.dp.toPx())
+                lineTo(mRight + 3.dp.toPx(), curY + 3.dp.toPx())
+                close()
+            }
+            drawPath(tri, Color.White)
+            caption(text, "${cur.mean.toInt()}", mRight + 3.dp.toPx(), curY - 5.dp.toPx(), Color.White, 7, 28.dp.toPx(), true)
+            // HI / LO / AVG over the window
+            val hi = window.maxOf { it.high }
+            val lo = window.minOf { it.low }
+            val avg = window.map { it.mean }.average().toInt()
+            caption(text, "HI $hi  LO $lo  AVG $avg dBm", splitX + 4.dp.toPx(), h - 9.dp.toPx(),
+                GOLD, 7, w - splitX - 6.dp.toPx())
         }
-        val ceil = if (snap.ceiling < 0) "${snap.ceiling}" else "—"
-        val flr = if (snap.floor < 0) "${snap.floor}" else "—"
-        caption(text, "CEIL $ceil · FLR $flr dBm · ${snap.contacts} LIVE",
-            splitX + 4.dp.toPx(), h - 9.dp.toPx(), GOLD, 7, w - splitX - 6.dp.toPx())
     }
 }
 
