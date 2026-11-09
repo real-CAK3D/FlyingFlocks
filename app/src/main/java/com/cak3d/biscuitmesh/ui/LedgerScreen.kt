@@ -1,5 +1,6 @@
 package com.cak3d.biscuitmesh.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,6 +11,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -18,6 +20,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -52,6 +55,7 @@ private class LedgerStats(
 fun LedgerScreen(vm: MainViewModel, onBack: () -> Unit) {
     var stats by remember { mutableStateOf<LedgerStats?>(null) }
     var loading by remember { mutableStateOf(true) }
+    var selected by remember { mutableStateOf<LedgerEntry?>(null) }
     LaunchedEffect(Unit) {
         val byDrive = vm.captureSamplesByDrive()
         val ledger = HashMap<String, LedgerEntry>()
@@ -136,9 +140,27 @@ fun LedgerScreen(vm: MainViewModel, onBack: () -> Unit) {
                         Text("REGULARS · ${s.regulars.size}", style = MaterialTheme.typography.labelMedium,
                             color = Color(0xFF34D399), fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
                     }
-                    items(s.regulars.take(100), key = { it.id }) { RegularRow(it) }
+                    items(s.regulars.take(100), key = { it.id }) { RegularRow(it, onClick = { selected = it }) }
                 }
             }
+        }
+
+        selected?.let { e ->
+            AlertDialog(
+                onDismissRequest = { selected = null },
+                confirmButton = { TextButton(onClick = { selected = null }) { Text("Close") } },
+                title = { Text(e.label.ifBlank { e.id }) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("Address: ${e.id}")
+                        OuiDb.vendor(e.id)?.let { Text("Vendor: $it") }
+                        Text("Type: ${e.type}")
+                        Text("Channel: ${e.channel}")
+                        Text("Best signal: ${e.best} dBm")
+                        Text("Seen on ${e.driveIds.size} drives")
+                    }
+                },
+            )
         }
     }
 }
@@ -161,8 +183,8 @@ private fun Stat(value: String, label: String, accent: Color, modifier: Modifier
 }
 
 @Composable
-private fun RegularRow(e: LedgerEntry) {
-    Card(Modifier.fillMaxWidth(), shape = appCardShape(),
+private fun RegularRow(e: LedgerEntry, onClick: () -> Unit) {
+    Card(Modifier.fillMaxWidth().clickable { onClick() }, shape = appCardShape(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {

@@ -1,6 +1,7 @@
 package com.cak3d.biscuitmesh.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -16,18 +17,22 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -40,6 +45,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.cak3d.biscuitmesh.MainViewModel
 import com.cak3d.biscuitmesh.model.BiscuitDevice
+import com.cak3d.biscuitmesh.sensors.PhoneScanRow
 import com.cak3d.biscuitmesh.wardrive.SampleKind
 import com.cak3d.biscuitmesh.wardrive.WardriveSample
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -171,6 +177,7 @@ private fun MapPane(vm: MainViewModel, modifier: Modifier) {
 private fun DevicePane(vm: MainViewModel, modifier: Modifier) {
     val results by vm.phoneScanResults.collectAsStateWithLifecycle(initialValue = emptyList())
     val sorted = remember(results) { results.sortedByDescending { it.rssi } }
+    var selected by remember { mutableStateOf<PhoneScanRow?>(null) }
     Column(modifier.background(MaterialTheme.colorScheme.surface)) {
         Text(
             "DEVICES · ${sorted.size}",
@@ -190,7 +197,7 @@ private fun DevicePane(vm: MainViewModel, modifier: Modifier) {
                     else -> "·" to Color.Gray
                 }
                 Row(
-                    Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                    Modifier.fillMaxWidth().clickable { selected = r }.padding(vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
@@ -209,6 +216,29 @@ private fun DevicePane(vm: MainViewModel, modifier: Modifier) {
                         fontWeight = FontWeight.Bold, fontSize = 12.sp)
                 }
             }
+        }
+
+        selected?.let { r ->
+            val type = when (r.kind) {
+                SampleKind.BT -> "Bluetooth"
+                SampleKind.RF -> "Sub-GHz"
+                else -> if (r.channel >= 32) "Wi-Fi 5 GHz" else "Wi-Fi 2.4 GHz"
+            }
+            AlertDialog(
+                onDismissRequest = { selected = null },
+                confirmButton = { TextButton(onClick = { selected = null }) { Text("Close") } },
+                title = { Text(r.label.ifBlank { r.id }) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("Address: ${r.id}")
+                        Text("Type: $type")
+                        if (r.channel > 0) Text("Channel: ${r.channel}")
+                        Text("Signal: ${r.rssi} dBm")
+                        if (r.security.isNotBlank()) Text("Security: ${r.security}")
+                        if (r.standard.isNotBlank()) Text("Standard: ${r.standard}")
+                    }
+                },
+            )
         }
     }
 }

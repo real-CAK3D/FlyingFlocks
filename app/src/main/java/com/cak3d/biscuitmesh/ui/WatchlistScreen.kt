@@ -1,5 +1,6 @@
 package com.cak3d.biscuitmesh.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -21,6 +23,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -51,6 +54,7 @@ fun WatchlistScreen(vm: MainViewModel, onBack: () -> Unit) {
     val samplesFlow = remember(vm) { vm.wardriveSamples ?: MutableStateFlow(emptyMap()) }
     val samples by samplesFlow.collectAsStateWithLifecycle(initialValue = emptyMap())
     var field by remember { mutableStateOf("") }
+    var selected by remember { mutableStateOf<WardriveSample?>(null) }
 
     val hits = remember(entries, samples) {
         if (entries.isEmpty()) emptyList()
@@ -106,7 +110,7 @@ fun WatchlistScreen(vm: MainViewModel, onBack: () -> Unit) {
                     Text("● IN RANGE NOW · ${hits.size}", style = MaterialTheme.typography.labelMedium,
                         color = HIT, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
                 }
-                items(hits, key = { "h-${it.id}" }) { HitRow(it) }
+                items(hits, key = { "h-${it.id}" }) { HitRow(it, onClick = { selected = it }) }
             }
             if (entries.isNotEmpty()) {
                 item("watchlabel") {
@@ -135,18 +139,41 @@ fun WatchlistScreen(vm: MainViewModel, onBack: () -> Unit) {
                 }
             }
         }
+
+        selected?.let { s ->
+            val band = when {
+                s.kind == SampleKind.RF -> "sub-GHz"
+                s.kind == SampleKind.BT -> "Bluetooth"
+                s.is5GHz -> "Wi-Fi 5 GHz"
+                else -> "Wi-Fi 2.4 GHz"
+            }
+            AlertDialog(
+                onDismissRequest = { selected = null },
+                confirmButton = { TextButton(onClick = { selected = null }) { Text("Close") } },
+                title = { Text(s.label.ifBlank { s.id }) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("Address: ${s.id}")
+                        Text("Band: $band")
+                        if (s.channel > 0) Text("Channel: ${s.channel}")
+                        Text("Signal: ${s.rssi} dBm")
+                        if (s.sources.isNotEmpty()) Text("Seen by: ${s.sources.joinToString()}")
+                    }
+                },
+            )
+        }
     }
 }
 
 @Composable
-private fun HitRow(s: WardriveSample) {
+private fun HitRow(s: WardriveSample, onClick: () -> Unit) {
     val band = when {
         s.kind == SampleKind.RF -> "sub-GHz"
         s.kind == SampleKind.BT -> "BT"
         s.is5GHz -> "5 GHz"
         else -> "2.4 GHz"
     }
-    Card(Modifier.fillMaxWidth(), shape = appCardShape(),
+    Card(Modifier.fillMaxWidth().clickable { onClick() }, shape = appCardShape(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)) {
