@@ -91,6 +91,11 @@ fun DeviceDetailScreen(vm: MainViewModel, address: String?, onBack: () -> Unit) 
                     }
                 },
                 actions = {
+                    HelpButton(
+                        device.displayName,
+                        "The live console for one board — its connection status plus a log of what it's " +
+                            "doing. Tap a quick command or type your own to send it to the board.",
+                    )
                     IconButton(onClick = { vm.refreshStatus(address) }, enabled = canSend) {
                         Icon(Icons.Default.Refresh, contentDescription = "Refresh status")
                     }
@@ -272,6 +277,13 @@ private fun MissingDevice(onBack: () -> Unit) {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
+                },
+                actions = {
+                    HelpButton(
+                        "Board",
+                        "This board is no longer in your fleet, so there's nothing to show. Go back " +
+                            "and reconnect it to open its console again.",
+                    )
                 },
             )
         },

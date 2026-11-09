@@ -86,6 +86,11 @@ fun WhisperListScreen(vm: MainViewModel, onBack: () -> Unit, onOpen: (String, St
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
                 actions = {
+                    HelpButton(
+                        "Chirps",
+                        "Private one-to-one messages with another wing — only the two of you can read them, " +
+                            "handy for swapping Band codes and Meshtastic details. Set a handle in Flock first.",
+                    )
                     IconButton(onClick = { refresh() }) { Icon(Icons.Default.Refresh, contentDescription = "Refresh") }
                 },
             )
@@ -165,6 +170,13 @@ fun WhisperThreadScreen(vm: MainViewModel, otherId: String, otherHandle: String,
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
+                },
+                actions = {
+                    HelpButton(
+                        otherHandle.ifBlank { "Whisper" },
+                        "Your private chat with this wing. Messages stay between the two of you — a good " +
+                            "place to share Band codes and Meshtastic details so you can track each other.",
+                    )
                 },
             )
         },

@@ -93,6 +93,13 @@ fun StatsScreen(vm: MainViewModel, onBack: () -> Unit) {
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
+                actions = {
+                    HelpButton(
+                        "Stats & Data",
+                        "Your running totals, plus a place to export your finds — cameras as CSV or KML, " +
+                            "or a full backup as JSON — to a file you choose.",
+                    )
+                },
             )
         },
     ) { padding ->

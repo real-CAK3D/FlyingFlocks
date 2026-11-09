@@ -83,6 +83,13 @@ fun TrackerScreen(vm: MainViewModel, onBack: () -> Unit) {
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
+                actions = {
+                    HelpButton(
+                        "Tracker Check",
+                        "A best-effort \"is something following me?\" check — it watches Bluetooth as you " +
+                            "move and flags any device that keeps reappearing across several places over time.",
+                    )
+                },
             )
         },
     ) { padding ->

@@ -77,6 +77,13 @@ fun SignalDetailScreen(vm: MainViewModel, id: String, onBack: () -> Unit) {
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
+                actions = {
+                    HelpButton(
+                        "Signal",
+                        "Everything known about one device you've picked up — its band, address and a " +
+                            "live signal-strength trail that keeps updating while this screen is open.",
+                    )
+                },
             )
         },
     ) { padding ->

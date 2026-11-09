@@ -62,6 +62,13 @@ fun DrivesScreen(vm: MainViewModel, onBack: () -> Unit, onOpenReplay: (String) -
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
+                actions = {
+                    HelpButton(
+                        "Drives",
+                        "A history of your wardrive sessions, each with its distance and how many Wi-Fi, " +
+                            "Bluetooth and camera finds it logged. Tap one to replay it on the map.",
+                    )
+                },
             )
         },
     ) { padding ->

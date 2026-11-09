@@ -111,6 +111,13 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit, onOpenDeadZones: () ->
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
+                actions = {
+                    HelpButton(
+                        "Settings",
+                        "Where you tune how the app works — units, appearance, collecting options, dead " +
+                            "zones and more. Changes take effect right away.",
+                    )
+                },
             )
         },
     ) { padding ->

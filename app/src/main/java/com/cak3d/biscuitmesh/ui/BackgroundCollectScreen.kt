@@ -61,6 +61,13 @@ fun BackgroundCollectScreen(vm: MainViewModel, onBack: () -> Unit) {
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
+                actions = {
+                    HelpButton(
+                        "Background Collect",
+                        "Phone-only passive collecting — start it, lock the phone and pocket it, and the " +
+                            "app keeps catching Wi-Fi and Bluetooth with the screen off. No board needed.",
+                    )
+                },
             )
         },
     ) { padding ->

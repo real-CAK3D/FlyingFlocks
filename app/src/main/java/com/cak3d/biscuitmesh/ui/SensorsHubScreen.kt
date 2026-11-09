@@ -95,6 +95,13 @@ fun SensorsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
+                actions = {
+                    HelpButton(
+                        "Sensors & Sky",
+                        "A hub that gathers the app's extra screens — the sky view, chat, stats, games " +
+                            "and tools — into one place. Tap any card to open that feature.",
+                    )
+                },
             )
         },
     ) { padding ->

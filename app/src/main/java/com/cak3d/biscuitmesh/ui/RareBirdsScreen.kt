@@ -111,6 +111,13 @@ fun RareBirdsScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
+                actions = {
+                    HelpButton(
+                        "Field Guide",
+                        "Rare finds to track down — walk toward the nearest one to capture it, and watch " +
+                            "for speed and red-light cameras flagged nearby. It updates as you move.",
+                    )
+                },
             )
         },
     ) { padding ->

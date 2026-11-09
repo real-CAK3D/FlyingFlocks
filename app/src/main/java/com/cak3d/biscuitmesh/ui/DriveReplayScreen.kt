@@ -93,6 +93,13 @@ fun DriveReplayScreen(vm: MainViewModel, driveId: String, onBack: () -> Unit) {
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
+                actions = {
+                    HelpButton(
+                        if (coverage) "All-drive coverage" else "Drive replay",
+                        "Plays your drive back on the map, dropping finds in the order you caught them. " +
+                            "Coverage mode instead shows everywhere you've driven across all your drives at once.",
+                    )
+                },
             )
         },
     ) { padding ->

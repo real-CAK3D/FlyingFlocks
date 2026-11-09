@@ -89,6 +89,13 @@ fun LedgerScreen(vm: MainViewModel, onBack: () -> Unit) {
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
+                actions = {
+                    HelpButton(
+                        "Device Ledger",
+                        "Rolls up every device across all your drives to show which ones you keep seeing. " +
+                            "Regulars appear on two or more drives; the rest showed up just once.",
+                    )
+                },
             )
         },
     ) { padding ->

@@ -87,6 +87,13 @@ fun DeadZonesScreen(vm: MainViewModel, onBack: () -> Unit) {
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
+                actions = {
+                    HelpButton(
+                        "Dead Zone Devices",
+                        "Pick the dead zone you're standing in and scan to quietly catalog what's " +
+                            "broadcasting there. This list is kept only on this phone and is never uploaded.",
+                    )
+                },
             )
         },
     ) { padding ->

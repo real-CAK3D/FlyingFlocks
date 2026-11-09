@@ -70,6 +70,13 @@ fun MeshChatScreen(vm: MainViewModel, onBack: () -> Unit) {
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
+                actions = {
+                    HelpButton(
+                        "Caw",
+                        "Off-grid chat carried over your Meshtastic mesh, no internet needed. It needs a " +
+                            "paired Meshtastic node; for the online room anyone with the app can use, see Squawk.",
+                    )
+                },
             )
         },
     ) { padding ->

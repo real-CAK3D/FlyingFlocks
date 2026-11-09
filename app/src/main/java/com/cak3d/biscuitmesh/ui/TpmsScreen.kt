@@ -87,6 +87,13 @@ fun TpmsScreen(vm: MainViewModel, onBack: () -> Unit) {
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
+                actions = {
+                    HelpButton(
+                        "Tire Pressure",
+                        "Watch the live pressure and temperature from your car's tire sensors. Assign each " +
+                            "sensor to a wheel, and set a low-pressure level so under-inflated tires stand out.",
+                    )
+                },
             )
         },
     ) { padding ->

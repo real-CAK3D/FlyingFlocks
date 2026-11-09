@@ -55,7 +55,7 @@ fun RunToolScreen(vm: MainViewModel, toolKey: String?, onBack: () -> Unit) {
     val devicesFlow = vm.devices
     val logFlow = vm.log
     if (tool == null || devicesFlow == null || logFlow == null) {
-        Scaffold(topBar = { TopAppBar(title = { Text("Tool") }, navigationIcon = { BackButton(onBack) }) }) { p ->
+        Scaffold(topBar = { TopAppBar(title = { Text("Tool") }, navigationIcon = { BackButton(onBack) }, actions = { HelpButton("Tool", "This tool isn't available right now — usually because no board is connected. Go back and connect a board, then try again.") }) }) { p ->
             Box(Modifier.fillMaxSize().padding(p), contentAlignment = Alignment.Center) {
                 Text("Tool unavailable.")
             }
@@ -102,6 +102,13 @@ fun RunToolScreen(vm: MainViewModel, toolKey: String?, onBack: () -> Unit) {
             TopAppBar(
                 title = { Text(tool.title) },
                 navigationIcon = { BackButton(onBack) },
+                actions = {
+                    HelpButton(
+                        tool.title,
+                        "Sends a command to your connected boards and shows their results live. Check the " +
+                            "command, make sure a board is connected, then press Start; Stop halts it.",
+                    )
+                },
             )
         },
     ) { padding ->

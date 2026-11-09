@@ -74,6 +74,13 @@ fun FindsScreen(vm: MainViewModel, kind: String, onBack: () -> Unit) {
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
+                actions = {
+                    HelpButton(
+                        title,
+                        "A live list of the devices of this type that have been picked up on this " +
+                            "wardrive run, strongest signal first, with their name and address.",
+                    )
+                },
             )
         },
     ) { padding ->

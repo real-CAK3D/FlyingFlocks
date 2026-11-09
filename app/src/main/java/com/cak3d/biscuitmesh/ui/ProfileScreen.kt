@@ -70,6 +70,13 @@ fun ProfileScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
+                actions = {
+                    HelpButton(
+                        "Profile",
+                        "Your own totals in one place — devices caught, distance covered and rank — plus " +
+                            "your flock handle. Jump from here to your full Stats or your Flock.",
+                    )
+                },
             )
         },
     ) { padding ->

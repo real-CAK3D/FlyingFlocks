@@ -88,6 +88,13 @@ fun PlacesScreen(vm: MainViewModel, onBack: () -> Unit, onRouteStarted: () -> Un
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
+                actions = {
+                    HelpButton(
+                        "Places",
+                        "Save spots you care about, then start a route to one to be guided there. Add a " +
+                            "place from your current location with the button below.",
+                    )
+                },
             )
         },
     ) { padding ->

@@ -67,6 +67,13 @@ fun WatchlistScreen(vm: MainViewModel, onBack: () -> Unit) {
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
+                actions = {
+                    HelpButton(
+                        "Watchlist",
+                        "Add device names or addresses you want to keep an eye out for. When one is picked " +
+                            "up on a drive it's flagged here, strongest signal first.",
+                    )
+                },
             )
         },
     ) { padding ->

@@ -349,6 +349,13 @@ private fun GameScaffold(title: String, onBack: () -> Unit, content: @Composable
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
+                actions = {
+                    HelpButton(
+                        title,
+                        "A playful mini-game built on the signals around you — move around and let the " +
+                            "Wi-Fi and Bluetooth devices nearby drive the play.",
+                    )
+                },
             )
         },
     ) { padding -> Box(Modifier.fillMaxSize().padding(padding)) { content() } }

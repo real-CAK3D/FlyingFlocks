@@ -93,6 +93,13 @@ fun CrewScreen(vm: MainViewModel, onBack: () -> Unit) {
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
+                actions = {
+                    HelpButton(
+                        "Flock",
+                        "Your crew's shared online space — join or create a flock, see who's live, and " +
+                            "compare everyone's lifetime totals. Pick a handle so your finds show up under your name.",
+                    )
+                },
             )
         },
     ) { padding ->

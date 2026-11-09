@@ -76,6 +76,13 @@ fun FlockChatScreen(vm: MainViewModel, onBack: () -> Unit) {
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
+                actions = {
+                    HelpButton(
+                        "Squawk",
+                        "The flock's open online chat room — anyone running the app sees and can post " +
+                            "to the same room, no board or mesh node needed. For off-grid mesh chat, use Caw.",
+                    )
+                },
             )
         },
     ) { padding ->

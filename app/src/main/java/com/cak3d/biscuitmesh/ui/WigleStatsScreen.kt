@@ -74,6 +74,13 @@ fun WigleStatsScreen(vm: MainViewModel, onBack: () -> Unit) {
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
+                actions = {
+                    HelpButton(
+                        "WiGLE Stats",
+                        "Shows your stats from your WiGLE account, where wardrive uploads go. Paste your " +
+                            "WiGLE credential once — it's kept on this phone and used only to read your stats.",
+                    )
+                },
             )
         },
     ) { padding ->

@@ -72,6 +72,14 @@ fun LabBenchScreen(onBack: () -> Unit) {
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
+                actions = {
+                    HelpButton(
+                        "Lab Bench",
+                        "Hands-on tools to make sense of what the radio hears — look up who made a device " +
+                            "from its MAC, turn signal strength into a rough distance, and compare how tough " +
+                            "different Wi-Fi security types are. Everything is worked out on the phone.",
+                    )
+                },
             )
         },
     ) { padding ->

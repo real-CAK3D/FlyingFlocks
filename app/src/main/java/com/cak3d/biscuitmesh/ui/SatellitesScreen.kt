@@ -79,6 +79,11 @@ fun SatellitesScreen(vm: MainViewModel, onBack: () -> Unit, onOpenGlobe: () -> U
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
                 actions = {
+                    HelpButton(
+                        "GPS Satellites",
+                        "A live sky of the GPS satellites your phone can see right now; the filled ones " +
+                            "are the satellites actually being used to work out your location.",
+                    )
                     IconButton(onClick = onOpenGlobe) { Icon(Icons.Default.Public, contentDescription = "3D globe view") }
                 },
             )

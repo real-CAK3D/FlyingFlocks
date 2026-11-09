@@ -86,6 +86,13 @@ fun HuntsScreen(vm: MainViewModel, onBack: () -> Unit) {
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
+                actions = {
+                    HelpButton(
+                        "Hunts",
+                        "Ongoing challenges that track your catches over time — each hunt fills up as you " +
+                            "find more of a given kind, clearing tiers as you go.",
+                    )
+                },
             )
         },
     ) { padding ->

@@ -54,6 +54,13 @@ fun GlobalStatsScreen(vm: MainViewModel, onBack: () -> Unit) {
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
+                actions = {
+                    HelpButton(
+                        "Global Stats",
+                        "The whole flock at a glance — how many people are flying, how much everyone has " +
+                            "caught all-time, and the leaderboard. Your own numbers live in Profile.",
+                    )
+                },
             )
         },
     ) { padding ->
