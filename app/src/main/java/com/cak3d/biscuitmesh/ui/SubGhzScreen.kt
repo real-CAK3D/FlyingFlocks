@@ -301,7 +301,7 @@ fun SubGhzScreen(vm: MainViewModel, onOpenMap: () -> Unit) {
             },
             confirmButton = {
                 androidx.compose.material3.TextButton(onClick = {
-                    vm.transmitSubGhz("%.2f".format(k.freq), k.bits); txConfirm = null
+                    vm.transmitSubGhz("%.2f".format(java.util.Locale.US, k.freq), k.bits); txConfirm = null
                 }) { Text("I own this — transmit") }
             },
             dismissButton = { androidx.compose.material3.TextButton(onClick = { txConfirm = null }) { Text("Cancel") } },

@@ -400,7 +400,10 @@ class BiscuitMeshApp : Application() {
                     val dist = NavigationManager.spokenDist(a.distanceM.toDouble())
                     val over = a.limitMph?.let { " You're over the $it limit." } ?: ""
                     speaker.say("$kind ahead, $dist.$over")
-                    NotificationHelper.notify(this@BiscuitMeshApp, 1001, "$kind ahead",
+                    // 1005, NOT 1001 — 1001 is the wardrive foreground-service notification that
+                    // carries the "Stop scan" kill-switch; reusing it here (an auto-cancel alert)
+                    // would clobber that persistent notification every time you pass a camera.
+                    NotificationHelper.notify(this@BiscuitMeshApp, 1005, "$kind ahead",
                         "${a.distanceM} m away.${a.limitMph?.let { " Over the $it limit." } ?: ""}")
                 }
             }

@@ -301,10 +301,13 @@ private fun LocatorContent(results: List<PhoneScanRow>, context: Context, initia
     val target = results.firstOrNull { it.id == targetId }
     val currentTarget by rememberUpdatedState(target)
 
-    // Pulse faster the closer you get (stronger signal).
+    // Pulse faster the closer you get (stronger signal). The target routinely drops out of a
+    // scan cycle for a moment, so wait it out instead of breaking — otherwise one blip ends the
+    // haptics for the rest of the session even after the device comes back.
     LaunchedEffect(targetId) {
         while (targetId != null) {
-            val t = currentTarget ?: break
+            val t = currentTarget
+            if (t == null) { delay(500); continue }
             val strength = ((t.rssi + 95f) / 65f).coerceIn(0f, 1f)
             buzz(context, (20 + strength * 80).toInt())
             delay((1200 - strength * 1050).toLong().coerceIn(140, 1200))

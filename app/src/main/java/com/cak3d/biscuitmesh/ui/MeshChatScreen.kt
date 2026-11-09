@@ -107,7 +107,10 @@ fun MeshChatScreen(vm: MainViewModel, onBack: () -> Unit) {
                     LazyColumn(state = listState, modifier = Modifier.fillMaxSize(),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 10.dp)) {
-                        items(messages, key = { it.timeMs.toString() + it.text.hashCode() }) { MsgBubble(it) }
+                        // No stable key: a mesh re-broadcasts identical text and two copies can
+                        // land in the same millisecond, so a content-based key collides and crashes
+                        // the list. The list is append-only and small, so positional diffing is fine.
+                        items(messages.size) { MsgBubble(messages[it]) }
                     }
                 }
             }

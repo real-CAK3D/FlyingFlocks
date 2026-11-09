@@ -165,7 +165,7 @@ private fun DevicePane(vm: MainViewModel, modifier: Modifier) {
                 val band = when {
                     r.kind == SampleKind.BT -> "BT" to Color(0xFFFF5470)
                     r.channel >= 1000 -> "6E" to Color(0xFFF0B429)
-                    r.channel in 32..177 -> "5G" to Color(0xFF22D3EE)
+                    r.channel in 32..179 -> "5G" to Color(0xFF22D3EE)
                     r.channel in 1..14 -> "2G4" to Color(0xFF5FD36A)
                     else -> "·" to Color.Gray
                 }

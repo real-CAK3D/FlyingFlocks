@@ -106,8 +106,27 @@ class MeshtasticManager(private val context: Context, private val adapter: Bluet
     }
     // Collect candidates briefly, then connect to the strongest — so we pick the nearest
     // (usually Home Base) when several mesh nodes are in range.
-    private val candidates = HashMap<android.bluetooth.BluetoothDevice, Int>()
+    // Written on the BLE scanner thread, read on the main thread in connectBest() — so it
+    // must be concurrency-safe or maxByOrNull races an insert into a ConcurrentModificationException.
+    private val candidates = java.util.concurrent.ConcurrentHashMap<android.bluetooth.BluetoothDevice, Int>()
     private val picker = Runnable { connectBest() }
+    // Fail the connect if it hasn't reached CONNECTED in time (these radios often emit a
+    // spurious status 133 or stall before service discovery; without this the UI hangs on
+    // "Connecting…" forever).
+    private val connectTimeout = Runnable {
+        if (_link.value == MeshLinkState.CONNECTING) {
+            Log.w(TAG, "mesh connect timed out")
+            failConnect("Couldn't connect to the node — timed out. Tap Caw again to retry.")
+        }
+    }
+    private fun failConnect(msg: String) {
+        scanWatchdog.removeCallbacks(connectTimeout)
+        if (_link.value == MeshLinkState.DISCONNECTED) return
+        _diag.value = msg
+        runCatching { gatt?.disconnect() }
+        cleanup()
+        _link.value = MeshLinkState.DISCONNECTED
+    }
     // Arm the picker ONCE, on the first candidate. A node beacons every ~60 ms, so
     // re-posting it on every advertisement (the old behaviour) reset the 2 s timer
     // forever and it never connected — it just scanned until the watchdog gave up.
@@ -150,6 +169,7 @@ class MeshtasticManager(private val context: Context, private val adapter: Bluet
         _link.value = MeshLinkState.CONNECTING
         Log.d(TAG, "connecting to mesh node ${best.address} (${candidates.size} candidate(s))")
         gatt = best.connectGatt(context, false, callback, android.bluetooth.BluetoothDevice.TRANSPORT_LE)
+        scanWatchdog.postDelayed(connectTimeout, 15_000)
     }
 
     private val scanCb = object : ScanCallback() {
@@ -180,6 +200,7 @@ class MeshtasticManager(private val context: Context, private val adapter: Bluet
 
     fun disconnect() {
         stopScan()
+        scanWatchdog.removeCallbacks(connectTimeout)
         runCatching { gatt?.disconnect() }
         cleanup()
         _link.value = MeshLinkState.DISCONNECTED
@@ -198,8 +219,16 @@ class MeshtasticManager(private val context: Context, private val adapter: Bluet
     private val callback = object : BluetoothGattCallback() {
         override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) {
             when (newState) {
-                BluetoothProfile.STATE_CONNECTED -> g.requestMtu(512)
-                BluetoothProfile.STATE_DISCONNECTED -> { cleanup(); _link.value = MeshLinkState.DISCONNECTED }
+                BluetoothProfile.STATE_CONNECTED ->
+                    if (status != BluetoothGatt.GATT_SUCCESS) {
+                        failConnect("Link failed (status $status). Tap Caw again to retry.")
+                    } else {
+                        g.requestMtu(512)
+                    }
+                BluetoothProfile.STATE_DISCONNECTED -> {
+                    scanWatchdog.removeCallbacks(connectTimeout)
+                    cleanup(); _link.value = MeshLinkState.DISCONNECTED
+                }
             }
         }
 
@@ -231,6 +260,7 @@ class MeshtasticManager(private val context: Context, private val adapter: Bluet
         }
 
         override fun onDescriptorWrite(g: BluetoothGatt, d: BluetoothGattDescriptor, status: Int) {
+            scanWatchdog.removeCallbacks(connectTimeout)
             _diag.value = null
             _link.value = MeshLinkState.CONNECTED
             opComplete()
@@ -293,29 +323,31 @@ class MeshtasticManager(private val context: Context, private val adapter: Bluet
             when {
                 field == 3 && wire == 2 -> parseMyInfo(r.lenBytes())    // my_info (MyNodeInfo)
                 field == 4 && wire == 2 -> parseNodeInfo(r.lenBytes())  // node_info
-                field == 11 && wire == 2 -> parsePacket(r.lenBytes())    // packet (MeshPacket)
+                field == 2 && wire == 2 -> parsePacket(r.lenBytes())    // packet (MeshPacket) — FromRadio.packet is field 2
                 else -> r.skip(wire)
             }
         }
     }
 
-    // A received text message: MeshPacket.decoded (Data) with portnum == TEXT_MESSAGE_APP (1).
+    // A live MeshPacket: carries the sender (from) and a decoded Data payload. We handle
+    // TEXT_MESSAGE_APP (Caw chat) and POSITION_APP (so the moving node's pin tracks live,
+    // not just when a full NodeInfo is rebroadcast).
     private fun parsePacket(buf: ByteArray) {
         val r = Pb(buf)
-        var text: String? = null
+        var from = 0L
+        var data: ByteArray? = null
         while (r.has()) {
             val (field, wire) = r.tag()
             when {
-                field == 4 && wire == 2 -> text = parseData(r.lenBytes())  // decoded
+                field == 1 && wire == 5 -> from = r.fixed32()      // from (node num, fixed32)
+                field == 4 && wire == 2 -> data = r.lenBytes()     // decoded (Data)
                 else -> r.skip(wire)
             }
         }
-        text?.takeIf { it.isNotBlank() }?.let { t ->
-            _messages.value = (_messages.value + MeshMessage(t, false, System.currentTimeMillis())).takeLast(100)
-        }
+        data?.let { handleData(from, it) }
     }
 
-    private fun parseData(buf: ByteArray): String? {
+    private fun handleData(from: Long, buf: ByteArray) {
         val r = Pb(buf)
         var portnum = -1L; var payload = ByteArray(0)
         while (r.has()) {
@@ -326,7 +358,25 @@ class MeshtasticManager(private val context: Context, private val adapter: Bluet
                 else -> r.skip(wire)
             }
         }
-        return if (portnum == 1L && payload.isNotEmpty()) String(payload, Charsets.UTF_8) else null
+        when (portnum) {
+            1L -> { // TEXT_MESSAGE_APP
+                val t = if (payload.isNotEmpty()) String(payload, Charsets.UTF_8) else ""
+                if (t.isNotBlank()) {
+                    _messages.value = (_messages.value + MeshMessage(t, false, System.currentTimeMillis())).takeLast(100)
+                }
+            }
+            3L -> { // POSITION_APP — live position update for node `from`
+                if (from != 0L && payload.isNotEmpty()) {
+                    val (lat, lon) = parsePosition(payload)
+                    if (lat != null && lon != null) {
+                        val existing = _nodes.value[from]
+                        val node = existing?.copy(lat = lat, lon = lon)
+                            ?: MeshNode(from, "!%08x".format(from), lat, lon, null)
+                        _nodes.value = _nodes.value + (from to node)
+                    }
+                }
+            }
+        }
     }
 
     /** Send a broadcast text message over the mesh. */
@@ -460,6 +510,12 @@ class MeshtasticManager(private val context: Context, private val adapter: Bluet
             return result
         }
         fun lenBytes(): ByteArray { val n = varint().toInt(); val out = b.copyOfRange(i, minOf(i + n, b.size)); i += n; return out }
+        /** Little-endian unsigned 32-bit (wire type 5), as a Long so node numbers don't go negative. */
+        fun fixed32(): Long {
+            val v = (b[i].toLong() and 0xFF) or ((b[i + 1].toLong() and 0xFF) shl 8) or
+                ((b[i + 2].toLong() and 0xFF) shl 16) or ((b[i + 3].toLong() and 0xFF) shl 24)
+            i += 4; return v
+        }
         /** A lat/lon field: sfixed32 (wire 5) or varint int32 (wire 0), scaled by 1e-7. */
         fun scaledInt(wire: Int): Double? = when (wire) {
             5 -> { val v = (b[i].toInt() and 0xFF) or ((b[i+1].toInt() and 0xFF) shl 8) or
