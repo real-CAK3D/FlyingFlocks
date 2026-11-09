@@ -76,6 +76,11 @@ class BiscuitMeshApp : Application() {
         com.cak3d.biscuitmesh.sensors.GnssManager(this)
     }
 
+    /** Live cell-tower status (which cells the modem sees, how strong). */
+    val cell: com.cak3d.biscuitmesh.sensors.CellManager by lazy {
+        com.cak3d.biscuitmesh.sensors.CellManager(this)
+    }
+
     /** Best-effort "is a BLE tracker following me" detector. */
     val trackerFollow: com.cak3d.biscuitmesh.sensors.TrackerFollowManager by lazy {
         com.cak3d.biscuitmesh.sensors.TrackerFollowManager()

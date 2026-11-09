@@ -53,6 +53,7 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.cak3d.biscuitmesh.MainViewModel
+import com.cak3d.biscuitmesh.sensors.CellSnapshot
 import com.cak3d.biscuitmesh.sensors.GnssSnapshot
 import com.cak3d.biscuitmesh.sensors.PhoneScanRow
 import com.cak3d.biscuitmesh.wardrive.SampleKind
@@ -99,8 +100,11 @@ private fun PhoneScanRow.scopeBand(): ScopeBand = when {
     else -> ScopeBand.Other
 }
 
-// Full-spectrum lane layout (0 until BINS): sub-GHz 0–11, GPS 14–18, 2.4 GHz 22–33,
-// BLE 35, 5 GHz 38–49, 6 GHz 52–59.
+// Full-spectrum lane layout (0 until BINS): sub-GHz 0–11, GPS 14–18, cell 19–21,
+// 2.4 GHz 22–33, BLE 35, 5 GHz 38–49, 6 GHz 52–59.
+private const val CELL_FIRST = 19
+private const val CELL_LAST = 21
+
 private fun channelBin(channel: Int, band: ScopeBand): Int = when (band) {
     ScopeBand.WiFi24 -> 22 + (channel - 1).coerceIn(0, 13) * 11 / 13
     ScopeBand.WiFi5 -> 38 + (channel - 32).coerceIn(0, 145) * 11 / 145
@@ -119,16 +123,50 @@ private fun gnssBin(constellation: String): Int = when (constellation.uppercase(
     else -> 16 // GPS / Galileo / QZSS / SBAS
 }
 
-/** Paint a signal into [bins] at [center], widened ±2 for legibility within [first]..[last]. */
+/** Cell dBm (~-120..-50) → terrain height. */
+private fun cellStrength(dbm: Int): Float = ((dbm + 120f) / 75f).coerceIn(.12f, 1f)
+
+// A wide, soft falloff so a single contact raises a rolling hill, not a spike. maxOf
+// blends overlapping signals into connected ridges — mountains, not sharp triangles.
+private val SPREAD = floatArrayOf(1f, .88f, .64f, .40f, .20f, .09f)
+
+/** Paint a signal into [bins] at [center] with a soft ±5 falloff, clipped to [first]..[last]. */
 private fun placeWide(bins: FloatArray, center: Int, first: Int, last: Int, level: Float) {
-    for (offset in -2..2) {
+    for (offset in -(SPREAD.size - 1)..(SPREAD.size - 1)) {
         val column = center + offset
         if (column in first..last) {
-            val fade = when (offset) { 0 -> 1f; -1, 1 -> .62f; else -> .24f }
-            bins[column] = maxOf(bins[column], level * fade)
+            bins[column] = maxOf(bins[column], level * SPREAD[kotlin.math.abs(offset)])
         }
     }
 }
+
+// Deterministic, slowly drifting noise floor so the whole surface is solid terrain
+// instead of bare grid between signals. Textured per bin; drifts with [seed].
+private const val NOISE_BASE = 0.045f
+private fun seedFloor(bins: FloatArray, seed: Int) {
+    for (bin in bins.indices) {
+        var h = (bin + 1) * 374761393 + seed * 668265263
+        h = (h xor (h ushr 13)) * 1274126177
+        val n = ((h ushr 16) and 0xFF) / 255f
+        bins[bin] = NOISE_BASE + 0.055f * n
+    }
+}
+
+/** 3-tap blur that rounds sharp peaks into mountainous ridges. */
+private fun smoothBins(bins: FloatArray, passes: Int) {
+    repeat(passes) {
+        var prev = bins[0]
+        for (i in bins.indices) {
+            val cur = bins[i]
+            val next = if (i + 1 < bins.size) bins[i + 1] else cur
+            bins[i] = prev * 0.26f + cur * 0.48f + next * 0.26f
+            prev = cur
+        }
+    }
+}
+
+/** A notable RF event the "factor signals" engine picks out of the live stream. */
+private data class ScopeSignal(val kind: String, val tint: Color, val detail: String, val tick: Int)
 
 private fun strength(rssi: Float): Float =
     ((rssi - MIN_DBM) / (MAX_DBM - MIN_DBM)).coerceIn(0f, 1f)
@@ -172,6 +210,10 @@ private data class ScopeSnapshot(
     val ranked: List<PhoneScanRow> = emptyList(),
     val contacts: Int = 0,
     val bands: IntArray = IntArray(ScopeBand.entries.size),
+    // Per-source load: 0 Wi-Fi, 1 BLE, 2 sub-GHz, 3 GPS, 4 cell.
+    val sources: IntArray = IntArray(5),
+    val ceiling: Int = 0,
+    val floor: Int = 0,
 )
 
 private fun <T> MutableList<T>.appendCapped(value: T, limit: Int) {
@@ -184,6 +226,7 @@ fun ScopeScreen(vm: MainViewModel, onBack: () -> Unit) {
     val terrain = remember(vm) { mutableStateListOf<ScopeSlice>() }
     val trace = remember(vm) { mutableStateListOf<ScopeTrace?>() }
     val feed = remember(vm) { mutableStateListOf<ScopeHit>() }
+    val signals = remember(vm) { mutableStateListOf<ScopeSignal>() }
     var current by remember(vm) { mutableStateOf(ScopeSnapshot()) }
     var newPerSecond by remember(vm) { mutableStateOf(0) }
     val enteredAt = remember(vm) { System.currentTimeMillis() }
@@ -192,7 +235,8 @@ fun ScopeScreen(vm: MainViewModel, onBack: () -> Unit) {
     DisposableEffect(vm) {
         vm.startPhoneScan(wifi = true, ble = true)
         vm.startGnss()
-        onDispose { vm.stopPhoneScan(); vm.stopGnss() }
+        vm.startCell()
+        onDispose { vm.stopPhoneScan(); vm.stopGnss(); vm.stopCell() }
     }
 
     LaunchedEffect(vm) {
@@ -201,18 +245,24 @@ fun ScopeScreen(vm: MainViewModel, onBack: () -> Unit) {
         val timeFormat = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
         var previous: List<PhoneScanRow>? = null
         var rate = 0
+        var tick = 0
         while (true) {
+            tick++
             val rows = vm.phoneScanResults.value
             val now = System.nanoTime() / 1_000_000L
             var next = current
             var newHits: List<ScopeHit>? = null
             var discovered = 0
+            var strongNew = Int.MIN_VALUE
+            var strongNewBand = ScopeBand.Other
             if (rows !== previous) {
                 previous = rows
                 val newest = feed.mapTo(ArrayList(FEED_LIMIT + 1)) { it.row }
-                next = summarize(rows, vm.gnssState.value, vm.wardriveSamples?.value?.values) { row ->
+                next = summarize(rows, vm.gnssState.value, vm.wardriveSamples?.value?.values,
+                    vm.cellState.value, tick) { row ->
                     if (row.lastSeenMs >= enteredAt && seen.add(row.id)) {
                         discovered++
+                        if (row.rssi > strongNew) { strongNew = row.rssi; strongNewBand = row.scopeBand() }
                         val index = newest.indexOfFirst { it.lastSeenMs < row.lastSeenMs }
                         if (index >= 0) newest.add(index, row)
                         else if (newest.size < FEED_LIMIT) newest.add(row)
@@ -228,15 +278,24 @@ fun ScopeScreen(vm: MainViewModel, onBack: () -> Unit) {
             while (arrivals.firstOrNull()?.let { now - it.tickMs >= 1_000L } == true) {
                 rate -= arrivals.removeFirst().count
             }
+            // Factor-signals engine: pick notable RF events out of the live stream.
+            val event = factorSignal(discovered, strongNew, strongNewBand, tick)
+            // Temporal smoothing: ease each slice toward the previous so the range flows
+            // front-to-back as rolling terrain rather than hard-edged steps.
+            val prevBins = terrain.lastOrNull()?.bins
+            val eased = if (prevBins == null) next.bins else FloatArray(BINS) { i ->
+                next.bins[i] * 0.7f + prevBins[i] * 0.3f
+            }
             Snapshot.withMutableSnapshot {
                 current = next
                 newPerSecond = rate
-                terrain.appendCapped(ScopeSlice(next.bins, next.channelPeak), TERRAIN_LIMIT)
+                terrain.appendCapped(ScopeSlice(eased, next.channelPeak), TERRAIN_LIMIT)
                 trace.appendCapped(next.trace?.copy(discoveries = discovered), TRACE_LIMIT)
                 newHits?.let {
                     feed.clear()
                     feed.addAll(it)
                 }
+                if (event != null) signals.appendCapped(event, 7)
             }
             delay(TICK_MS)
         }
@@ -247,6 +306,7 @@ fun ScopeScreen(vm: MainViewModel, onBack: () -> Unit) {
             val wide = maxWidth >= 640.dp
             val heroHeight = (maxWidth * .53f).coerceIn(214.dp, 490.dp)
             val traceHeight = (maxWidth * .34f).coerceIn(154.dp, 260.dp)
+            val signalsHeight = (maxWidth * .22f).coerceIn(96.dp, 150.dp)
             val lowerHeight = (maxWidth * .46f).coerceIn(230.dp, 400.dp)
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
@@ -261,6 +321,7 @@ fun ScopeScreen(vm: MainViewModel, onBack: () -> Unit) {
                     }
                 }
                 item { ScopeTracePanel(text, trace, current.profile, traceHeight.value.toInt()) }
+                item { ScopeSignalsPanel(text, signals, current, signalsHeight.value.toInt()) }
                 item {
                     Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                         Column(Modifier.weight(1.05f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -281,12 +342,16 @@ private inline fun summarize(
     rows: List<PhoneScanRow>,
     gnss: GnssSnapshot,
     rf: Collection<WardriveSample>?,
+    cell: CellSnapshot,
+    seed: Int,
     onValid: (PhoneScanRow) -> Unit,
 ): ScopeSnapshot {
     val bins = FloatArray(BINS)
+    seedFloor(bins, seed)
     val profile = IntArray(PROFILE_BINS)
     val ranked = ArrayList<PhoneScanRow>(RANK_LIMIT)
     val bands = IntArray(ScopeBand.entries.size)
+    val sources = IntArray(5)
     var channelPeak: ScopePeak? = null
     var high = Int.MIN_VALUE
     var low = Int.MAX_VALUE
@@ -332,15 +397,39 @@ private inline fun summarize(
         if (s.kind == SampleKind.RF) {
             val mhz = s.label.removeSuffix(" MHz").trim().toFloatOrNull() ?: return@forEach
             placeWide(bins, subGhzBin(mhz), 0, 11, strength(s.rssi.toFloat()).coerceAtLeast(.06f))
+            sources[2]++
         }
     }
     // GPS / GNSS satellites in the 14–18 lane, height from carrier-to-noise.
     for (sat in gnss.sats) {
         if (sat.cn0 <= 0f) continue
         placeWide(bins, gnssBin(sat.constellation), 14, 18, (sat.cn0 / 48f).coerceIn(.06f, 1f))
+        sources[3]++
     }
+    // Cell sectors in the 19–21 lane, bucketed low / mid / high band.
+    for (tower in cell.cells) {
+        placeWide(bins, (CELL_FIRST + tower.tier).coerceIn(CELL_FIRST, CELL_LAST),
+            CELL_FIRST, CELL_LAST, cellStrength(tower.dbm))
+        sources[4]++
+    }
+    sources[0] = bands[0] + bands[1] + bands[2]
+    sources[1] = bands[3]
+    // Round the whole surface into rolling mountains rather than sharp per-channel spikes.
+    smoothBins(bins, 2)
     val trace = if (count == 0) null else ScopeTrace(high, low, total.toFloat() / count, count)
-    return ScopeSnapshot(bins, trace, channelPeak, profile, ranked, count, bands)
+    val ceiling = if (count == 0) 0 else high
+    val floor = if (count == 0) 0 else low
+    return ScopeSnapshot(bins, trace, channelPeak, profile, ranked, count, bands, sources, ceiling, floor)
+}
+
+/** Pick the single most notable event this tick — the quant "factor signal" repurposed. */
+private fun factorSignal(
+    discovered: Int, strongNew: Int, strongNewBand: ScopeBand, tick: Int,
+): ScopeSignal? = when {
+    strongNew >= -52 -> ScopeSignal("LOCK", GOLD, "${strongNewBand.tag}  $strongNew dBm", tick)
+    discovered >= 3 -> ScopeSignal("SURGE", EMBER, "+$discovered contacts", tick)
+    discovered > 0 -> ScopeSignal("NEW", GREEN, "+$discovered  ${strongNewBand.tag}", tick)
+    else -> null
 }
 
 @Composable
@@ -528,7 +617,7 @@ private fun DrawScope.drawDepth(text: TextMeasurer, terrain: List<ScopeSlice>) {
     } else {
         caption(text, "WAITING FOR PHONE SCAN", width * .33f, height * .55f, MUTED, 9)
     }
-    caption(text, "SUB-GHZ · GPS · 2.4 · 5 · 6 GHz", 3.dp.toPx(), axis, MUTED, 7)
+    caption(text, "SUB · GPS · CELL · 2.4 · 5 · 6 GHz", 3.dp.toPx(), axis, MUTED, 7)
 }
 
 private fun DrawScope.plotTag(
@@ -612,6 +701,53 @@ private fun ScopeWaterfallPanel(text: TextMeasurer, terrain: List<ScopeSlice>, h
             val point = project(it.bin, 0f, strength(it.rssi.toFloat()))
             plotTag(text, "${it.rssi} dBm", point, w * .48f, h * .57f, INK, 58)
         }
+    }
+}
+
+private val SOURCE_LABELS = listOf("WIFI", "BLE", "SUBG", "GPS", "CELL")
+private val SOURCE_TINTS = listOf(GREEN, RED, AMBER, CYAN, Color(0xFF8566E8))
+
+@Composable
+private fun ScopeSignalsPanel(text: TextMeasurer, signals: List<ScopeSignal>, snap: ScopeSnapshot, height: Int) {
+    val recent = signals.asReversed().joinToString { "${it.kind} ${it.detail}" }
+    ScopePanel(text, "◆  FACTOR SIGNALS", "SOURCES / LOAD", height,
+        "Notable RF events and per-source load. ${recent.ifEmpty { "Listening." }}") {
+        val w = size.width
+        val h = size.height
+        val splitX = w * .50f
+        // Left: factor-signal events, newest at top.
+        if (signals.isEmpty()) caption(text, "LISTENING…", 3.dp.toPx(), 4.dp.toPx(), MUTED, 9)
+        val rowH = 12.dp.toPx()
+        val maxRows = ((h - 2.dp.toPx()) / rowH).toInt().coerceAtLeast(1)
+        val shown = signals.asReversed().take(maxRows)
+        for ((i, s) in shown.withIndex()) {
+            val y = i * rowH
+            val fade = (1f - i * 0.12f).coerceAtLeast(0.4f)
+            drawRect(s.tint.copy(alpha = .13f * fade), Offset(0f, y + 1.dp.toPx()),
+                Size(splitX - 5.dp.toPx(), rowH - 2.dp.toPx()))
+            drawRect(s.tint.copy(alpha = fade), Offset(0f, y + 1.dp.toPx()), Size(2.dp.toPx(), rowH - 2.dp.toPx()))
+            caption(text, s.kind, 6.dp.toPx(), y + .5.dp.toPx(), s.tint.copy(alpha = fade), 8, 36.dp.toPx(), true)
+            caption(text, s.detail, 42.dp.toPx(), y + .5.dp.toPx(), INK.copy(alpha = fade), 7, splitX - 46.dp.toPx())
+        }
+        drawLine(GRID, Offset(splitX, 2.dp.toPx()), Offset(splitX, h - 2.dp.toPx()))
+        // Right: per-source load bars + ceiling / floor tape.
+        val maxSrc = (snap.sources.maxOrNull() ?: 0).coerceAtLeast(1)
+        val barLeft = splitX + 32.dp.toPx()
+        val barMax = (w - barLeft - 18.dp.toPx()).coerceAtLeast(1f)
+        val srcRowH = (h - 14.dp.toPx()) / 5f
+        for (i in 0 until 5) {
+            val y = i * srcRowH + 1.dp.toPx()
+            caption(text, SOURCE_LABELS[i], splitX + 4.dp.toPx(), y, SOURCE_TINTS[i], 7, 28.dp.toPx(), true)
+            drawRect(GRID, Offset(barLeft, y + 1.5.dp.toPx()), Size(barMax, 4.dp.toPx()))
+            val raw = barMax * snap.sources[i] / maxSrc
+            val len = if (snap.sources[i] > 0) raw.coerceAtLeast(2.dp.toPx()) else 0f
+            drawRect(SOURCE_TINTS[i], Offset(barLeft, y + 1.5.dp.toPx()), Size(len, 4.dp.toPx()))
+            caption(text, "${snap.sources[i]}", w - 16.dp.toPx(), y, INK, 7)
+        }
+        val ceil = if (snap.ceiling < 0) "${snap.ceiling}" else "—"
+        val flr = if (snap.floor < 0) "${snap.floor}" else "—"
+        caption(text, "CEIL $ceil · FLR $flr dBm · ${snap.contacts} LIVE",
+            splitX + 4.dp.toPx(), h - 9.dp.toPx(), GOLD, 7, w - splitX - 6.dp.toPx())
     }
 }
 

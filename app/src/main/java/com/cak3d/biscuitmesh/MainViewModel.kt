@@ -531,6 +531,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun startGnss() = appRef.gnss.start()
     fun stopGnss() = appRef.gnss.stop()
 
+    // --- Cell towers -------------------------------------------------------
+    val cellState: StateFlow<com.cak3d.biscuitmesh.sensors.CellSnapshot> = appRef.cell.state
+    fun startCell() = appRef.cell.start()
+    fun stopCell() = appRef.cell.stop()
+
     // --- Location passthrough (for the live aircraft view) -----------------
     fun locationUpdates() = appRef.locationProvider.locationUpdates()
 
