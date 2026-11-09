@@ -95,8 +95,27 @@ object ToolCatalog {
         Tool("mc_beaconspam", "Beacon Spam", "Flood fake beacons — own networks only", "beaconspam", offensive = true),
     )
 
+    // --- T-Embed CC1101 Plus (ESP32-S3 Biscuit image) ------------------------
+    // Everything the T-Embed hardware offers over the Biscuit-BLE bridge: CC1101
+    // sub-GHz (sweep/decode + gated TX), PN532 NFC, IR TX/RX, and the Wi-Fi set.
+    // Results stream back live (DATA:RF/TPMS/WEATHER/KEYFOB/NFC/IR/STA/PROBE/PKT).
+    val tembed = listOf(
+        Tool("te_subghz", "Sub-GHz Sweep", "315/433/868/915 RSSI + TPMS/weather/keyfob decode", "scanall"),
+        Tool("te_nfc", "NFC Read", "Poll the PN532 for a tag → DATA:NFC", "nfcread"),
+        Tool("te_irsniff", "IR Sniff", "Enable the IR receiver → DATA:IR", "irsniff"),
+        Tool("te_stations", "Station Sniff", "Wi-Fi client stations → DATA:STA", "stationlist"),
+        Tool("te_probes", "Probe Sniff", "SSIDs clients are probing for → DATA:PROBE", "probesniff"),
+        Tool("te_aplist", "AP List", "Access points with vendor + packet counts → DATA:AP", "aplist"),
+        Tool("te_pktmon", "Packet Monitor", "802.11 frame-type counters → DATA:PKT", "pktmon"),
+        Tool("te_stop", "Stop", "Stop all scans and attacks", "stopscan"),
+        Tool("te_irsend", "IR Send", "Transmit IR — edit proto,hex (e.g. NEC,0x20DF10EF)", "irsend:NEC,", documented = false),
+        Tool("te_tx", "Sub-GHz TX", "Replay an OOK burst — edit freqMHz,bits — your own device only", "tx:433.92,", offensive = true),
+        Tool("te_deauth", "Deauth", "Deauth the board's selected AP list — own networks only", "deauth", offensive = true),
+        Tool("te_beaconspam", "Beacon Spam", "Flood fake beacons — own networks only", "beaconspam", offensive = true),
+    )
+
     val all: List<Tool> =
-        wifiSniffing + wifiAttacks + wifiScanners + btScanning + btAttacks + misc + marauder
+        wifiSniffing + wifiAttacks + wifiScanners + btScanning + btAttacks + misc + marauder + tembed
 
     fun byKey(key: String): Tool? = all.firstOrNull { it.key == key }
 }
