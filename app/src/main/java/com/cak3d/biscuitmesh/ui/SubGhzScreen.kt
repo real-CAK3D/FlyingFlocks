@@ -80,6 +80,9 @@ private data class KeyfobEvent(val freq: Double, val pulses: Int, val bits: Stri
 /** A 433/868 MHz weather / environment sensor reading. */
 private data class WeatherStation(val id: String, val tempC: Double?, val humidity: Int?, val timeMs: Long)
 
+/** A decoded fixed-code OOK remote (PT2262/EV1527): DATA:SUBGHZ:<mhz>,OOK,<bits>,<hexcode>. */
+private data class SubghzCode(val freq: Double, val bits: Int, val code: String, val timeMs: Long)
+
 /**
  * The sub-GHz hub for the wtBLEep node's CC1101 antenna. Shows live 315/433/868/915 MHz
  * band activity parsed from the node's DATA:RF stream, a sweep control, the capability
@@ -137,6 +140,18 @@ fun SubGhzScreen(vm: MainViewModel, onOpenMap: () -> Unit) {
             }
             .associateBy { it.id }.values.sortedByDescending { it.timeMs }
     }
+    // Decoded fixed-code OOK remotes: DATA:SUBGHZ:<mhz>,OOK,<bits>,<hexcode>.
+    val subCodes = remember(log) {
+        log.asSequence()
+            .filter { it.message.type == BiscuitMessage.Type.DATA && it.message.subtype == "SUBGHZ" }
+            .mapNotNull { e ->
+                val f = e.message.payload.split(",")
+                val freq = f.getOrNull(0)?.toDoubleOrNull() ?: return@mapNotNull null
+                val code = f.getOrNull(3) ?: return@mapNotNull null
+                SubghzCode(freq, f.getOrNull(2)?.toIntOrNull() ?: 0, code, e.timeMs)
+            }
+            .toList()
+    }
     val now = System.currentTimeMillis()
     // Capability cards go LIVE as real decodes arrive from the node; a card reads "WAITING"
     // until its first hit. A channel only produces data once the node's firmware runs that
@@ -145,7 +160,7 @@ fun SubGhzScreen(vm: MainViewModel, onOpenMap: () -> Unit) {
         Capability("Band activity monitor", "Which sub-GHz bands are busy and how strong — live from the node's CC1101.", Icons.Default.GraphicEq) to hits.isNotEmpty(),
         Capability("TPMS reader", "FSK tire-pressure sensors, positively identified as cars pass: sensor ID, pressure, temperature.", Icons.Default.DirectionsCar) to tpms.isNotEmpty(),
         Capability("Weather & 433 sensors", "433/868 MHz temperature, humidity and rain stations in range.", Icons.Default.Thermostat) to weather.isNotEmpty(),
-        Capability("OOK bursts · keyfobs · remotes", "433 OOK bursts — keyfobs, doorbells, garage openers (and OOK TPMS, which read the same).", Icons.Default.SettingsRemote) to keyfobs.isNotEmpty(),
+        Capability("OOK bursts · keyfobs · remotes", "433 OOK bursts — keyfobs, doorbells, garage openers (and OOK TPMS, which read the same).", Icons.Default.SettingsRemote) to (keyfobs.isNotEmpty() || subCodes.isNotEmpty()),
     )
 
     Column(
@@ -220,6 +235,14 @@ fun SubGhzScreen(vm: MainViewModel, onOpenMap: () -> Unit) {
             keyfobs.takeLast(6).reversed().forEach { KeyfobRow(it) }
         }
 
+        // Decoded fixed-code remotes (PT2262/EV1527) — positively decoded to a code,
+        // not just a raw burst. These come from the T-Embed's on-board OOK decoder.
+        if (subCodes.isNotEmpty()) {
+            Text("DECODED REMOTES", style = MaterialTheme.typography.labelMedium, color = RF_AMBER,
+                fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+            subCodes.takeLast(8).reversed().forEach { SubghzCodeRow(it) }
+        }
+
         // Weather / 433 sensors.
         if (weather.isNotEmpty()) {
             Text("WEATHER & SENSORS", style = MaterialTheme.typography.labelMedium, color = RF_AMBER,
@@ -269,7 +292,7 @@ fun SubGhzScreen(vm: MainViewModel, onOpenMap: () -> Unit) {
         // Board diagnostic: tell the user whether the gap is "no RF at all" (node not
         // connected / CC1101 not wired) or "raw RF only" (firmware isn't running the
         // TPMS / weather / OOK decoders) — the real reason the decoded rows stay empty.
-        val anyDecoded = tpms.isNotEmpty() || weather.isNotEmpty() || keyfobs.isNotEmpty()
+        val anyDecoded = tpms.isNotEmpty() || weather.isNotEmpty() || keyfobs.isNotEmpty() || subCodes.isNotEmpty()
         val diag = when {
             hits.isEmpty() ->
                 "No RF from the node yet. Connect the wtBLEep C5, check the CC1101 is wired, and make sure its firmware is streaming DATA:RF."
@@ -470,6 +493,28 @@ private fun KeyfobRow(k: KeyfobEvent) {
                 Text("An OOK burst — could be a keyfob, a remote, a doorbell/garage opener, or an OOK TPMS (they share this encoding). Replay it on your own device from the Transmit section above.",
                     style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
             }
+        }
+    }
+}
+
+@Composable
+private fun SubghzCodeRow(c: SubghzCode) {
+    Card(
+        Modifier.fillMaxWidth(),
+        shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.SettingsRemote, contentDescription = null, tint = RF_AMBER, modifier = Modifier.size(24.dp))
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text("remote 0x${c.code}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold,
+                    fontFamily = FontFamily.Monospace)
+                Text("${"%.2f".format(c.freq)} MHz · ${c.bits}-bit OOK · PT2262/EV1527",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+            }
+            Text(agoText(c.timeMs), style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f))
         }
     }
 }
