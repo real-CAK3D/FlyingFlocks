@@ -21,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BluetoothSearching
 import androidx.compose.material.icons.filled.DeveloperBoard
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.MonitorHeart
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Router
 import androidx.compose.material.icons.filled.Stop
@@ -65,7 +66,7 @@ import com.cak3d.biscuitmesh.usb.UsbDeviceInfo
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FleetScreen(vm: MainViewModel, onOpen: (String) -> Unit = {}) {
+fun FleetScreen(vm: MainViewModel, onOpen: (String) -> Unit = {}, onHealth: () -> Unit = {}) {
     val devicesFlow = vm.devices
     if (devicesFlow == null) {
         BluetoothUnavailable()
@@ -112,12 +113,20 @@ fun FleetScreen(vm: MainViewModel, onOpen: (String) -> Unit = {}) {
                 if (usb.isNotEmpty()) item("usb") { UsbBanner(usb, vm) }
                 if (all.isNotEmpty()) {
                     item("header") {
-                        Text(
-                            "$liveCount LIVE · ${all.size} KNOWN".let { "> $it" },
-                            style = MaterialTheme.typography.labelMedium,
-                            fontFamily = FontFamily.Monospace,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                "$liveCount LIVE · ${all.size} KNOWN".let { "> $it" },
+                                style = MaterialTheme.typography.labelMedium,
+                                fontFamily = FontFamily.Monospace,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.weight(1f),
+                            )
+                            FilledTonalButton(onClick = onHealth) {
+                                Icon(Icons.Default.MonitorHeart, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("Health")
+                            }
+                        }
                     }
                     if (connectableInRange > 0 || connected.isNotEmpty()) {
                         item {

@@ -35,6 +35,7 @@ data class BiscuitDevice(
     val known: Boolean = false,       // saved to the fleet; persists across restarts
     val inRange: Boolean = false,     // seen in the current scan sweep
     val lastSeenMs: Long = 0L,        // when it last appeared in a scan
+    val health: BoardHealth? = null,  // latest DATA:HEALTH heartbeat (live telemetry)
 ) {
     /** Connected, or mid-connection. */
     val isLive: Boolean
@@ -75,3 +76,38 @@ data class DeviceStatus(
     val link: String? = null,         // link-code gate: "required" | "ok" | null
     val rawJson: String = "",
 )
+
+/**
+ * A live health snapshot from a board's `DATA:HEALTH:` heartbeat (emitted every
+ * few seconds over BLE/USB). This is how the Fleet Health view tells whether a
+ * board is actually working: free memory, uptime (a reset zeroes it), and which
+ * radios/peripherals came up.
+ *   DATA:HEALTH:<heapFree>,<uptimeSec>,<sd>,<cc1101>,<nfc>,<link>
+ */
+data class BoardHealth(
+    val heapFree: Int? = null,
+    val uptimeSec: Long? = null,
+    val sd: Boolean? = null,
+    val cc1101: Boolean? = null,
+    val nfc: Boolean? = null,
+    val link: String? = null,
+    val atMs: Long = 0L,              // when this heartbeat arrived (for "last heard")
+) {
+    companion object {
+        /** Parse a `DATA:HEALTH` payload (`heap,uptime,sd,cc1101,nfc,link`). */
+        fun parse(payload: String, atMs: Long): BoardHealth? {
+            val p = payload.split(',')
+            if (p.size < 6) return null
+            fun bit(s: String): Boolean? = when (s.trim()) { "1" -> true; "0" -> false; else -> null }
+            return BoardHealth(
+                heapFree = p[0].trim().toIntOrNull(),
+                uptimeSec = p[1].trim().toLongOrNull(),
+                sd = bit(p[2]),
+                cc1101 = bit(p[3]),
+                nfc = bit(p[4]),
+                link = p[5].trim().ifEmpty { null },
+                atMs = atMs,
+            )
+        }
+    }
+}

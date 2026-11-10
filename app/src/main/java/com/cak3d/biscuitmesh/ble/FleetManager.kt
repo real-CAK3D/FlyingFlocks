@@ -6,6 +6,7 @@ import android.content.Context
 import com.cak3d.biscuitmesh.data.KnownDevice
 import com.cak3d.biscuitmesh.data.KnownDevicesStore
 import com.cak3d.biscuitmesh.model.BiscuitDevice
+import com.cak3d.biscuitmesh.model.BoardHealth
 import com.cak3d.biscuitmesh.model.ConnectionState
 import com.cak3d.biscuitmesh.model.DeviceStatus
 import com.cak3d.biscuitmesh.model.LogEntry
@@ -175,6 +176,14 @@ class FleetManager(
     fun ingestLine(address: String, raw: String) {
         val msg = BiscuitMessage.parse(raw)
         _log.update { (it + LogEntry(address, msg, System.currentTimeMillis())).takeLast(500) }
+        applyHealth(address, msg)
+    }
+
+    /** Fold a `DATA:HEALTH` heartbeat into the board's live telemetry, if present. */
+    private fun applyHealth(address: String, message: BiscuitMessage) {
+        if (message.type != BiscuitMessage.Type.DATA || message.subtype != "HEALTH") return
+        val h = BoardHealth.parse(message.payload, System.currentTimeMillis()) ?: return
+        _devices.update { it.mutate(address) { d -> d.copy(health = h, lastSeenMs = System.currentTimeMillis()) } }
     }
 
     /** Show/hide a USB-attached board in the fleet registry (it has no BLE GATT connection). */
@@ -207,6 +216,7 @@ class FleetManager(
 
     override fun onMessage(address: String, message: BiscuitMessage) {
         _log.update { (it + LogEntry(address, message, System.currentTimeMillis())).takeLast(500) }
+        applyHealth(address, message)
     }
 
     /** Short display name for a board address (used when tagging fleet-wide results). */

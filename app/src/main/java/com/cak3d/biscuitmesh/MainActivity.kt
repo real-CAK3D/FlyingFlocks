@@ -69,6 +69,7 @@ import com.cak3d.biscuitmesh.ui.BluetoothScreen
 import com.cak3d.biscuitmesh.ui.DeviceDetailScreen
 import com.cak3d.biscuitmesh.ui.DrivesScreen
 import com.cak3d.biscuitmesh.ui.FindsScreen
+import com.cak3d.biscuitmesh.ui.FleetHealthScreen
 import com.cak3d.biscuitmesh.ui.FleetScreen
 import com.cak3d.biscuitmesh.ui.AircraftScreen
 import com.cak3d.biscuitmesh.ui.AuroraScreen
@@ -311,8 +312,9 @@ private fun MainShell(vm: MainViewModel) {
                     FleetScreen(vm, onOpen = { address ->
                         vm.open(address)
                         nav.navigate("device")
-                    })
+                    }, onHealth = { nav.navigate("fleethealth") })
                 }
+                composable("fleethealth") { FleetHealthScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("wardrive") { WardriveScreen(vm) }
                 composable("wifi") {
                     WifiScreen(vm, onOpenTool = { nav.navigate("runtool/$it") },
