@@ -15,8 +15,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -54,13 +60,19 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.Alignment
 import com.cak3d.biscuitmesh.MainViewModel
+import com.cak3d.biscuitmesh.model.BiscuitDevice
+import com.cak3d.biscuitmesh.model.LogEntry
+import com.cak3d.biscuitmesh.protocol.BiscuitMessage
 import com.cak3d.biscuitmesh.sensors.CellSnapshot
 import com.cak3d.biscuitmesh.sensors.GnssSnapshot
 import com.cak3d.biscuitmesh.sensors.PhoneScanRow
 import com.cak3d.biscuitmesh.wardrive.SampleKind
 import com.cak3d.biscuitmesh.wardrive.WardriveSample
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 
 private val BG = Color(0xFF05080A)
 private val PANEL = Color(0xFF050708)
@@ -348,6 +360,7 @@ fun ScopeScreen(vm: MainViewModel, onBack: () -> Unit) {
             ) {
                 item { ScopeStats(text, current, newPerSecond) }
                 item { ScopeModeTabs(text, mode) { mode = it } }
+                item { ScopeSourcesStrip(vm) }
                 item {
                     ScopePanel(text, "◆  3D DEPTH VISUALIZER", "CH / RSSI / HISTORY", heroHeight.value.toInt(),
                         "RF depth, Wi-Fi channels and a separate Bluetooth lane. Newest at the front.") {
@@ -368,6 +381,70 @@ fun ScopeScreen(vm: MainViewModel, onBack: () -> Unit) {
                     }
                 }
             }
+        }
+    }
+}
+
+// Relay attribution: who is feeding the scope. The phone's own radios, plus
+// every connected board, each with a live tally of the capture lines it has
+// relayed. Answers "what board is relaying what" at a glance.
+private val SOURCE_TINTS = listOf(GREEN, AMBER, EMBER, GOLD, Color(0xFF8566E8))
+private val CAPTURE_SUBS = setOf(
+    "AP", "STA", "BT", "RF", "SUBGHZ", "TPMS", "WEATHER", "KEYFOB", "PROBE", "NFC", "IR",
+)
+
+@Composable
+private fun ScopeSourcesStrip(vm: MainViewModel) {
+    val logFlow = remember(vm) { vm.log ?: MutableStateFlow(emptyList<LogEntry>()) }
+    val devFlow = remember(vm) { vm.devices ?: MutableStateFlow(emptyMap<String, BiscuitDevice>()) }
+    val entries by logFlow.collectAsState()
+    val devMap by devFlow.collectAsState()
+    val phoneRows by vm.phoneScanResults.collectAsState()
+
+    val phoneCount = phoneRows.count { it.rssi < 0 }
+    val boardCounts = remember(entries) {
+        entries.asSequence()
+            .filter { it.message.type == BiscuitMessage.Type.DATA && it.message.subtype in CAPTURE_SUBS }
+            .groupingBy { it.address }
+            .eachCount()
+    }
+    // Phone first, then every live board (a 0-count board still shows as present).
+    val boards = remember(boardCounts, devMap) {
+        (boardCounts.keys + devMap.values.filter { it.isLive }.map { it.address })
+            .distinct()
+            .map { it to (boardCounts[it] ?: 0) }
+            .sortedByDescending { it.second }
+    }
+
+    Row(
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 6.dp, vertical = 3.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        SourceChip("PHONE", phoneCount, CYAN)
+        boards.forEachIndexed { i, (addr, n) ->
+            SourceChip(vm.nameFor(addr), n, SOURCE_TINTS[i % SOURCE_TINTS.size])
+        }
+        if (boards.isEmpty()) {
+            Text(
+                "no board relaying — connect one in Fleet",
+                color = MUTED, fontSize = 10.sp, fontFamily = MONO,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SourceChip(name: String, count: Int, tint: Color) {
+    Surface(color = tint.copy(alpha = 0.12f), shape = RoundedCornerShape(6.dp)) {
+        Row(
+            Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Canvas(Modifier.size(7.dp)) { drawCircle(tint) }
+            Text(name.uppercase(), color = INK, fontSize = 10.sp, fontFamily = MONO, maxLines = 1)
+            Text("$count", color = tint, fontSize = 10.sp, fontFamily = MONO, fontWeight = FontWeight.Bold)
         }
     }
 }
