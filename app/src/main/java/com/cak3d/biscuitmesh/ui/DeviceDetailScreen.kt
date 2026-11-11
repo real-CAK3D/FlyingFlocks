@@ -17,6 +17,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Cast
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
@@ -59,7 +60,7 @@ private val QUICK_COMMANDS = listOf(
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-fun DeviceDetailScreen(vm: MainViewModel, address: String?, onBack: () -> Unit) {
+fun DeviceDetailScreen(vm: MainViewModel, address: String?, onBack: () -> Unit, onMirror: () -> Unit = {}) {
     val devicesFlow = vm.devices
     val logFlow = vm.log
     if (address == null || devicesFlow == null || logFlow == null) {
@@ -107,6 +108,9 @@ fun DeviceDetailScreen(vm: MainViewModel, address: String?, onBack: () -> Unit) 
                         "The live console for one board — its connection status plus a log of what it's " +
                             "doing. Tap a quick command or type your own to send it to the board.",
                     )
+                    IconButton(onClick = onMirror, enabled = canSend) {
+                        Icon(Icons.Default.Cast, contentDescription = "Mirror / remote control")
+                    }
                     IconButton(onClick = { vm.refreshStatus(address) }, enabled = canSend) {
                         Icon(Icons.Default.Refresh, contentDescription = "Refresh status")
                     }

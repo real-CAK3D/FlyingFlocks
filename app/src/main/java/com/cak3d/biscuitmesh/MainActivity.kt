@@ -67,6 +67,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.cak3d.biscuitmesh.ui.BluetoothScreen
 import com.cak3d.biscuitmesh.ui.DeviceDetailScreen
+import com.cak3d.biscuitmesh.ui.MirrorScreen
 import com.cak3d.biscuitmesh.ui.DrivesScreen
 import com.cak3d.biscuitmesh.ui.FindsScreen
 import com.cak3d.biscuitmesh.ui.FleetHealthScreen
@@ -433,7 +434,12 @@ private fun MainShell(vm: MainViewModel) {
                 }
                 composable("device") {
                     val address by vm.selected.collectAsStateWithLifecycle()
-                    DeviceDetailScreen(vm = vm, address = address, onBack = { nav.popBackStack() })
+                    DeviceDetailScreen(vm = vm, address = address, onBack = { nav.popBackStack() },
+                        onMirror = { nav.navigate("mirror") })
+                }
+                composable("mirror") {
+                    val address by vm.selected.collectAsStateWithLifecycle()
+                    MirrorScreen(vm = vm, address = address, onBack = { nav.popBackStack() })
                 }
                 composable("runtool/{key}") { entry ->
                     RunToolScreen(
