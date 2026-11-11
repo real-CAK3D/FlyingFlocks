@@ -192,6 +192,7 @@ private fun BoardHealthCard(d: BiscuitDevice, relayed: Int, vm: MainViewModel) {
                     Metric("HEAP", h.heapFree?.let { "${it / 1024} KB" } ?: "—")
                     Metric("UPTIME", h.uptimeSec?.let { fmtUptime(it) } ?: "—")
                     Metric("HEARD", fmtAgo(System.currentTimeMillis() - h.atMs))
+                    h.battery?.let { Metric("BATT", "$it%") }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     RadioChip("SD", h.sd)

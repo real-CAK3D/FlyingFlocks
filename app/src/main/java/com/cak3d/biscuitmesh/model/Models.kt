@@ -91,14 +91,16 @@ data class BoardHealth(
     val cc1101: Boolean? = null,
     val nfc: Boolean? = null,
     val link: String? = null,
+    val battery: Int? = null,         // 0-100, or null when the board reports -1 (unknown)
     val atMs: Long = 0L,              // when this heartbeat arrived (for "last heard")
 ) {
     companion object {
-        /** Parse a `DATA:HEALTH` payload (`heap,uptime,sd,cc1101,nfc,link`). */
+        /** Parse a `DATA:HEALTH` payload (`heap,uptime,sd,cc1101,nfc,link[,batt]`). */
         fun parse(payload: String, atMs: Long): BoardHealth? {
             val p = payload.split(',')
             if (p.size < 6) return null
             fun bit(s: String): Boolean? = when (s.trim()) { "1" -> true; "0" -> false; else -> null }
+            val batt = p.getOrNull(6)?.trim()?.toIntOrNull()
             return BoardHealth(
                 heapFree = p[0].trim().toIntOrNull(),
                 uptimeSec = p[1].trim().toLongOrNull(),
@@ -106,6 +108,7 @@ data class BoardHealth(
                 cc1101 = bit(p[3]),
                 nfc = bit(p[4]),
                 link = p[5].trim().ifEmpty { null },
+                battery = batt?.takeIf { it in 0..100 },
                 atMs = atMs,
             )
         }

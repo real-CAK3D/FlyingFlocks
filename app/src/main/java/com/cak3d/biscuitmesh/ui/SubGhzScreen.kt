@@ -152,6 +152,15 @@ fun SubGhzScreen(vm: MainViewModel, onOpenMap: () -> Unit) {
             }
             .toList()
     }
+    // Fine-sweep spectrum from the T-Embed's Waterfall/Full-Band action:
+    // DATA:SPECTRUM:<f0>,<stepMHz>,<nBins>,<r0;r1;...> — keep the last ~28 sweeps.
+    val sweeps = remember(log) {
+        log.asSequence()
+            .filter { it.message.type == BiscuitMessage.Type.DATA && it.message.subtype == "SPECTRUM" }
+            .mapNotNull { e -> SpectrumSweep.parse(e.message.payload, e.timeMs) }
+            .toList()
+            .takeLast(28)
+    }
     val now = System.currentTimeMillis()
     // Capability cards go LIVE as real decodes arrive from the node; a card reads "WAITING"
     // until its first hit. A channel only produces data once the node's firmware runs that
@@ -202,6 +211,13 @@ fun SubGhzScreen(vm: MainViewModel, onOpenMap: () -> Unit) {
                     }
                 }
             }
+        }
+
+        // Fine-sweep spectrum + waterfall from the T-Embed's Waterfall / Full-Band action.
+        if (sweeps.isNotEmpty()) {
+            Text("SPECTRUM", style = MaterialTheme.typography.labelMedium, color = RF_AMBER,
+                fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+            SpectrumCard(sweeps)
         }
 
         // Waterfall spectrogram — the last 60s of RF across 300–950 MHz.
@@ -347,6 +363,76 @@ fun SubGhzScreen(vm: MainViewModel, onOpenMap: () -> Unit) {
             },
             dismissButton = { androidx.compose.material3.TextButton(onClick = { txConfirm = null }) { Text("Cancel") } },
         )
+    }
+}
+
+/** One fine-sweep pass from the node: DATA:SPECTRUM:<f0>,<step>,<n>,<r0;r1;...>. */
+private data class SpectrumSweep(val f0: Double, val step: Double, val rssis: IntArray, val timeMs: Long) {
+    val n: Int get() = rssis.size
+    fun freqAt(i: Int): Double = f0 + step * i
+    companion object {
+        fun parse(payload: String, timeMs: Long): SpectrumSweep? {
+            val p = payload.split(',')
+            if (p.size < 4) return null
+            val f0 = p[0].toDoubleOrNull() ?: return null
+            val step = p[1].toDoubleOrNull() ?: return null
+            val vals = p[3].split(';').mapNotNull { it.trim().toIntOrNull() }
+            if (vals.isEmpty()) return null
+            return SpectrumSweep(f0, step, vals.toIntArray(), timeMs)
+        }
+    }
+}
+
+@Composable
+private fun SpectrumCard(sweeps: List<SpectrumSweep>) {
+    val latest = sweeps.last()
+    val peakIdx = latest.rssis.indices.maxByOrNull { latest.rssis[it] } ?: 0
+    val peakF = latest.freqAt(peakIdx)
+    val peakR = latest.rssis.getOrElse(peakIdx) { -128 }
+    val fEnd = latest.freqAt(latest.n - 1)
+    Card(
+        Modifier.fillMaxWidth(),
+        shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                "fine sweep · newest on bottom · peak ${"%.2f".format(peakF)} MHz  $peakR dBm",
+                style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+            )
+            androidx.compose.foundation.Canvas(Modifier.fillMaxWidth().height(150.dp)) {
+                val w = size.width; val h = size.height
+                val rowH = h / sweeps.size
+                sweeps.forEachIndexed { ri, sw ->
+                    val y = ri * rowH
+                    val cellW = w / sw.n.coerceAtLeast(1)
+                    for (i in 0 until sw.n) {
+                        val s = ((sw.rssis[i] + 100).coerceIn(0, 70)) / 70f
+                        val col = androidx.compose.ui.graphics.lerp(Color(0xFF071226), Color(0xFF66E0FF), s)
+                        drawRect(
+                            col,
+                            topLeft = androidx.compose.ui.geometry.Offset(i * cellW, y),
+                            size = androidx.compose.ui.geometry.Size(cellW + 1f, rowH + 1f),
+                        )
+                    }
+                }
+                // peak marker column on the latest (bottom) row
+                val cellW = w / latest.n.coerceAtLeast(1)
+                drawLine(
+                    RF_AMBER,
+                    androidx.compose.ui.geometry.Offset(peakIdx * cellW + cellW / 2, h - rowH),
+                    androidx.compose.ui.geometry.Offset(peakIdx * cellW + cellW / 2, h),
+                    2f,
+                )
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("${"%.1f".format(latest.f0)}", style = MaterialTheme.typography.labelSmall,
+                    fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
+                Text("${"%.1f".format(fEnd)} MHz", style = MaterialTheme.typography.labelSmall,
+                    fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
+            }
+        }
     }
 }
 
