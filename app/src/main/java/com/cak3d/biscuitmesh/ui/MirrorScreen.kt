@@ -294,7 +294,7 @@ private fun CrowSprite(mood: Int, modifier: Modifier) {
         else -> R.drawable.crow_idle
     }
     Image(
-        painter = painterResource(res),
+        bitmap = androidx.compose.ui.res.imageResource(res),
         contentDescription = null,
         modifier = modifier,
         contentScale = ContentScale.Fit,
