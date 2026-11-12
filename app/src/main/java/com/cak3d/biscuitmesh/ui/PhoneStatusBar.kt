@@ -48,7 +48,7 @@ private val SB_GREEN = Color(0xFF53D38A)
 private val SB_AMBER = Color(0xFFF2AC2A)
 private val SB_MONO = FontFamily.Monospace
 
-private val SB_TIME = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+private val SB_TIME = SimpleDateFormat("h:mm:ss a", Locale.getDefault())
 private val SB_DATE = SimpleDateFormat("EEE d MMM", Locale.getDefault())
 
 /** GPS readiness: a recent fix, provider on but no fix, or off. */
