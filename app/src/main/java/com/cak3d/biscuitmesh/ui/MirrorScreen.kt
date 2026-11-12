@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -40,6 +41,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.text.font.FontFamily
@@ -197,8 +200,8 @@ private fun DeviceScreen(ui: MirrorUi, onPick: (Int) -> Unit) {
                 }
             }
         }
-        // 3-crow corner accent, bottom-left (matches the firmware border accent)
-        CrowAccent(Modifier.align(Alignment.BottomStart))
+        // Flock accent — sits on the bottom border, breaking the frame, bottom-left.
+        CrowAccent(Modifier.align(Alignment.BottomStart).offset(x = 8.dp, y = 9.dp))
     }
 }
 
@@ -303,17 +306,27 @@ private fun CrowSprite(mood: Int, modifier: Modifier) {
     )
 }
 
-/** The 3-crow corner accent the firmware draws bottom-left (blood-red). */
+/** Three gulls in the distance (wings up, body dipping) that sit ON the border
+ *  and break it — the bg backing notches the purple frame, like a flock crossing it. */
 @Composable
 private fun CrowAccent(modifier: Modifier) {
-    Row(modifier, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-        repeat(3) {
-            Canvas(Modifier.size(11.dp, 7.dp)) {
+    Row(
+        modifier.background(TE_BG).padding(horizontal = 5.dp, vertical = 1.dp),
+        horizontalArrangement = Arrangement.spacedBy(7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        // near → far, so they read as a flock receding into the distance
+        listOf(17f to 9f, 13f to 7f, 10f to 6f).forEach { (gw, gh) ->
+            Canvas(Modifier.size(gw.dp, gh.dp)) {
                 val w = size.width; val h = size.height
-                drawLine(TE_BLOOD, Offset(0f, h), Offset(w * 0.5f, 0f), 2f)
-                drawLine(TE_BLOOD, Offset(w * 0.5f, 0f), Offset(w, h), 2f)
-                drawLine(TE_BLOOD, Offset(w * 0.28f, h * 0.45f), Offset(w * 0.5f, h * 0.2f), 2f)
-                drawLine(TE_BLOOD, Offset(w * 0.5f, h * 0.2f), Offset(w * 0.72f, h * 0.45f), 2f)
+                val tip = h * 0.22f      // wingtips near the top
+                val body = h * 0.88f     // body dips to the bottom centre
+                val gull = Path().apply {
+                    moveTo(0f, tip)
+                    quadraticBezierTo(w * 0.26f, h * 0.08f, w * 0.5f, body)  // left wing: up, then to body
+                    quadraticBezierTo(w * 0.74f, h * 0.08f, w, tip)         // right wing: body, up to tip
+                }
+                drawPath(gull, TE_BLOOD, style = Stroke(width = (h * 0.2f).coerceAtLeast(2f), cap = StrokeCap.Round))
             }
         }
     }
