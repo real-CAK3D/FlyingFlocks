@@ -583,6 +583,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun setFlockHandle(name: String) = viewModelScope.launch { runCatching { appRef.crew.setHandle(name) } }
 
     init {
+        // Push the phone's wall clock to every connected board every 20s, so the T-Embed's
+        // own top bar shows the right time/date even with no Wi-Fi/NTP. We send *local* epoch
+        // (UTC + tz offset); the firmware formats it straight, no TZ handling on-device.
+        viewModelScope.launch {
+            while (true) {
+                devices?.value?.values
+                    ?.filter { it.state == com.cak3d.biscuitmesh.model.ConnectionState.READY }
+                    ?.forEach { dev ->
+                        val nowMs = System.currentTimeMillis()
+                        val localEpoch = nowMs / 1000 + java.util.TimeZone.getDefault().getOffset(nowMs) / 1000
+                        send(dev.address, "settime:$localEpoch")
+                    }
+                kotlinx.coroutines.delay(20_000)
+            }
+        }
+
         // Report lifetime totals to the flock whenever a saved drive changes the numbers — not
         // only while the Flock screen happens to be open. Gated on Flock being enabled, and
         // deduped by a signature so it pushes only when a total actually moves.
