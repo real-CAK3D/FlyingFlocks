@@ -17,6 +17,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Cast
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AssistChip
@@ -60,7 +61,7 @@ private val QUICK_COMMANDS = listOf(
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-fun DeviceDetailScreen(vm: MainViewModel, address: String?, onBack: () -> Unit, onMirror: () -> Unit = {}) {
+fun DeviceDetailScreen(vm: MainViewModel, address: String?, onBack: () -> Unit, onMirror: () -> Unit = {}, onDebug: () -> Unit = {}) {
     val devicesFlow = vm.devices
     val logFlow = vm.log
     if (address == null || devicesFlow == null || logFlow == null) {
@@ -89,8 +90,12 @@ fun DeviceDetailScreen(vm: MainViewModel, address: String?, onBack: () -> Unit, 
     val linkMsg = remember(lines) {
         lines.lastOrNull { it.type == BiscuitMessage.Type.DATA && it.subtype == "LINK" }?.payload
     }
-    val linked = device.status?.link == "ok" || linkMsg == "ok"
-    val needsLink = canSend && !linked && (device.needsLink || linkMsg == "need" || linkMsg == "bad")
+    // Freshest link signal wins. DATA:HEALTH streams the live link bit every ~3s, so
+    // a stale STATUS "required" (or an old DATA:LINK:need seen mid-scan) must not keep the
+    // banner up once the board is actually linked. health.link == "ok" clears it.
+    val linked = device.status?.link == "ok" || linkMsg == "ok" || device.health?.link == "ok"
+    val needsLink = canSend && !linked && device.health?.link != "ok" &&
+        (device.needsLink || linkMsg == "need" || linkMsg == "bad")
     var code by remember { mutableStateOf("") }
 
     Scaffold(
@@ -110,6 +115,9 @@ fun DeviceDetailScreen(vm: MainViewModel, address: String?, onBack: () -> Unit, 
                     )
                     IconButton(onClick = onMirror, enabled = canSend) {
                         Icon(Icons.Default.Cast, contentDescription = "Mirror / remote control")
+                    }
+                    IconButton(onClick = onDebug) {
+                        Icon(Icons.Default.BugReport, contentDescription = "Debug console")
                     }
                     IconButton(onClick = { vm.refreshStatus(address) }, enabled = canSend) {
                         Icon(Icons.Default.Refresh, contentDescription = "Refresh status")

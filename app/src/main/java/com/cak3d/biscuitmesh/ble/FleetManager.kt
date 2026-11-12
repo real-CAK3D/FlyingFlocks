@@ -46,6 +46,9 @@ class FleetManager(
     private val _log = MutableStateFlow<List<LogEntry>>(emptyList())
     val log: StateFlow<List<LogEntry>> = _log.asStateFlow()
 
+    /** Wipe the protocol log (the Debug console's clear button). */
+    fun clearLog() { _log.value = emptyList() }
+
     val connectedCount: Int
         get() = _devices.value.values.count { it.state == ConnectionState.READY }
 

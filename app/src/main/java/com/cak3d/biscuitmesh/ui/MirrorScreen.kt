@@ -37,6 +37,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
@@ -134,6 +135,10 @@ fun MirrorScreen(vm: MainViewModel, address: String?, onBack: () -> Unit) {
             Modifier.fillMaxSize().padding(padding).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            PhoneStatusBar(
+                boardConnected = device?.isLive == true,
+                boardLink = device?.health?.link ?: device?.status?.link ?: ui?.link,
+            )
             if (ui == null) {
                 Text(
                     "Waiting for the board's screen…\n\nConnect and link the T-Embed (enter the 6-digit code from " +
@@ -167,11 +172,9 @@ fun MirrorScreen(vm: MainViewModel, address: String?, onBack: () -> Unit) {
 private fun DeviceScreen(ui: MirrorUi, onPick: (Int) -> Unit) {
     Box(
         Modifier.fillMaxWidth().aspectRatio(320f / 170f)
-            .background(TE_BG, RoundedCornerShape(10.dp))
-            .border(2.dp, TE_PLUM, RoundedCornerShape(10.dp))
-            .padding(8.dp),
+            .background(TE_BG, RoundedCornerShape(10.dp)),
     ) {
-        Column(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize().padding(8.dp)) {
             // header bar
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 Text("FLOCKED UP", color = TE_BLOOD, fontFamily = MONO, fontSize = 11.sp, fontWeight = FontWeight.Bold)
@@ -200,8 +203,8 @@ private fun DeviceScreen(ui: MirrorUi, onPick: (Int) -> Unit) {
                 }
             }
         }
-        // Flock accent — sits on the bottom border, breaking the frame, bottom-left.
-        CrowAccent(Modifier.align(Alignment.BottomStart).offset(x = 8.dp, y = 9.dp))
+        // Purple frame whose bottom-left corner is broken by a flock of 3 birds.
+        FrameFlockBorder(Modifier.matchParentSize())
     }
 }
 
@@ -306,29 +309,61 @@ private fun CrowSprite(mood: Int, modifier: Modifier) {
     )
 }
 
-/** Three gulls in the distance (wings up, body dipping) that sit ON the border
- *  and break it — the bg backing notches the purple frame, like a flock crossing it. */
+/**
+ * The purple frame, drawn by hand so its bottom-left corner is *broken* by a flock
+ * of three birds flying through it (in the distance). The left edge runs down and
+ * ends at the top-left bird's left wingtip; the bottom edge runs in from the right
+ * and ends at the bottom bird's right wingtip; the rounded corner between them is
+ * gone — a downward triangle of gulls (2 up, 1 below) spans the gap, with the
+ * top-right bird flying free, unattached to the frame.
+ */
 @Composable
-private fun CrowAccent(modifier: Modifier) {
-    Row(
-        modifier.background(TE_BG).padding(horizontal = 5.dp, vertical = 1.dp),
-        horizontalArrangement = Arrangement.spacedBy(7.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        // near → far, so they read as a flock receding into the distance
-        listOf(17f to 9f, 13f to 7f, 10f to 6f).forEach { (gw, gh) ->
-            Canvas(Modifier.size(gw.dp, gh.dp)) {
-                val w = size.width; val h = size.height
-                val tip = h * 0.22f      // wingtips near the top
-                val body = h * 0.88f     // body dips to the bottom centre
-                val gull = Path().apply {
-                    moveTo(0f, tip)
-                    quadraticBezierTo(w * 0.26f, h * 0.08f, w * 0.5f, body)  // left wing: up, then to body
-                    quadraticBezierTo(w * 0.74f, h * 0.08f, w, tip)         // right wing: body, up to tip
-                }
-                drawPath(gull, TE_BLOOD, style = Stroke(width = (h * 0.2f).coerceAtLeast(2f), cap = StrokeCap.Round))
-            }
+private fun FrameFlockBorder(modifier: Modifier) {
+    Canvas(modifier) {
+        val w = size.width; val h = size.height
+        val r = 10.dp.toPx()
+        val sw = 2.dp.toPx()
+        val i = sw / 2f                       // inset so the stroke sits inside the bounds
+
+        // --- flock anchors (bottom-left corner), near → far ---
+        // bottom bird (nearest, largest): body just above the bottom edge
+        val b1hs = 11.dp.toPx(); val b1lf = 7.dp.toPx()
+        val b1cx = r + 26.dp.toPx(); val b1cy = h - 9.dp.toPx()
+        val b1RTip = Offset(b1cx + b1hs, b1cy - b1lf)   // right wingtip → bottom-edge end
+        // top-left bird: left wingtip rides the left edge
+        val b2hs = 9.dp.toPx(); val b2lf = 6.dp.toPx()
+        val b2cx = i + b2hs; val b2cy = h - r - 16.dp.toPx()
+        val b2LTip = Offset(b2cx - b2hs, b2cy - b2lf)   // left wingtip → left-edge end
+        // top-right bird (farthest, smallest): flying free in the open corner
+        val b3hs = 7.dp.toPx(); val b3lf = 4.5.dp.toPx()
+        val b3cx = r + 34.dp.toPx(); val b3cy = h - r - 22.dp.toPx()
+
+        // --- the frame outline, with the bottom-left corner omitted ---
+        val border = Path().apply {
+            moveTo(i, b2LTip.y)                                     // left edge ends at top-left bird's wing
+            lineTo(i, r + i)                                        // up the left edge
+            arcTo(Rect(i, i, i + 2 * r, i + 2 * r), 180f, 90f, false)               // top-left corner
+            lineTo(w - r - i, i)                                    // top edge
+            arcTo(Rect(w - i - 2 * r, i, w - i, i + 2 * r), 270f, 90f, false)       // top-right corner
+            lineTo(w - i, h - r - i)                                // right edge
+            arcTo(Rect(w - i - 2 * r, h - i - 2 * r, w - i, h - i), 0f, 90f, false) // bottom-right corner
+            lineTo(b1RTip.x, h - i)                                 // bottom edge, in from the right
+            lineTo(b1RTip.x, b1RTip.y)                              // lift up into the bottom bird's wing
         }
+        drawPath(border, TE_PLUM, style = Stroke(width = sw, cap = StrokeCap.Round))
+
+        // --- the three gulls (all purple, like the frame) ---
+        fun gull(cx: Float, cy: Float, hs: Float, lf: Float, stroke: Float) {
+            val g = Path().apply {
+                moveTo(cx - hs, cy - lf)                            // left wingtip (high)
+                quadraticBezierTo(cx - hs * 0.42f, cy - lf * 0.12f, cx, cy)  // dip to the body
+                quadraticBezierTo(cx + hs * 0.42f, cy - lf * 0.12f, cx + hs, cy - lf)  // up to right wingtip
+            }
+            drawPath(g, TE_PLUM, style = Stroke(width = stroke, cap = StrokeCap.Round))
+        }
+        gull(b1cx, b1cy, b1hs, b1lf, sw)            // bottom (nearest)
+        gull(b2cx, b2cy, b2hs, b2lf, sw * 0.9f)     // top-left
+        gull(b3cx, b3cy, b3hs, b3lf, sw * 0.75f)    // top-right, free
     }
 }
 

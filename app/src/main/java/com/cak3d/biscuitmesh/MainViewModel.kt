@@ -41,6 +41,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     val devices get() = fleet?.devices
     val log get() = fleet?.log
+    fun clearLog() { fleet?.clearLog() }
 
     /** USB-OTG devices currently attached (serial boards, dongles). */
     val usbDevices: kotlinx.coroutines.flow.Flow<List<UsbDeviceInfo>> get() = appRef.usbDetector.devices
