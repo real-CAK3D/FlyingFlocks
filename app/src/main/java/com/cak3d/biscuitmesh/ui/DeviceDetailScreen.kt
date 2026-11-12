@@ -200,6 +200,13 @@ fun DeviceDetailScreen(vm: MainViewModel, address: String?, onBack: () -> Unit, 
                 }
             }
 
+            // Live visualization — animates to whatever scan is running.
+            LiveVizPanel(
+                lines = lines,
+                activeOp = device.status?.activeOp,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+
             Card(
                 modifier = Modifier.fillMaxWidth().weight(1f),
                 shape = RoundedCornerShape(12.dp),
