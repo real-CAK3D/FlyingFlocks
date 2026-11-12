@@ -1,6 +1,7 @@
 package com.cak3d.biscuitmesh.ui
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -36,27 +37,32 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.cak3d.biscuitmesh.MainViewModel
+import com.cak3d.biscuitmesh.R
 import com.cak3d.biscuitmesh.model.BiscuitDevice
 import com.cak3d.biscuitmesh.model.LogEntry
 import com.cak3d.biscuitmesh.protocol.BiscuitMessage
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.json.JSONObject
 
-// T-Embed firmware palette, mirrored so the replica looks like the real screen.
-private val TE_BG = Color(0xFF0A0B0A)
+// Exact T-Embed firmware palette (RGB565 values from the sketch) so the replica
+// matches the real screen 1:1.
+private val TE_BG = Color(0xFF08080A)
 private val TE_PLUM = Color(0xFFB24BFF)
-private val TE_BLOOD = Color(0xFFE23B3B)
-private val TE_AMBER = Color(0xFFF0B429)
-private val TE_INK = Color(0xFFE9F0EE)
-private val TE_DIM = Color(0xFF8FA189)
-private val TE_PANEL = Color(0xFF191D1A)
+private val TE_BLOOD = Color(0xFFCA1C24)
+private val TE_AMBER = Color(0xFFF2AC2A)
+private val TE_INK = Color(0xFFE8E6DC)
+private val TE_DIM = Color(0xFF70707C)
+private val TE_PANEL = Color(0xFF121218)
 private val MONO = FontFamily.Monospace
 
 private data class MirrorUi(
@@ -174,9 +180,9 @@ private fun DeviceScreen(ui: MirrorUi, onPick: (Int) -> Unit) {
                     ),
                 )
             }
-            Row(Modifier.fillMaxWidth().weight(1f).padding(top = 4.dp)) {
-                // crow on the left
-                CrowGlyph(ui.mood, Modifier.weight(0.34f).fillMaxSize())
+            Row(Modifier.fillMaxWidth().weight(1f).padding(top = 2.dp)) {
+                // real crow sprite on the left
+                CrowSprite(ui.mood, Modifier.weight(0.34f).fillMaxSize())
                 // content on the right
                 Box(Modifier.weight(0.66f).fillMaxSize()) {
                     when (ui.screen) {
@@ -190,6 +196,8 @@ private fun DeviceScreen(ui: MirrorUi, onPick: (Int) -> Unit) {
                 }
             }
         }
+        // 3-crow corner accent, bottom-left (matches the firmware border accent)
+        CrowAccent(Modifier.align(Alignment.BottomStart))
     }
 }
 
@@ -275,36 +283,38 @@ private fun CenteredBig(big: String, label: String) {
     }
 }
 
-/** A simple crow silhouette, tinted by mood (plum idle, amber scan, blood flip). */
+/** The real T-Embed crow sprite for this mood, drawn pixel-for-pixel (the same
+ *  1-bit masks the firmware uses, exported to PNG), so the mirror matches the screen. */
 @Composable
-private fun CrowGlyph(mood: Int, modifier: Modifier) {
-    val tint = when (mood) { 1 -> TE_AMBER; 2 -> TE_INK; 3 -> TE_BLOOD; else -> TE_PLUM }
-    Canvas(modifier) {
-        val w = size.width; val h = size.height
-        val cx = w * 0.5f; val cy = h * 0.55f; val s = minOf(w, h) * 0.42f
-        // body
-        drawOval(tint, topLeft = Offset(cx - s * 0.7f, cy - s * 0.45f),
-            size = androidx.compose.ui.geometry.Size(s * 1.4f, s * 0.9f))
-        // head
-        drawCircle(tint, s * 0.4f, Offset(cx + s * 0.55f, cy - s * 0.5f))
-        // beak
-        val beak = Path().apply {
-            moveTo(cx + s * 0.9f, cy - s * 0.6f)
-            lineTo(cx + s * 1.35f, cy - s * 0.42f)
-            lineTo(cx + s * 0.9f, cy - s * 0.3f)
-            close()
+private fun CrowSprite(mood: Int, modifier: Modifier) {
+    val res = when (mood) {
+        1 -> R.drawable.crow_scan   // scanning
+        2 -> R.drawable.crow_hit    // got one
+        3 -> R.drawable.crow_flip   // FTM
+        else -> R.drawable.crow_idle
+    }
+    Image(
+        painter = painterResource(res),
+        contentDescription = null,
+        modifier = modifier,
+        contentScale = ContentScale.Fit,
+        filterQuality = FilterQuality.None,   // crisp pixels, no smoothing
+    )
+}
+
+/** The 3-crow corner accent the firmware draws bottom-left (blood-red). */
+@Composable
+private fun CrowAccent(modifier: Modifier) {
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+        repeat(3) {
+            Canvas(Modifier.size(11.dp, 7.dp)) {
+                val w = size.width; val h = size.height
+                drawLine(TE_BLOOD, Offset(0f, h), Offset(w * 0.5f, 0f), 2f)
+                drawLine(TE_BLOOD, Offset(w * 0.5f, 0f), Offset(w, h), 2f)
+                drawLine(TE_BLOOD, Offset(w * 0.28f, h * 0.45f), Offset(w * 0.5f, h * 0.2f), 2f)
+                drawLine(TE_BLOOD, Offset(w * 0.5f, h * 0.2f), Offset(w * 0.72f, h * 0.45f), 2f)
+            }
         }
-        drawPath(beak, TE_AMBER)
-        // tail
-        val tail = Path().apply {
-            moveTo(cx - s * 0.6f, cy)
-            lineTo(cx - s * 1.3f, cy + s * 0.35f)
-            lineTo(cx - s * 0.5f, cy + s * 0.35f)
-            close()
-        }
-        drawPath(tail, tint)
-        // eye
-        drawCircle(TE_BG, s * 0.09f, Offset(cx + s * 0.7f, cy - s * 0.6f))
     }
 }
 
