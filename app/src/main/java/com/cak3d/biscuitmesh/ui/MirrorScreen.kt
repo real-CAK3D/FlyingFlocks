@@ -159,6 +159,13 @@ fun MirrorScreen(vm: MainViewModel, address: String?, onBack: () -> Unit) {
                 CtrlButton("▼", TE_INK, Modifier.weight(0.7f)) { tap("ui:down") }
                 CtrlButton("● SELECT", TE_PLUM, Modifier.weight(1.3f)) { tap("ui:sel") }
             }
+
+            // Live viz — mirrors the active scan (signal bars / spectrum), like the device.
+            val vizLines = remember(log, address) {
+                log.filter { it.address == address }.map { it.message }
+            }
+            LiveVizPanel(lines = vizLines, activeOp = device?.status?.activeOp)
+
             Text(
                 "Tap a row to jump to it and select. ▲/▼ moves the highlight, ● selects, ◀ goes back — " +
                     "exactly like the encoder on the device.",
