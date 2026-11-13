@@ -22,6 +22,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.ui.platform.LocalContext
@@ -134,6 +135,7 @@ fun SavedDevicesScreen(vm: MainViewModel, onBack: () -> Unit) {
     var playConfirm by remember { mutableStateOf<Pair<String, String>?>(null) }
     var deleteConfirm by remember { mutableStateOf<Pair<String, String?>?>(null) }  // device to (button | null=whole device)
     var lastCaptured by remember { mutableStateOf<Pair<String, String>?>(null) }     // for the Test button
+    var renameDevice by remember { mutableStateOf<String?>(null) }                   // device being renamed
 
     Column(Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState())) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
@@ -197,6 +199,7 @@ fun SavedDevicesScreen(vm: MainViewModel, onBack: () -> Unit) {
                     onAddButton = { addDeviceName = dev.name; showAdd = true },
                     onDeleteButton = { btn -> deleteConfirm = dev.name to btn },
                     onDeleteDevice = { deleteConfirm = dev.name to null },
+                    onRenameDevice = { renameDevice = dev.name },
                 )
                 Spacer(Modifier.height(8.dp))
             }
@@ -214,6 +217,23 @@ fun SavedDevicesScreen(vm: MainViewModel, onBack: () -> Unit) {
                 lastCaptured = dev to btn
                 showAdd = false
             },
+        )
+    }
+
+    renameDevice?.let { oldName ->
+        var newName by remember(oldName) { mutableStateOf(oldName) }
+        AlertDialog(
+            onDismissRequest = { renameDevice = null },
+            title = { Text("Rename device") },
+            text = {
+                OutlinedTextField(value = newName, onValueChange = { newName = it },
+                    label = { Text("Device name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            },
+            confirmButton = {
+                TextButton(enabled = newName.isNotBlank() && newName != oldName,
+                    onClick = { vm.renameDevice(oldName, newName.trim()); renameDevice = null }) { Text("Rename") }
+            },
+            dismissButton = { TextButton(onClick = { renameDevice = null }) { Text("Cancel") } },
         )
     }
 
@@ -294,12 +314,16 @@ private fun DeviceCard(
     onAddButton: () -> Unit,
     onDeleteButton: (String) -> Unit,
     onDeleteDevice: () -> Unit,
+    onRenameDevice: () -> Unit,
 ) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(device.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.weight(1f))
+                IconButton(onClick = onRenameDevice) {
+                    Icon(Icons.Default.Edit, contentDescription = "Rename device")
+                }
                 IconButton(onClick = onDeleteDevice) {
                     Icon(Icons.Default.Delete, contentDescription = "Delete device",
                         tint = MaterialTheme.colorScheme.error)

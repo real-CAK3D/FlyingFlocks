@@ -396,6 +396,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         fleet?.broadcast(command("dev", p))
         appRef.biscuitSerial.send(command("dev", p))
     }
+    /** Rename a whole device. */
+    fun renameDevice(oldName: String, newName: String) {
+        val p = "rename:$oldName|$newName"
+        fleet?.broadcast(command("dev", p)); appRef.biscuitSerial.send(command("dev", p))
+    }
+    /** Rename a button within a device. */
+    fun renameButton(device: String, oldBtn: String, newBtn: String) {
+        val p = "btnrename:$device|$oldBtn|$newBtn"
+        fleet?.broadcast(command("dev", p)); appRef.biscuitSerial.send(command("dev", p))
+    }
     /** Delete a saved button, or the whole device if button is blank. */
     fun deleteDeviceButton(device: String, button: String = "") {
         val p = if (button.isBlank()) "del:$device" else "del:$device|$button"
