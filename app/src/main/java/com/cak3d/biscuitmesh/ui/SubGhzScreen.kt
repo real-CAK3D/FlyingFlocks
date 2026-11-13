@@ -89,7 +89,7 @@ private data class SubghzCode(val freq: Double, val bits: Int, val code: String,
  * roadmap (what the antenna can do as we add decoders to the firmware), and a raw RF log.
  */
 @Composable
-fun SubGhzScreen(vm: MainViewModel, onOpenMap: () -> Unit) {
+fun SubGhzScreen(vm: MainViewModel, onOpenMap: () -> Unit, onOpenSaved: () -> Unit = {}) {
     val logFlow = vm.log ?: remember { MutableStateFlow(emptyList<LogEntry>()) }
     val log by logFlow.collectAsStateWithLifecycle(initialValue = emptyList())
     var sweeping by remember { mutableStateOf(false) }
@@ -209,6 +209,12 @@ fun SubGhzScreen(vm: MainViewModel, onOpenMap: () -> Unit) {
                         Spacer(Modifier.width(6.dp))
                         Text("Map")
                     }
+                }
+                Spacer(Modifier.height(8.dp))
+                Button(onClick = onOpenSaved, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Default.SettingsRemote, contentDescription = null)
+                    Spacer(Modifier.width(6.dp))
+                    Text("Saved Devices  (capture & replay remotes)")
                 }
             }
         }

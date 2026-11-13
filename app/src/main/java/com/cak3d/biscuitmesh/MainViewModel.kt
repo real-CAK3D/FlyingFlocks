@@ -333,6 +333,25 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         fleet?.broadcast(command("tx", "$freqMhz,$bits"))
         appRef.biscuitSerial.send(command("tx", "$freqMhz,$bits"))
     }
+
+    // --- Saved sub-GHz devices (named device -> labeled buttons) -----------
+    /** Ask the node to stream its saved device/button inventory (DATA:DEV / DATA:DEVEND). */
+    fun requestSavedDevices() {
+        fleet?.broadcast(command("dev", "list"))
+        appRef.biscuitSerial.send(command("dev", "list"))
+    }
+    /** Guided capture: the node auto-detects the band, rejects noise, saves <device>/<button>.sub. */
+    fun addDeviceButton(device: String, button: String) {
+        val p = "add:$device|$button"
+        fleet?.broadcast(command("dev", p))
+        appRef.biscuitSerial.send(command("dev", p))
+    }
+    /** Fire a saved button (re-transmit its captured .sub). Own-device use only. */
+    fun playDeviceButton(device: String, button: String) {
+        val p = "play:$device|$button"
+        fleet?.broadcast(command("dev", p))
+        appRef.biscuitSerial.send(command("dev", p))
+    }
     fun connectAll() = fleet?.connectAll()
     fun disconnectAll() = fleet?.disconnectAll()
     fun forget(address: String) = fleet?.forget(address)
