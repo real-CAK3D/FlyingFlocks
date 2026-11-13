@@ -89,7 +89,7 @@ private data class SubghzCode(val freq: Double, val bits: Int, val code: String,
  * roadmap (what the antenna can do as we add decoders to the firmware), and a raw RF log.
  */
 @Composable
-fun SubGhzScreen(vm: MainViewModel, onOpenMap: () -> Unit, onOpenSaved: () -> Unit = {}) {
+fun SubGhzScreen(vm: MainViewModel, onOpenMap: () -> Unit, onOpenSaved: () -> Unit = {}, onOpenAudio: () -> Unit = {}) {
     val logFlow = vm.log ?: remember { MutableStateFlow(emptyList<LogEntry>()) }
     val log by logFlow.collectAsStateWithLifecycle(initialValue = emptyList())
     var sweeping by remember { mutableStateOf(false) }
@@ -216,7 +216,13 @@ fun SubGhzScreen(vm: MainViewModel, onOpenMap: () -> Unit, onOpenSaved: () -> Un
                     Spacer(Modifier.width(6.dp))
                     Text("Saved Devices  (capture & replay remotes)")
                 }
-            }
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(onClick = onOpenAudio, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Default.GraphicEq, contentDescription = null)
+                    Spacer(Modifier.width(6.dp))
+                    Text("Audio  (mic spectrum + speaker)")
+                }
+}
         }
 
         // Fine-sweep spectrum + waterfall from the T-Embed's Waterfall / Full-Band action.

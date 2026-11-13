@@ -114,6 +114,7 @@ import com.cak3d.biscuitmesh.ui.RareBirdsScreen
 import com.cak3d.biscuitmesh.ui.RunToolScreen
 import com.cak3d.biscuitmesh.ui.SettingsScreen
 import com.cak3d.biscuitmesh.ui.StatsScreen
+import com.cak3d.biscuitmesh.ui.AudioScreen
 import com.cak3d.biscuitmesh.ui.SavedDevicesScreen
 import com.cak3d.biscuitmesh.ui.SubGhzScreen
 import com.cak3d.biscuitmesh.ui.WardriveScreen
@@ -338,10 +339,14 @@ private fun MainShell(vm: MainViewModel) {
                             launchSingleTop = true
                             restoreState = true
                         }
-                    }, onOpenSaved = { nav.navigate("saveddevices") })
+                    }, onOpenSaved = { nav.navigate("saveddevices") },
+                       onOpenAudio = { nav.navigate("audio") })
                 }
                 composable("saveddevices") {
                     SavedDevicesScreen(vm, onBack = { nav.popBackStack() })
+                }
+                composable("audio") {
+                    AudioScreen(vm, onBack = { nav.popBackStack() })
                 }
                 composable("misc") { MiscScreen(onOpenTool = { nav.navigate("runtool/$it") }) }
                 composable("rarebirds") {

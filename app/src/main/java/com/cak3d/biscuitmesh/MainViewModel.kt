@@ -334,6 +334,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         appRef.biscuitSerial.send(command("tx", "$freqMhz,$bits"))
     }
 
+    // --- On-board audio (speaker beep / mic) -------------------------------
+    fun beep(freqHz: Int = 1600, ms: Int = 120) {
+        val p = "$freqHz:$ms"
+        fleet?.broadcast(command("beep", p)); appRef.biscuitSerial.send(command("beep", p))
+    }
+    fun speakerClick() { fleet?.broadcast(command("click")); appRef.biscuitSerial.send(command("click")) }
+    fun speakerAlert() { fleet?.broadcast(command("alert")); appRef.biscuitSerial.send(command("alert")) }
+    /** Start/stop the node's live audio stream (DATA:MIC + DATA:ASPEC) for the Audio screen. */
+    fun audioStart() { fleet?.broadcast(command("audio")); appRef.biscuitSerial.send(command("audio")) }
+    fun audioStop() { fleet?.broadcast(command("audiostop")); appRef.biscuitSerial.send(command("audiostop")) }
+
     // --- Saved sub-GHz devices (named device -> labeled buttons) -----------
     /** Ask the node to stream its saved device/button inventory (DATA:DEV / DATA:DEVEND). */
     fun requestSavedDevices() {
