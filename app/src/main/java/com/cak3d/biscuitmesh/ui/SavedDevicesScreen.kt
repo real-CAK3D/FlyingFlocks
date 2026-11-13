@@ -54,7 +54,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 private val RF_AMBER = androidx.compose.ui.graphics.Color(0xFFFF8A3D)
 private val BTN_PRESETS = listOf("On", "Off", "Up", "Down", "Open", "Close", "Stop", "Unlock", "Lock")
 
-private data class SavedDevice(val name: String, val buttons: List<String>)
+private data class Btn(val name: String, val isIr: Boolean)
+private data class SavedDevice(val name: String, val buttons: List<Btn>)
 
 /**
  * Saved sub-GHz devices: a named device (Garage, Lamp…) holds labeled buttons (On, Off…),
@@ -79,7 +80,9 @@ fun SavedDevicesScreen(vm: MainViewModel, onBack: () -> Unit) {
                 if (bar < 0) return@mapNotNull null
                 val name = e.message.payload.substring(0, bar).trim()
                 if (name.isEmpty()) return@mapNotNull null
+                // A trailing '~' marks an IR button (vs sub-GHz).
                 val btns = e.message.payload.substring(bar + 1).split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                    .map { if (it.endsWith("~")) Btn(it.dropLast(1), true) else Btn(it, false) }
                 Triple(name, btns, e.timeMs)
             }
             .groupBy { it.first }
@@ -106,6 +109,7 @@ fun SavedDevicesScreen(vm: MainViewModel, onBack: () -> Unit) {
     var addDeviceName by remember { mutableStateOf("") }
     var playConfirm by remember { mutableStateOf<Pair<String, String>?>(null) }
     var deleteConfirm by remember { mutableStateOf<Pair<String, String?>?>(null) }  // device to (button | null=whole device)
+    var lastCaptured by remember { mutableStateOf<Pair<String, String>?>(null) }     // for the Test button
 
     Column(Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState())) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
@@ -122,7 +126,12 @@ fun SavedDevicesScreen(vm: MainViewModel, onBack: () -> Unit) {
         )
         Spacer(Modifier.height(10.dp))
 
-        capStatus?.let { st -> CapStatusBanner(st) }
+        capStatus?.let { st ->
+            CapStatusBanner(
+                status = st,
+                onTest = lastCaptured?.let { (d, b) -> { playConfirm = d to b } },
+            )
+        }
 
         Button(onClick = { addDeviceName = ""; showAdd = true }, modifier = Modifier.fillMaxWidth()) {
             Icon(Icons.Default.Add, contentDescription = null); Spacer(Modifier.width(6.dp)); Text("Add device / button")
@@ -157,7 +166,11 @@ fun SavedDevicesScreen(vm: MainViewModel, onBack: () -> Unit) {
             initialDevice = addDeviceName,
             existingDevices = devices.map { it.name },
             onDismiss = { showAdd = false },
-            onCapture = { dev, btn -> vm.addDeviceButton(dev, btn); showAdd = false },
+            onCapture = { dev, btn, ir ->
+                if (ir) vm.addIrButton(dev, btn) else vm.addDeviceButton(dev, btn)
+                lastCaptured = dev to btn
+                showAdd = false
+            },
         )
     }
 
@@ -193,13 +206,21 @@ fun SavedDevicesScreen(vm: MainViewModel, onBack: () -> Unit) {
 }
 
 @Composable
-private fun CapStatusBanner(status: String) {
+private fun CapStatusBanner(status: String, onTest: (() -> Unit)?) {
+    // DATA:SUBCAP saved line: saved,<path>,<edges>,<freq>,<rssi>,<proto>,<codehex>
+    val saved = status.startsWith("saved")
     val (text, tint) = when {
-        status.startsWith("saved") -> {
+        saved -> {
             val p = status.split(",")
             val freq = p.getOrNull(3) ?: "?"
-            val edges = p.getOrNull(2) ?: "?"
-            "Saved ✓  ($freq MHz, $edges edges)" to androidx.compose.ui.graphics.Color(0xFF4CAF50)
+            val proto = p.getOrNull(5)
+            val code = p.getOrNull(6)
+            val detail = when {
+                proto == "IR" -> "IR learned ✓  (${code ?: "raw"})"
+                proto != null && proto != "raw" && code != null && code != "-" -> "Saved ✓  $proto · $code · $freq MHz"
+                else -> "Saved ✓  (raw, $freq MHz) — unverified, test it"
+            }
+            detail to androidx.compose.ui.graphics.Color(0xFF4CAF50)
         }
         status.startsWith("nothing") -> "No clean signal — hold the button and retry" to androidx.compose.ui.graphics.Color(0xFFE53935)
         status.startsWith("listening") -> "Listening… point the remote and HOLD the button" to RF_AMBER
@@ -211,8 +232,14 @@ private fun CapStatusBanner(status: String) {
         Modifier.fillMaxWidth().padding(bottom = 10.dp),
         colors = CardDefaults.cardColors(containerColor = tint.copy(alpha = 0.14f)),
     ) {
-        Text(text, Modifier.padding(12.dp), color = tint, fontWeight = FontWeight.SemiBold,
-            style = MaterialTheme.typography.bodyMedium)
+        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(text, Modifier.weight(1f), color = tint, fontWeight = FontWeight.SemiBold,
+                style = MaterialTheme.typography.bodyMedium)
+            if (saved && onTest != null) {
+                Spacer(Modifier.width(8.dp))
+                OutlinedButton(onClick = onTest) { Text("Test") }
+            }
+        }
     }
 }
 
@@ -244,14 +271,16 @@ private fun DeviceCard(
                 device.buttons.forEach { btn ->
                     androidx.compose.material3.Surface(
                         shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
-                        color = MaterialTheme.colorScheme.primary,
+                        color = if (btn.isIr) RF_AMBER else MaterialTheme.colorScheme.primary,
                         modifier = Modifier.combinedClickable(
-                            onClick = { onFire(btn) },
-                            onLongClick = { onDeleteButton(btn) },
+                            onClick = { onFire(btn.name) },
+                            onLongClick = { onDeleteButton(btn.name) },
                         ),
                     ) {
-                        Text(btn, Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
-                            color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Medium)
+                        Text(if (btn.isIr) "${btn.name}  ·IR" else btn.name,
+                            Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
+                            color = if (btn.isIr) androidx.compose.ui.graphics.Color.Black else MaterialTheme.colorScheme.onPrimary,
+                            fontWeight = FontWeight.Medium)
                     }
                 }
                 OutlinedButton(onClick = onAddButton) {
@@ -272,15 +301,22 @@ private fun AddButtonDialog(
     initialDevice: String,
     existingDevices: List<String>,
     onDismiss: () -> Unit,
-    onCapture: (String, String) -> Unit,
+    onCapture: (String, String, Boolean) -> Unit,
 ) {
     var device by remember { mutableStateOf(initialDevice) }
     var button by remember { mutableStateOf("") }
+    var isIr by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Add a button") },
         text = {
             Column {
+                // Capture type — sub-GHz radio remote, or an IR (TV/AC) remote.
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    FilterChip(selected = !isIr, onClick = { isIr = false }, label = { Text("Sub-GHz") })
+                    FilterChip(selected = isIr, onClick = { isIr = true }, label = { Text("Infrared") })
+                }
+                Spacer(Modifier.height(10.dp))
                 OutlinedTextField(
                     value = device, onValueChange = { device = it },
                     label = { Text("Device name") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
@@ -305,15 +341,17 @@ private fun AddButtonDialog(
                     }
                 }
                 Spacer(Modifier.height(10.dp))
-                Text("When you tap Capture, point the remote at the node and HOLD its button until it says saved.",
+                Text(
+                    if (isIr) "When you tap Learn, point your IR remote at the node and press the button once."
+                    else "When you tap Capture, point the remote at the node and HOLD its button until it says saved.",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         },
         confirmButton = {
             Button(
                 enabled = device.isNotBlank() && button.isNotBlank(),
-                onClick = { onCapture(device.trim(), button.trim()) },
-            ) { Text("Capture") }
+                onClick = { onCapture(device.trim(), button.trim(), isIr) },
+            ) { Text(if (isIr) "Learn" else "Capture") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )

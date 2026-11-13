@@ -346,6 +346,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         fleet?.broadcast(command("dev", p))
         appRef.biscuitSerial.send(command("dev", p))
     }
+    /** Learn an IR frame into a device button (fires through the same Saved Devices list). */
+    fun addIrButton(device: String, button: String) {
+        val p = "addir:$device|$button"
+        fleet?.broadcast(command("dev", p))
+        appRef.biscuitSerial.send(command("dev", p))
+    }
     /** Fire a saved button (re-transmit its captured .sub). Own-device use only. */
     fun playDeviceButton(device: String, button: String) {
         val p = "play:$device|$button"
