@@ -18,9 +18,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.UploadFile
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material.icons.filled.SettingsRemote
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
@@ -101,6 +105,26 @@ fun SavedDevicesScreen(vm: MainViewModel, onBack: () -> Unit) {
         log.count { it.message.type == BiscuitMessage.Type.DATA && it.message.subtype == "SUBCAP" && it.message.payload.startsWith("saved") }
     }
 
+    // Latest DATA:PUT line → push progress.
+    val putStatus = remember(log) {
+        log.lastOrNull { it.message.type == BiscuitMessage.Type.DATA && it.message.subtype == "PUT" }?.message?.payload
+    }
+
+    // File picker: push a .sub/.ir/.fu from the phone to the node, then import it.
+    val ctx = LocalContext.current
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            val name = runCatching {
+                ctx.contentResolver.query(uri, null, null, null, null)?.use { c ->
+                    val idx = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                    if (idx >= 0 && c.moveToFirst()) c.getString(idx) else null
+                }
+            }.getOrNull() ?: "pushed.sub"
+            val bytes = runCatching { ctx.contentResolver.openInputStream(uri)?.use { it.readBytes() } }.getOrNull()
+            if (bytes != null) vm.pushFileToNode(name, bytes, autoImport = true)
+        }
+    }
+
     // Refresh the inventory on open and whenever a new capture is saved.
     androidx.compose.runtime.LaunchedEffect(Unit) { vm.requestSavedDevices() }
     androidx.compose.runtime.LaunchedEffect(savedCount) { if (savedCount > 0) vm.requestSavedDevices() }
@@ -118,6 +142,9 @@ fun SavedDevicesScreen(vm: MainViewModel, onBack: () -> Unit) {
             Spacer(Modifier.width(8.dp))
             Text("Saved Devices", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Spacer(Modifier.weight(1f))
+            IconButton(onClick = { picker.launch(arrayOf("*/*")) }) {
+                Icon(Icons.Default.UploadFile, contentDescription = "Push file to node")
+            }
             IconButton(onClick = { vm.requestSavedDevices() }) { Icon(Icons.Default.Refresh, contentDescription = "Refresh") }
         }
         Text(
@@ -131,6 +158,22 @@ fun SavedDevicesScreen(vm: MainViewModel, onBack: () -> Unit) {
                 status = st,
                 onTest = lastCaptured?.let { (d, b) -> { playConfirm = d to b } },
             )
+        }
+
+        putStatus?.let { st ->
+            val txt = when {
+                st.startsWith("begin") -> "Pushing file to node…"
+                st.startsWith("done") -> "Pushed ✓ (${st.split(",").getOrNull(2) ?: "?"} bytes) — importing"
+                st.startsWith("err") -> "Push failed (${st.substringAfter("err,")})"
+                else -> null
+            }
+            txt?.let {
+                Card(Modifier.fillMaxWidth().padding(bottom = 10.dp),
+                    colors = CardDefaults.cardColors(containerColor = RF_AMBER.copy(alpha = 0.14f))) {
+                    Text(it, Modifier.padding(12.dp), color = RF_AMBER, fontWeight = FontWeight.SemiBold,
+                        style = MaterialTheme.typography.bodyMedium)
+                }
+            }
         }
 
         Button(onClick = { addDeviceName = ""; showAdd = true }, modifier = Modifier.fillMaxWidth()) {

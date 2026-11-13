@@ -343,6 +343,23 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun runImport() {
         fleet?.broadcast(command("import")); appRef.biscuitSerial.send(command("import"))
     }
+    /** Push a file (.sub/.ir/.fu) from the phone to the node's /flockedup/import over BLE,
+     *  base64-chunked on 4-char boundaries so each chunk decodes independently, then import. */
+    fun pushFileToNode(name: String, bytes: ByteArray, autoImport: Boolean = true) = viewModelScope.launch {
+        val safe = name.substringAfterLast('/').substringAfterLast('\\').ifBlank { "pushed.sub" }
+        fun send(n: String, p: String = "") { fleet?.broadcast(command(n, p)); appRef.biscuitSerial.send(command(n, p)) }
+        send("putbegin", safe)
+        kotlinx.coroutines.delay(150)
+        val b64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+        var i = 0
+        while (i < b64.length) {
+            val end = minOf(i + 300, b64.length)   // 300 is a multiple of 4 → whole base64 groups
+            send("putb64", b64.substring(i, end))
+            i = end
+            kotlinx.coroutines.delay(30)
+        }
+        send("putend", if (autoImport) "import" else "")
+    }
 
     // --- On-board audio (speaker beep / mic) -------------------------------
     fun beep(freqHz: Int = 1600, ms: Int = 120) {
