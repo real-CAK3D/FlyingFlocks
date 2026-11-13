@@ -65,6 +65,7 @@ private val DMONO = FontFamily.Monospace
 /** Debug chips — handy commands to poke the board from here (free text field for the rest). */
 private val DEBUG_CMDS = listOf(
     "status", "ui:sync", "ccdiag", "scanall", "stopscan", "scanap", "sniffbt:type=all",
+    "import", "fetchfw", "dev:list", "audio", "audiostop", "beep", "alert",
 )
 
 private val TIME_FMT = SimpleDateFormat("HH:mm:ss.SSS", Locale.US)

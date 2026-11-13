@@ -334,6 +334,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         appRef.biscuitSerial.send(command("tx", "$freqMhz,$bits"))
     }
 
+    // --- Maintenance: OTA firmware + importer ------------------------------
+    /** Pull a new firmware .bin over Wi-Fi to the SD (bare = dev channel). Device reboots. */
+    fun updateFirmware(url: String = "") {
+        fleet?.broadcast(command("fetchfw", url)); appRef.biscuitSerial.send(command("fetchfw", url))
+    }
+    /** Run the on-device importer over /flockedup/import (emits DATA:IMPORT per file). */
+    fun runImport() {
+        fleet?.broadcast(command("import")); appRef.biscuitSerial.send(command("import"))
+    }
+
     // --- On-board audio (speaker beep / mic) -------------------------------
     fun beep(freqHz: Int = 1600, ms: Int = 120) {
         val p = "$freqHz:$ms"
