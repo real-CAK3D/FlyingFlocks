@@ -352,6 +352,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         fleet?.broadcast(command("dev", p))
         appRef.biscuitSerial.send(command("dev", p))
     }
+    /** Delete a saved button, or the whole device if button is blank. */
+    fun deleteDeviceButton(device: String, button: String = "") {
+        val p = if (button.isBlank()) "del:$device" else "del:$device|$button"
+        fleet?.broadcast(command("dev", p))
+        appRef.biscuitSerial.send(command("dev", p))
+    }
     fun connectAll() = fleet?.connectAll()
     fun disconnectAll() = fleet?.disconnectAll()
     fun forget(address: String) = fleet?.forget(address)
