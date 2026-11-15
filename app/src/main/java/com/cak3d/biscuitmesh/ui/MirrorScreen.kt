@@ -211,6 +211,7 @@ private fun DeviceScreen(ui: MirrorUi, onPick: (Int) -> Unit) {
                         "ACTION" -> LogView(ui)
                         "CONFIRM" -> ConfirmView()
                         "ABOUT" -> AboutView(ui)
+                        "AUDIO" -> AudioMirrorView()
                         else -> RowsView(ui, onPick)
                     }
                 }
@@ -282,6 +283,21 @@ private fun ConfirmView() {
         Text("● SELECT = confirm", color = TE_INK, fontFamily = MONO, fontSize = 12.sp,
             modifier = Modifier.padding(top = 6.dp))
         Text("◀ BACK = cancel", color = TE_DIM, fontFamily = MONO, fontSize = 12.sp)
+    }
+}
+
+/** The Songbird/Audio screen: the live mic VU + spectrum draws on the device and in the
+ *  app's dedicated Audio screen, so here we show a clear label instead of a blank panel. */
+@Composable
+private fun AudioMirrorView() {
+    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
+        Text("SONGBIRD", color = TE_PLUM, fontFamily = MONO, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+        Text("mic VU + live spectrum", color = TE_INK, fontFamily = MONO, fontSize = 11.sp)
+        Text("running on the device", color = TE_DIM, fontFamily = MONO, fontSize = 10.sp,
+            modifier = Modifier.padding(top = 2.dp))
+        Text("Open Audio in the app", color = TE_AMBER, fontFamily = MONO, fontSize = 10.sp,
+            modifier = Modifier.padding(top = 6.dp))
+        Text("for the live waveform", color = TE_DIM, fontFamily = MONO, fontSize = 10.sp)
     }
 }
 

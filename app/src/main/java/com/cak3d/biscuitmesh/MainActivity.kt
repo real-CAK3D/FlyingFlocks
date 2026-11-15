@@ -146,8 +146,15 @@ class MainActivity : ComponentActivity() {
                 ) {
                     val vm: MainViewModel = viewModel()
                     val keepAwake by vm.keepAwake.collectAsStateWithLifecycle()
-                    androidx.compose.runtime.DisposableEffect(keepAwake) {
-                        if (keepAwake) window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    // Also hold the screen on whenever a board is live, so a BLE session / mirror
+                    // isn't cut off by the phone dozing and dropping the link mid-task.
+                    val devMap by remember(vm) {
+                        vm.devices ?: kotlinx.coroutines.flow.MutableStateFlow(emptyMap())
+                    }.collectAsStateWithLifecycle(initialValue = emptyMap())
+                    val boardLive = devMap.values.any { it.isLive }
+                    val stayAwake = keepAwake || boardLive
+                    androidx.compose.runtime.DisposableEffect(stayAwake) {
+                        if (stayAwake) window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                         else window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                         onDispose { }
                     }
