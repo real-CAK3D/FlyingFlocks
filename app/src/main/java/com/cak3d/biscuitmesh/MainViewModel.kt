@@ -372,6 +372,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun caw() { fleet?.broadcast(command("caw")); appRef.biscuitSerial.send(command("caw")) }
     /** Any named call/cue on the node: caw, chirp, trill, error, success, capture, scan, chime. */
     fun playSound(name: String) { fleet?.broadcast(command("sound", name)); appRef.biscuitSerial.send(command("sound", name)) }
+
+    // --- Universal IR TV remote (fires the node's IR LED) ------------------
+    /** Blast a universal-TV button across common brands. fn: power/volup/voldn/mute/chup/chdn. */
+    fun irTv(fn: String) { fleet?.broadcast(command("irtv", fn)); appRef.biscuitSerial.send(command("irtv", fn)) }
+    /** Sweep every common TV power code in turn (TV-B-Gone) until one matches. */
+    fun tvbGone() { fleet?.broadcast(command("tvbgone")); appRef.biscuitSerial.send(command("tvbgone")) }
     /** Start/stop the node's live audio stream (DATA:MIC + DATA:ASPEC) for the Audio screen. */
     fun audioStart() { fleet?.broadcast(command("audio")); appRef.biscuitSerial.send(command("audio")) }
     fun audioStop() { fleet?.broadcast(command("audiostop")); appRef.biscuitSerial.send(command("audiostop")) }

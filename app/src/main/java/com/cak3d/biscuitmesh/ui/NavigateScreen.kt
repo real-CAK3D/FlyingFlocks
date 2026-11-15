@@ -96,7 +96,10 @@ private fun cardinal16(deg: Float): String {
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NavigateScreen(vm: MainViewModel, onBack: () -> Unit, startMode: NavMode, startTargetId: String? = null) {
+fun NavigateScreen(
+    vm: MainViewModel, onBack: () -> Unit, startMode: NavMode,
+    startTargetId: String? = null, onOpenTargets: () -> Unit = {},
+) {
     val context = LocalContext.current
     var mode by remember { mutableStateOf(startMode) }
     var raw by remember { mutableFloatStateOf(0f) }
@@ -165,7 +168,7 @@ fun NavigateScreen(vm: MainViewModel, onBack: () -> Unit, startMode: NavMode, st
                 when (mode) {
                     NavMode.COMPASS -> CompassContent(heading)
                     NavMode.RADAR -> RadarContent(heading, sweep, results)
-                    NavMode.LOCATOR -> LocatorContent(results, context, heading, startTargetId)
+                    NavMode.LOCATOR -> LocatorContent(vm, results, context, heading, onOpenTargets, startTargetId)
                 }
             }
             ModeSwitcher(mode) { mode = it }
@@ -318,12 +321,25 @@ private fun heatColor(strength: Float): Color = when {
 
 @Composable
 private fun LocatorContent(
-    results: List<PhoneScanRow>, context: Context, heading: Float, initialTargetId: String? = null,
+    vm: MainViewModel, results: List<PhoneScanRow>, context: Context, heading: Float,
+    onOpenTargets: () -> Unit, initialTargetId: String? = null,
 ) {
-    var targetId by remember { mutableStateOf(initialTargetId) }
+    val savedTargets by vm.targets.collectAsStateWithLifecycle(initialValue = emptyList())
+    val fix by vm.currentFix.collectAsStateWithLifecycle(initialValue = null)
+    var wanted by remember { mutableStateOf(initialTargetId) }
+    var locTarget by remember { mutableStateOf<com.cak3d.biscuitmesh.data.Target?>(null) }
     var locatorOn by remember { mutableStateOf(true) }
     var kindFilter by remember { mutableStateOf<SampleKind?>(null) }   // null = all
-    val target = results.firstOrNull { it.id == targetId }
+
+    // A saved LOCATION target uses true GPS bearing + distance instead of RSSI.
+    locTarget?.let { lt ->
+        GpsLocatorView(lt, fix, heading, context, locatorOn,
+            onToggle = { locatorOn = it }, onClear = { locTarget = null })
+        return
+    }
+
+    // A network/device target is matched against the live scan by id (MAC) or label (SSID).
+    val target = results.firstOrNull { it.id.equals(wanted, true) || it.label.equals(wanted, true) }
     val currentTarget by rememberUpdatedState(target)
     val currentHeading by rememberUpdatedState(heading)
 
@@ -334,10 +350,10 @@ private fun LocatorContent(
     var hotHeading by remember { mutableStateOf<Float?>(null) }
     var liveStrength by remember { mutableFloatStateOf(0f) }
 
-    LaunchedEffect(targetId, locatorOn) {
+    LaunchedEffect(wanted, locatorOn) {
         for (i in hotByHeading.indices) hotByHeading[i] = -200f
         hotHeading = null
-        while (targetId != null && locatorOn) {
+        while (wanted != null && locatorOn) {
             val t = currentTarget
             if (t == null) { delay(500); continue }
             val strength = ((t.rssi + 95f) / 65f).coerceIn(0f, 1f)
@@ -353,11 +369,10 @@ private fun LocatorContent(
         }
     }
 
-    if (target != null) {
+    if (wanted != null) {
         val relBearing = hotHeading?.let { ((it - currentHeading + 540f) % 360f) - 180f }
         Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            // on/off
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(if (locatorOn) "Locating" else "Paused", style = MaterialTheme.typography.labelLarge,
@@ -365,51 +380,100 @@ private fun LocatorContent(
                     color = if (locatorOn) heatColor(liveStrength) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
                 Switch(checked = locatorOn, onCheckedChange = { locatorOn = it })
             }
-            LocatorRing(target, if (locatorOn) liveStrength else ((target.rssi + 95f) / 65f).coerceIn(0f, 1f),
-                relBearing, locatorOn)
-            TextButton(onClick = { targetId = null }) { Text("Pick a different target") }
+            val tgt = target
+            if (tgt != null) {
+                LocatorRing(tgt, if (locatorOn) liveStrength else ((tgt.rssi + 95f) / 65f).coerceIn(0f, 1f),
+                    relBearing, locatorOn)
+            } else {
+                Text("Searching for “$wanted” — not in range yet.\nKeep the scan running and move around.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+            }
+            TextButton(onClick = { wanted = null }) { Text("Pick a different target") }
         }
     } else {
-        Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("Pick a network or device to home in on, then walk toward it — the bar fills and flashes, " +
-                "the arrow points warmer, and the phone buzzes faster as you get closer.",
-                style = MaterialTheme.typography.bodyMedium)
-            // kind filter: all / Wi-Fi / BLE
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterPill("All", kindFilter == null) { kindFilter = null }
-                FilterPill("Wi-Fi", kindFilter == SampleKind.AP) { kindFilter = SampleKind.AP }
-                FilterPill("BLE", kindFilter == SampleKind.BT) { kindFilter = SampleKind.BT }
+        val shown = results.filter {
+            when (kindFilter) {
+                SampleKind.AP -> it.kind == SampleKind.AP || it.kind == SampleKind.STATION
+                SampleKind.BT -> it.kind == SampleKind.BT
+                else -> true
             }
-            val shown = results.filter {
-                when (kindFilter) {
-                    SampleKind.AP -> it.kind == SampleKind.AP || it.kind == SampleKind.STATION
-                    SampleKind.BT -> it.kind == SampleKind.BT
-                    else -> true
+        }
+        LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            item {
+                Text("Pick a network, device or saved target to home in on — the bar fills and flashes, " +
+                    "the arrow points the way, and the phone buzzes faster as you get closer.",
+                    style = MaterialTheme.typography.bodyMedium)
+            }
+            if (savedTargets.isNotEmpty()) {
+                item {
+                    Text("SAVED TARGETS", style = MaterialTheme.typography.labelMedium,
+                        fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold)
                 }
-            }
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(shown, key = { it.id }) { row ->
+                items(savedTargets, key = { "t-${it.id}" }) { t ->
+                    val tag = when (t.kind) {
+                        com.cak3d.biscuitmesh.data.TargetKind.NETWORK -> "NET"
+                        com.cak3d.biscuitmesh.data.TargetKind.DEVICE -> "DEV"
+                        else -> "LOC"
+                    }
                     Card(
-                        Modifier.fillMaxWidth().clickable { targetId = row.id },
+                        Modifier.fillMaxWidth().clickable {
+                            if (t.kind == com.cak3d.biscuitmesh.data.TargetKind.LOCATION) locTarget = t
+                            else wanted = t.value
+                        },
                         shape = RoundedCornerShape(12.dp),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     ) {
                         Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.padding(end = 10.dp)) {
-                                Text(if (row.kind == SampleKind.BT) "BLE" else "WiFi",
-                                    style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace,
-                                    color = blipColor(row.kind))
-                            }
+                            Text(tag, modifier = Modifier.padding(end = 10.dp),
+                                style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace,
+                                color = MaterialTheme.colorScheme.primary)
                             Column(Modifier.weight(1f)) {
-                                Text(row.label.ifBlank { row.id }, style = MaterialTheme.typography.bodyLarge, maxLines = 1)
-                                Text(row.id, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                                Text(t.label.ifBlank { t.value }, style = MaterialTheme.typography.bodyLarge, maxLines = 1)
+                                Text(t.value, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), maxLines = 1)
                             }
-                            Text("${row.rssi} dBm", style = MaterialTheme.typography.labelLarge,
-                                fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.secondary)
                         }
                     }
                 }
+            }
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterPill("All", kindFilter == null) { kindFilter = null }
+                    FilterPill("Wi-Fi", kindFilter == SampleKind.AP) { kindFilter = SampleKind.AP }
+                    FilterPill("BLE", kindFilter == SampleKind.BT) { kindFilter = SampleKind.BT }
+                }
+            }
+            item {
+                Text("IN RANGE · ${shown.size}", style = MaterialTheme.typography.labelMedium,
+                    fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    fontWeight = FontWeight.Bold)
+            }
+            items(shown, key = { "s-${it.id}" }) { row ->
+                Card(
+                    Modifier.fillMaxWidth().clickable { wanted = row.id },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                ) {
+                    Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.padding(end = 10.dp)) {
+                            Text(if (row.kind == SampleKind.BT) "BLE" else "WiFi",
+                                style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace,
+                                color = blipColor(row.kind))
+                        }
+                        Column(Modifier.weight(1f)) {
+                            Text(row.label.ifBlank { row.id }, style = MaterialTheme.typography.bodyLarge, maxLines = 1)
+                            Text(row.id, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                        }
+                        Text("${row.rssi} dBm", style = MaterialTheme.typography.labelLarge,
+                            fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.secondary)
+                    }
+                }
+            }
+            item {
+                TextButton(onClick = onOpenTargets) { Text("＋  Manage targets") }
             }
         }
     }
@@ -489,6 +553,93 @@ private fun LocatorRing(row: PhoneScanRow, strength: Float, relBearing: Float?, 
     Text("~${d.toInt()} m away · ${if (active) "buzzes + flashes as you get warmer" else "paused"}",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+}
+
+private fun gpsNear(distM: Float): String = when {
+    distM < 0f -> "—"
+    distM < 3f -> "You're here · ${distM.roundToInt()} m"
+    distM < 1000f -> "${distM.roundToInt()} m away"
+    else -> "%.1f km away".format(distM / 1000f)
+}
+
+/** Locate a saved LOCATION target by true GPS bearing + distance (real direction, not RSSI). */
+@Composable
+private fun GpsLocatorView(
+    t: com.cak3d.biscuitmesh.data.Target, fix: Pair<Double, Double>?, heading: Float,
+    context: Context, active: Boolean, onToggle: (Boolean) -> Unit, onClear: () -> Unit,
+) {
+    val ll = t.latLon
+    val dist: Float
+    val bearing: Float
+    if (fix != null && ll != null) {
+        val out = FloatArray(2)
+        android.location.Location.distanceBetween(fix.first, fix.second, ll.first, ll.second, out)
+        dist = out[0]; bearing = out[1]
+    } else {
+        dist = -1f; bearing = 0f
+    }
+    val strength = if (dist < 0f) 0f else (1f - dist / 200f).coerceIn(0f, 1f)   // closer = stronger
+    val color = heatColor(strength)
+    val relBearing = ((bearing - heading + 540f) % 360f) - 180f
+
+    val curStrength by rememberUpdatedState(strength)
+    LaunchedEffect(active) {
+        while (active) {
+            val s = curStrength
+            buzz(context, (20 + s * 80).toInt())
+            delay((1200 - s * 1050).toLong().coerceIn(140, 1200))
+        }
+    }
+    val blink by rememberInfiniteTransition(label = "gblink").animateFloat(
+        0.3f, 1f, infiniteRepeatable(tween(360, easing = LinearEasing), repeatMode = RepeatMode.Reverse), label = "gb",
+    )
+    val barAlpha = if (active && strength > 0.8f) blink else 1f
+    val ink = MaterialTheme.colorScheme.onSurface
+
+    Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(if (active) "Locating" else "Paused", style = MaterialTheme.typography.labelLarge,
+                fontFamily = FontFamily.Monospace, color = if (active) color else ink.copy(alpha = 0.5f))
+            Switch(checked = active, onCheckedChange = onToggle)
+        }
+        Text(t.label.ifBlank { t.value }, style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold, maxLines = 1)
+        Box(Modifier.fillMaxWidth(0.52f).aspectRatio(1f), contentAlignment = Alignment.Center) {
+            Canvas(Modifier.fillMaxSize()) {
+                val c = Offset(size.width / 2f, size.height / 2f)
+                val r = min(size.width, size.height) / 2f * 0.92f
+                drawCircle(ink.copy(alpha = 0.06f), r)
+                drawCircle(ink.copy(alpha = 0.18f), r, style = Stroke(2f))
+                if (fix != null) {
+                    val phi = Math.toRadians(relBearing.toDouble())
+                    val tip = Offset(c.x + (r * 0.82f * sin(phi)).toFloat(), c.y - (r * 0.82f * cos(phi)).toFloat())
+                    drawLine(color, c, tip, 10f)
+                    drawCircle(color, 10f, tip)
+                }
+            }
+            Text(if (fix != null) cardinal16(((bearing % 360f) + 360f) % 360f) else "GPS…",
+                style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace,
+                color = ink.copy(alpha = 0.5f), modifier = Modifier.align(Alignment.BottomCenter))
+        }
+        if (fix == null) {
+            Text("Waiting for a GPS fix…", style = MaterialTheme.typography.bodyMedium, color = ink.copy(alpha = 0.6f))
+        } else {
+            Text(gpsNear(dist), style = MaterialTheme.typography.headlineSmall, color = color,
+                fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+            Box(
+                Modifier.fillMaxWidth(0.82f).aspectRatio(10f).drawBehind {
+                    val h = size.height
+                    val rr = androidx.compose.ui.geometry.CornerRadius(h / 2f, h / 2f)
+                    drawRoundRect(Color.White.copy(alpha = 0.08f), cornerRadius = rr)
+                    drawRoundRect(color.copy(alpha = barAlpha),
+                        size = Size(size.width * strength.coerceIn(0.02f, 1f), h), cornerRadius = rr)
+                },
+            ) {}
+        }
+        TextButton(onClick = onClear) { Text("Pick a different target") }
+    }
 }
 
 private fun buzz(context: Context, amplitudePct: Int) {

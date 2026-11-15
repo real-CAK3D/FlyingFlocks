@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Radar
 import androidx.compose.material.icons.filled.SatelliteAlt
 import androidx.compose.material.icons.filled.Sensors
+import androidx.compose.material.icons.filled.SettingsRemote
 import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material.icons.filled.Science
 import androidx.compose.material3.Card
@@ -85,6 +86,7 @@ fun SensorsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
         )),
         HubSection("Tools", listOf(
             HubEntry("Tire Pressure", "Learn your car's TPMS sensors, watch live pressure", Icons.Default.DirectionsCar, "tiredash", Color(0xFF38BDF8)),
+            HubEntry("Universal Remote", "TV power/volume/channel over the node's IR LED — Flipper-style", Icons.Default.SettingsRemote, "remote", Color(0xFFFF5470)),
             HubEntry("Lab Bench", "MAC decoder, signal→distance, crack-time, quiz", Icons.Default.Science, "labbench", Color(0xFFF59E0B)),
         )),
     )

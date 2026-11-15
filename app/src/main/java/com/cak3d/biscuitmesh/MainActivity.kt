@@ -399,11 +399,11 @@ private fun MainShell(vm: MainViewModel) {
                 composable("game/signalhunt") { SignalHuntScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("game/safari") { DeviceSafariScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("game/blitz") { BandBlitzScreen(vm = vm, onBack = { nav.popBackStack() }) }
-                composable("compass") { NavigateScreen(vm = vm, onBack = { nav.popBackStack() }, startMode = NavMode.COMPASS) }
-                composable("radar") { NavigateScreen(vm = vm, onBack = { nav.popBackStack() }, startMode = NavMode.RADAR) }
+                composable("compass") { NavigateScreen(vm = vm, onBack = { nav.popBackStack() }, startMode = NavMode.COMPASS, onOpenTargets = { nav.navigate("targets") }) }
+                composable("radar") { NavigateScreen(vm = vm, onBack = { nav.popBackStack() }, startMode = NavMode.RADAR, onOpenTargets = { nav.navigate("targets") }) }
                 composable("aircraft") { AircraftScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("aurora") { AuroraScreen(vm = vm, onBack = { nav.popBackStack() }) }
-                composable("locator") { NavigateScreen(vm = vm, onBack = { nav.popBackStack() }, startMode = NavMode.LOCATOR) }
+                composable("locator") { NavigateScreen(vm = vm, onBack = { nav.popBackStack() }, startMode = NavMode.LOCATOR, onOpenTargets = { nav.navigate("targets") }) }
                 composable("trackers") { TrackerScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("crew") { CrewScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("drives") {
@@ -442,6 +442,7 @@ private fun MainShell(vm: MainViewModel) {
                 }
                 composable("watchlist") { WatchlistScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("targets") { TargetsScreen(vm = vm, onBack = { nav.popBackStack() }) }
+                composable("remote") { RemoteScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("signaldetail/{id}") { entry ->
                     val id = java.net.URLDecoder.decode(entry.arguments?.getString("id") ?: "", "UTF-8")
                     SignalDetailScreen(vm = vm, id = id, onBack = { nav.popBackStack() })
