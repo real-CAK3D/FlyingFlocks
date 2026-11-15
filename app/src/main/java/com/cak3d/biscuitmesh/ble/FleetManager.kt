@@ -39,6 +39,16 @@ class FleetManager(
     // (onStateChanged → remove), so it must be concurrent to avoid HashMap corruption.
     private val connections = java.util.concurrent.ConcurrentHashMap<String, DeviceConnection>()
 
+    // Auto-reconnect/relink: a board can drop its BLE link (supervision timeout while a
+    // scan contends for the shared radio). We treat an UNEXPECTED drop (not a user
+    // disconnect) as recoverable — reconnect with backoff, then re-send the link code the
+    // user already entered so they don't have to re-link on every blip (the code is still
+    // required; we just remember it for the session).
+    private val userClosing = java.util.Collections.synchronizedSet(HashSet<String>())
+    private val reconnectTries = java.util.concurrent.ConcurrentHashMap<String, Int>()
+    private val lastLinkCmd = java.util.concurrent.ConcurrentHashMap<String, ByteArray>()
+    private val lastRelinkMs = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
     private val _devices = MutableStateFlow<Map<String, BiscuitDevice>>(emptyMap())
     val devices: StateFlow<Map<String, BiscuitDevice>> = _devices.asStateFlow()
 
@@ -112,6 +122,7 @@ class FleetManager(
     /** Connect one board and remember it as part of the fleet. */
     fun connect(address: String): Boolean {
         markKnown(address)
+        userClosing.remove(address)
         if (connections.containsKey(address)) return true
         if (liveCount >= maxConnections) return false
         val remote = runCatching { adapter.getRemoteDevice(address) }.getOrNull() ?: return false
@@ -122,6 +133,8 @@ class FleetManager(
     }
 
     fun disconnect(address: String) {
+        userClosing.add(address)          // a deliberate disconnect — don't auto-reconnect it
+        reconnectTries.remove(address)
         connections[address]?.disconnect()
     }
 
@@ -134,7 +147,7 @@ class FleetManager(
     }
 
     fun disconnectAll() {
-        connections.keys.toList().forEach { connections[it]?.disconnect() }
+        connections.keys.toList().forEach { userClosing.add(it); connections[it]?.disconnect() }
     }
 
     /** Remove a board from the saved fleet (and drop it if it's not in range). */
@@ -159,7 +172,42 @@ class FleetManager(
     // --- Commands ----------------------------------------------------------
 
     fun sendCommand(address: String, bytes: ByteArray) {
+        // Remember a link command verbatim so we can re-send it automatically if the board
+        // drops and comes back asking to be linked again (same session only).
+        runCatching { String(bytes) }.getOrNull()?.let { s ->
+            if (Regex("link:\\d{4,6}").containsMatchIn(s)) lastLinkCmd[address] = bytes
+        }
         connections[address]?.writeCommand(bytes)
+    }
+
+    private fun scheduleReconnect(address: String) {
+        val tries = reconnectTries.getOrDefault(address, 0)
+        if (tries >= 6) { reconnectTries.remove(address); return }   // give up after ~6 attempts
+        reconnectTries[address] = tries + 1
+        scope.launch {
+            kotlinx.coroutines.delay(1500L + tries * 1500L)          // backoff 1.5 s .. ~9 s
+            val d = _devices.value[address]
+            if (d != null && d.known && d.state != ConnectionState.READY &&
+                address !in userClosing && !connections.containsKey(address)
+            ) {
+                connect(address)
+            }
+        }
+    }
+
+    /** When a board (re)connects and asks to be linked, re-send the code the user already
+     *  entered this session — so a transient drop doesn't force a manual re-link. */
+    private fun maybeAutoRelink(address: String, message: BiscuitMessage) {
+        if (message.type != BiscuitMessage.Type.DATA || message.subtype != "LINK") return
+        if (!message.payload.startsWith("need")) return
+        val cmd = lastLinkCmd[address] ?: return
+        val now = System.currentTimeMillis()
+        if (now - (lastRelinkMs[address] ?: 0L) < 3000L) return      // cooldown — don't hammer
+        lastRelinkMs[address] = now
+        scope.launch {
+            kotlinx.coroutines.delay(500)                            // let the board settle
+            connections[address]?.writeCommand(cmd)
+        }
     }
 
     /** Fan a command out to every READY board at once — the fleet's party trick. */
@@ -212,14 +260,17 @@ class FleetManager(
     override fun onStateChanged(address: String, state: ConnectionState, error: String?) {
         if (state == ConnectionState.DISCONNECTED || state == ConnectionState.FAILED) {
             connections.remove(address)
+            val deliberate = userClosing.remove(address)
+            if (!deliberate) scheduleReconnect(address)              // a blip, not a user action → come back
         }
         _devices.update { it.mutate(address) { d -> d.copy(state = state, lastError = error ?: d.lastError) } }
-        if (state == ConnectionState.READY) persistKnown()
+        if (state == ConnectionState.READY) { reconnectTries.remove(address); persistKnown() }
     }
 
     override fun onMessage(address: String, message: BiscuitMessage) {
         _log.update { (it + LogEntry(address, message, System.currentTimeMillis())).takeLast(500) }
         applyHealth(address, message)
+        maybeAutoRelink(address, message)
     }
 
     /** Short display name for a board address (used when tagging fleet-wide results). */
