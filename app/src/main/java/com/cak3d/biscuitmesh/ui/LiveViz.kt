@@ -186,19 +186,31 @@ private fun SpectrumViz(bins: List<Int>, history: List<List<Int>>) {
             drawLine(LV_GRID, Offset(0f, gy), Offset(size.width, gy), 1f)
         }
 
-        // live spectrum bars
-        val bw = (size.width / n).coerceAtLeast(1f)
+        // crisp GREEN filled waveform (same hacker-scope look as the T-Embed's drawSpectrum,
+        // not chunky colored bars) — dim green glow under the curve, bright green top line.
         var bestI = 0; var bestR = Int.MIN_VALUE
-        bins.forEachIndexed { i, r ->
-            if (r > bestR) { bestR = r; bestI = i }
-            val h = sigFrac(r) * barsH
-            val x = i * bw
-            drawRect(sigColor(r), Offset(x, barsH - h), Size((bw - 0.5f).coerceAtLeast(1f), h))
-            if (h > 1f) drawLine(LV_INK, Offset(x, barsH - h), Offset(x + bw - 0.5f, barsH - h), 1f)
+        bins.forEachIndexed { i, r -> if (r > bestR) { bestR = r; bestI = i } }
+        val steps = 220
+        val top = Path(); val area = Path().apply { moveTo(0f, barsH) }
+        for (s in 0..steps) {
+            val x = size.width * s / steps
+            val fx = if (n > 1) s.toFloat() * (n - 1) / steps else 0f
+            val i0 = fx.toInt(); val i1 = if (i0 < n - 1) i0 + 1 else i0; val fr = fx - i0
+            val r = bins[i0] * (1f - fr) + bins[i1] * fr
+            val y = barsH - sigFrac(r.toInt()) * barsH
+            if (s == 0) top.moveTo(x, y) else top.lineTo(x, y)
+            area.lineTo(x, y)
         }
-        // peak caret pointing down at the strongest bin
-        val px = bestI * bw + bw / 2f
+        area.lineTo(size.width, barsH); area.close()
+        drawPath(area, LV_GREEN.copy(alpha = 0.16f))
+        drawPath(top, LV_GREEN.copy(alpha = 0.25f),
+            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 4f))
+        drawPath(top, LV_GREEN, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.6f))
+        // peak marker: amber caret + dot on the strongest bin
+        val px = if (n > 1) size.width * bestI / (n - 1) else size.width / 2f
+        val py = barsH - sigFrac(bestR) * barsH
         drawPath(Path().apply { moveTo(px - 3f, 0f); lineTo(px + 3f, 0f); lineTo(px, 5f); close() }, LV_AMBER)
+        drawCircle(LV_AMBER, 2.2f, Offset(px, py))
         // separator between bars and waterfall
         drawLine(LV_AMBER.copy(alpha = 0.5f), Offset(0f, barsH + 1f), Offset(size.width, barsH + 1f), 1f)
 

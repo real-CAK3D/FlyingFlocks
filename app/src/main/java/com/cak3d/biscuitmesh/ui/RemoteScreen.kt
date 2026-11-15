@@ -125,6 +125,29 @@ fun RemoteScreen(vm: MainViewModel, onBack: () -> Unit) {
             // Source
             WideKey(Icons.Default.Input, "Source / Input", Cyan) { fire("Source") { vm.irTv("source") } }
 
+            // Channel number pad — each digit fires the matching universal IR code
+            Column(
+                Modifier.fillMaxWidth().padding(top = 2.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text("CHANNEL", style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace,
+                    letterSpacing = 1.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
+                for (r in 0 until 3) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        for (c in 1..3) {
+                            val d = r * 3 + c
+                            DigitKey(d.toString(), Modifier.weight(1f)) { fire("Ch $d") { vm.irTv(d.toString()) } }
+                        }
+                    }
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Spacer(Modifier.weight(1f))
+                    DigitKey("0", Modifier.weight(1f)) { fire("Ch 0") { vm.irTv("0") } }
+                    Spacer(Modifier.weight(1f))
+                }
+            }
+
             Spacer(Modifier.height(2.dp))
 
             // TV-B-Gone sweep
@@ -201,6 +224,21 @@ private fun PillColumn(label: String, tint: Color, up: () -> Unit, down: () -> U
             IconButton(onClick = down, modifier = Modifier.size(56.dp)) {
                 Icon(Icons.Default.Remove, contentDescription = "$label down", tint = tint, modifier = Modifier.size(28.dp))
             }
+        }
+    }
+}
+
+@Composable
+private fun DigitKey(label: String, modifier: Modifier, onClick: () -> Unit) {
+    Card(
+        modifier.height(52.dp).clickable(onClick = onClick),
+        shape = appCardShape(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, Green.copy(alpha = 0.3f)),
+    ) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text(label, style = MaterialTheme.typography.titleLarge, fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
         }
     }
 }
