@@ -20,7 +20,9 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Cast
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -98,6 +100,25 @@ fun DeviceDetailScreen(vm: MainViewModel, address: String?, onBack: () -> Unit, 
         (device.needsLink || linkMsg == "need" || linkMsg == "bad")
     var code by remember { mutableStateOf("") }
 
+    // Flash a firmware .bin straight onto the node's SD /downloads over BLE — no pulling the card.
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val fwPush by vm.fwPush.collectAsStateWithLifecycle(initialValue = -1)
+    val fwPicker = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) {
+            var name = "FlockedUp.bin"
+            runCatching {
+                context.contentResolver.query(uri, null, null, null, null)?.use { c ->
+                    val i = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                    if (i >= 0 && c.moveToFirst()) name = c.getString(i)
+                }
+            }
+            val bytes = runCatching { context.contentResolver.openInputStream(uri)?.use { it.readBytes() } }.getOrNull()
+            if (bytes != null) vm.pushFirmwareToNode(name, bytes)
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -174,6 +195,33 @@ fun DeviceDetailScreen(vm: MainViewModel, address: String?, onBack: () -> Unit, 
                         OutlinedButton(onClick = { vm.disconnect(address) }) { Text("Disconnect") }
                     else ->
                         OutlinedButton(onClick = { vm.connect(address) }) { Text("Connect") }
+                }
+            }
+
+            // Over-the-air flash: push a .bin to the SD, then pick it in the on-device Launcher.
+            if (fwPush >= 0) {
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                    shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                ) {
+                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            if (fwPush >= 100) "Sent ✓  On the T-Embed, open the Launcher and pick the .bin to flash."
+                            else "Sending firmware to the SD over BLE… $fwPush%  (keep the app open)",
+                            style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary,
+                        )
+                        LinearProgressIndicator(progress = { fwPush / 100f }, modifier = Modifier.fillMaxWidth())
+                    }
+                }
+            } else {
+                OutlinedButton(
+                    onClick = { fwPicker.launch(arrayOf("application/octet-stream", "*/*")) },
+                    enabled = canSend,
+                    modifier = Modifier.padding(top = 8.dp),
+                ) {
+                    Icon(Icons.Default.SystemUpdate, contentDescription = null, modifier = Modifier.padding(end = 6.dp))
+                    Text("Flash firmware → SD")
                 }
             }
 

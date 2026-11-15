@@ -361,6 +361,34 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         send("putend", if (autoImport) "import" else "")
     }
 
+    private val _fwPush = kotlinx.coroutines.flow.MutableStateFlow(-1)   // -1 idle, else 0..100 %
+    val fwPush: StateFlow<Int> = _fwPush.asStateFlow()
+
+    /** Push a firmware .bin from the phone straight onto the node's SD /downloads over BLE
+     *  (CMD:putfw), so the on-device bmorcelli Launcher can flash it — no pulling the SD.
+     *  Progress 0..100 streams in [fwPush]. ~1.5 MB over BLE takes a few minutes. */
+    fun pushFirmwareToNode(name: String, bytes: ByteArray) = viewModelScope.launch {
+        fun send(n: String, p: String = "") { fleet?.broadcast(command(n, p)); appRef.biscuitSerial.send(command(n, p)) }
+        val safe = name.substringAfterLast('/').substringAfterLast('\\').ifBlank { "FlockedUp.bin" }
+            .let { if (it.endsWith(".bin")) it else "$it.bin" }
+        _fwPush.value = 0
+        send("putfw", safe)
+        kotlinx.coroutines.delay(200)
+        val b64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+        var i = 0
+        while (i < b64.length) {
+            val end = minOf(i + 300, b64.length)
+            send("putb64", b64.substring(i, end))
+            i = end
+            _fwPush.value = (i.toLong() * 100 / b64.length).toInt().coerceIn(0, 99)
+            kotlinx.coroutines.delay(25)
+        }
+        send("putend", "")
+        _fwPush.value = 100
+        kotlinx.coroutines.delay(2500)
+        _fwPush.value = -1
+    }
+
     // --- On-board audio (speaker beep / mic) -------------------------------
     fun beep(freqHz: Int = 1600, ms: Int = 120) {
         val p = "$freqHz:$ms"
