@@ -18,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -67,6 +68,7 @@ fun PhoneStatusBar(boardConnected: Boolean, boardLink: String?, modifier: Modifi
     var wifi by remember { mutableStateOf(false) }
     var bt by remember { mutableStateOf(false) }
     var gps by remember { mutableStateOf(Gps.OFF) }
+    var tailscale by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -75,6 +77,7 @@ fun PhoneStatusBar(boardConnected: Boolean, boardLink: String?, modifier: Modifi
             wifi = readWifi(ctx)
             bt = readBt(ctx)
             gps = readGps(ctx)
+            tailscale = readTailscale()
             delay(2000)
         }
     }
@@ -109,6 +112,9 @@ fun PhoneStatusBar(boardConnected: Boolean, boardLink: String?, modifier: Modifi
             StatusIcon(Icons.Default.Bluetooth, "BT", if (bt) SB_GREEN else SB_DIM)
             StatusIcon(Icons.Default.LocationOn, "GPS",
                 when (gps) { Gps.FIX -> SB_GREEN; Gps.ON -> SB_AMBER; Gps.OFF -> SB_DIM })
+            // Tailscale: green when the phone holds a tailnet address (100.64/10) — the app
+            // and board are then reachable from anywhere over Tailscale, not just home Wi-Fi.
+            StatusIcon(Icons.Default.Share, "TS", if (tailscale) SB_GREEN else SB_DIM)
         }
     }
 }
@@ -135,6 +141,16 @@ private fun readWifi(ctx: Context): Boolean = runCatching {
 private fun readBt(ctx: Context): Boolean = runCatching {
     val mgr = ctx.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
     mgr.adapter?.isEnabled == true
+}.getOrDefault(false)
+
+/** True when any up interface holds a Tailscale address (the 100.64.0.0/10 CGNAT range). */
+private fun readTailscale(): Boolean = runCatching {
+    java.net.NetworkInterface.getNetworkInterfaces().toList().any { nif ->
+        nif.isUp && nif.inetAddresses.toList().any { addr ->
+            val a = addr.address
+            a.size == 4 && (a[0].toInt() and 0xFF) == 100 && (a[1].toInt() and 0xFF) in 64..127
+        }
+    }
 }.getOrDefault(false)
 
 private fun readGps(ctx: Context): Gps = runCatching {

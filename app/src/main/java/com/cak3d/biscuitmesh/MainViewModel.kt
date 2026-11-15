@@ -368,6 +368,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
     fun speakerClick() { fleet?.broadcast(command("click")); appRef.biscuitSerial.send(command("click")) }
     fun speakerAlert() { fleet?.broadcast(command("alert")); appRef.biscuitSerial.send(command("alert")) }
+    /** The crow's call on the node's speaker. */
+    fun caw() { fleet?.broadcast(command("caw")); appRef.biscuitSerial.send(command("caw")) }
+    /** Any named call/cue on the node: caw, chirp, trill, error, success, capture, scan, chime. */
+    fun playSound(name: String) { fleet?.broadcast(command("sound", name)); appRef.biscuitSerial.send(command("sound", name)) }
     /** Start/stop the node's live audio stream (DATA:MIC + DATA:ASPEC) for the Audio screen. */
     fun audioStart() { fleet?.broadcast(command("audio")); appRef.biscuitSerial.send(command("audio")) }
     fun audioStop() { fleet?.broadcast(command("audiostop")); appRef.biscuitSerial.send(command("audiostop")) }
@@ -733,6 +737,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val watchlist: Flow<List<String>> = appRef.watchlistStore.entries
     fun addWatch(entry: String) = viewModelScope.launch { appRef.watchlistStore.add(entry) }
     fun removeWatch(entry: String) = viewModelScope.launch { appRef.watchlistStore.remove(entry) }
+
+    // Local-only saved targets (networks / devices / locations) — never uploaded anywhere.
+    val targets: Flow<List<com.cak3d.biscuitmesh.data.Target>> = appRef.targetsStore.targets
+    fun addTarget(t: com.cak3d.biscuitmesh.data.Target) = viewModelScope.launch { appRef.targetsStore.add(t) }
+    fun removeTarget(id: String) = viewModelScope.launch { appRef.targetsStore.remove(id) }
+    fun setTargetScan(id: String, canScan: Boolean) =
+        viewModelScope.launch { appRef.targetsStore.setCanScan(id, canScan) }
 
     // --- Appearance (theme system) -----------------------------------------
     val appFeel: Flow<String> = appRef.settingsStore.appFeel

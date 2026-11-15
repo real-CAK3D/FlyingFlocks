@@ -360,11 +360,17 @@ private fun FrameFlockBorder(modifier: Modifier) {
         drawPath(border, TE_PLUM, style = Stroke(width = sw, cap = StrokeCap.Round))
 
         // --- the three gulls (all purple, like the frame) ---
+        // A distant gull "m": wingtips high, a shallow dip to each inner shoulder, and a
+        // small body peak at the centre — the same silhouette the firmware's fuGull draws.
         fun gull(cx: Float, cy: Float, hs: Float, lf: Float, stroke: Float) {
+            val ix = hs * 0.4f          // inner shoulder offset
+            val bodyUp = lf * 0.4f      // little upward body peak
             val g = Path().apply {
-                moveTo(cx - hs, cy - lf)                            // left wingtip (high)
-                quadraticBezierTo(cx - hs * 0.42f, cy - lf * 0.12f, cx, cy)  // dip to the body
-                quadraticBezierTo(cx + hs * 0.42f, cy - lf * 0.12f, cx + hs, cy - lf)  // up to right wingtip
+                moveTo(cx - hs, cy - lf)                                        // left wingtip (high)
+                quadraticBezierTo(cx - ix * 1.4f, cy - lf * 0.15f, cx - ix, cy)  // down to left shoulder
+                quadraticBezierTo(cx - ix * 0.4f, cy - bodyUp, cx, cy - bodyUp)  // up to the body peak
+                quadraticBezierTo(cx + ix * 0.4f, cy - bodyUp, cx + ix, cy)      // down to right shoulder
+                quadraticBezierTo(cx + ix * 1.4f, cy - lf * 0.15f, cx + hs, cy - lf) // up to right wingtip
             }
             drawPath(g, TE_PLUM, style = Stroke(width = stroke, cap = StrokeCap.Round))
         }

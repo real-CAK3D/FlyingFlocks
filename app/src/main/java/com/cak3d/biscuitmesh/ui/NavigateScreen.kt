@@ -10,6 +10,7 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
@@ -39,6 +40,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -163,7 +165,7 @@ fun NavigateScreen(vm: MainViewModel, onBack: () -> Unit, startMode: NavMode, st
                 when (mode) {
                     NavMode.COMPASS -> CompassContent(heading)
                     NavMode.RADAR -> RadarContent(heading, sweep, results)
-                    NavMode.LOCATOR -> LocatorContent(results, context, startTargetId)
+                    NavMode.LOCATOR -> LocatorContent(results, context, heading, startTargetId)
                 }
             }
             ModeSwitcher(mode) { mode = it }
@@ -308,43 +310,96 @@ private fun RadarContent(heading: Float, sweep: Float, results: List<PhoneScanRo
 
 // ---- Locator ----------------------------------------------------------------
 
+private fun heatColor(strength: Float): Color = when {
+    strength > 0.75f -> Color(0xFF34D399)
+    strength > 0.45f -> Color(0xFFF59E0B)
+    else -> Color(0xFFFF5470)
+}
+
 @Composable
-private fun LocatorContent(results: List<PhoneScanRow>, context: Context, initialTargetId: String? = null) {
+private fun LocatorContent(
+    results: List<PhoneScanRow>, context: Context, heading: Float, initialTargetId: String? = null,
+) {
     var targetId by remember { mutableStateOf(initialTargetId) }
+    var locatorOn by remember { mutableStateOf(true) }
+    var kindFilter by remember { mutableStateOf<SampleKind?>(null) }   // null = all
     val target = results.firstOrNull { it.id == targetId }
     val currentTarget by rememberUpdatedState(target)
+    val currentHeading by rememberUpdatedState(heading)
 
-    // Pulse faster the closer you get (stronger signal). The target routinely drops out of a
-    // scan cycle for a moment, so wait it out instead of breaking — otherwise one blip ends the
-    // haptics for the rest of the session even after the device comes back.
-    LaunchedEffect(targetId) {
-        while (targetId != null) {
+    // "Warmer this way" direction: handheld RSSI direction-finding. We bucket the target's
+    // RSSI by the compass heading it was heard at; the strongest bucket is the hot bearing.
+    // Turning/moving sweeps the signal across headings so the arrow converges on the target.
+    val hotByHeading = remember { FloatArray(36) { -200f } }
+    var hotHeading by remember { mutableStateOf<Float?>(null) }
+    var liveStrength by remember { mutableFloatStateOf(0f) }
+
+    LaunchedEffect(targetId, locatorOn) {
+        for (i in hotByHeading.indices) hotByHeading[i] = -200f
+        hotHeading = null
+        while (targetId != null && locatorOn) {
             val t = currentTarget
             if (t == null) { delay(500); continue }
             val strength = ((t.rssi + 95f) / 65f).coerceIn(0f, 1f)
+            liveStrength = strength
+            val b = ((((currentHeading % 360f) + 360f) % 360f) / 10f).toInt().coerceIn(0, 35)
+            for (i in hotByHeading.indices) hotByHeading[i] -= 1.2f          // slow decay
+            if (t.rssi.toFloat() > hotByHeading[b]) hotByHeading[b] = t.rssi.toFloat()
+            var bestB = 0; var bestV = -1000f
+            for (i in hotByHeading.indices) if (hotByHeading[i] > bestV) { bestV = hotByHeading[i]; bestB = i }
+            hotHeading = if (bestV > -199f) bestB * 10f + 5f else null
             buzz(context, (20 + strength * 80).toInt())
             delay((1200 - strength * 1050).toLong().coerceIn(140, 1200))
         }
     }
 
     if (target != null) {
+        val relBearing = hotHeading?.let { ((it - currentHeading + 540f) % 360f) - 180f }
         Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            LocatorRing(target)
-            TextButton(onClick = { targetId = null }) { Text("Pick a different device") }
+            verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            // on/off
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(if (locatorOn) "Locating" else "Paused", style = MaterialTheme.typography.labelLarge,
+                    fontFamily = FontFamily.Monospace,
+                    color = if (locatorOn) heatColor(liveStrength) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                Switch(checked = locatorOn, onCheckedChange = { locatorOn = it })
+            }
+            LocatorRing(target, if (locatorOn) liveStrength else ((target.rssi + 95f) / 65f).coerceIn(0f, 1f),
+                relBearing, locatorOn)
+            TextButton(onClick = { targetId = null }) { Text("Pick a different target") }
         }
     } else {
         Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("Pick a device to home in on — then walk toward it. It buzzes faster as you get closer.",
+            Text("Pick a network or device to home in on, then walk toward it — the bar fills and flashes, " +
+                "the arrow points warmer, and the phone buzzes faster as you get closer.",
                 style = MaterialTheme.typography.bodyMedium)
+            // kind filter: all / Wi-Fi / BLE
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterPill("All", kindFilter == null) { kindFilter = null }
+                FilterPill("Wi-Fi", kindFilter == SampleKind.AP) { kindFilter = SampleKind.AP }
+                FilterPill("BLE", kindFilter == SampleKind.BT) { kindFilter = SampleKind.BT }
+            }
+            val shown = results.filter {
+                when (kindFilter) {
+                    SampleKind.AP -> it.kind == SampleKind.AP || it.kind == SampleKind.STATION
+                    SampleKind.BT -> it.kind == SampleKind.BT
+                    else -> true
+                }
+            }
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(results, key = { it.id }) { row ->
+                items(shown, key = { it.id }) { row ->
                     Card(
                         Modifier.fillMaxWidth().clickable { targetId = row.id },
                         shape = RoundedCornerShape(12.dp),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     ) {
                         Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.padding(end = 10.dp)) {
+                                Text(if (row.kind == SampleKind.BT) "BLE" else "WiFi",
+                                    style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace,
+                                    color = blipColor(row.kind))
+                            }
                             Column(Modifier.weight(1f)) {
                                 Text(row.label.ifBlank { row.id }, style = MaterialTheme.typography.bodyLarge, maxLines = 1)
                                 Text(row.id, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace,
@@ -361,35 +416,78 @@ private fun LocatorContent(results: List<PhoneScanRow>, context: Context, initia
 }
 
 @Composable
-private fun LocatorRing(row: PhoneScanRow) {
-    val rssi = row.rssi
-    val strength = ((rssi + 95f) / 65f).coerceIn(0f, 1f)
-    val color = when {
-        strength > 0.75f -> Color(0xFF34D399)
-        strength > 0.45f -> Color(0xFFF59E0B)
-        else -> Color(0xFFFF5470)
+private fun FilterPill(label: String, on: Boolean, onClick: () -> Unit) {
+    val c = if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+    Box(
+        Modifier.clickable(onClick = onClick)
+            .drawBehind {
+                drawRoundRect(c.copy(alpha = if (on) 0.18f else 0.06f),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(18f, 18f))
+            }
+            .padding(horizontal = 14.dp, vertical = 6.dp),
+    ) {
+        Text(label, style = MaterialTheme.typography.labelMedium, fontFamily = FontFamily.Monospace, color = c)
     }
+}
+
+@Composable
+private fun LocatorRing(row: PhoneScanRow, strength: Float, relBearing: Float?, active: Boolean) {
+    val rssi = row.rssi
+    val color = heatColor(strength)
     val d = 10.0.pow(((-40.0) - rssi) / (10.0 * 2.7))
     val near = when {
         d < 2 -> "Right here"; d < 5 -> "Very close"; d < 15 -> "Close"; d < 40 -> "Nearby"; else -> "Far — keep moving"
     }
-    Text(row.label.ifBlank { row.id }, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, maxLines = 1)
-    Box(
-        Modifier.fillMaxWidth(0.72f).aspectRatio(1f).drawBehind {
-            val r = min(size.width, size.height) / 2f
-            drawCircle(color.copy(alpha = 0.12f), r)
-            drawCircle(color.copy(alpha = 0.35f), r * (0.4f + strength * 0.6f), style = Stroke(10f))
-            drawCircle(color, r * (0.4f + strength * 0.6f) * 0.5f, style = Stroke(6f))
-        },
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("$rssi dB", style = MaterialTheme.typography.headlineMedium, color = color,
-                fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
-            Text(near, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f))
+    // flash when very close (and active)
+    val blink by rememberInfiniteTransition(label = "blink").animateFloat(
+        0.3f, 1f, infiniteRepeatable(tween(360, easing = LinearEasing), repeatMode = RepeatMode.Reverse), label = "b",
+    )
+    val hot = active && strength > 0.8f
+    val barAlpha = if (hot) blink else 1f
+
+    Text(row.label.ifBlank { row.id }, style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.SemiBold, maxLines = 1)
+
+    // Direction dial — the "warmer this way" arrow.
+    Box(Modifier.fillMaxWidth(0.42f).aspectRatio(1f), contentAlignment = Alignment.Center) {
+        val ink = MaterialTheme.colorScheme.onSurface
+        Canvas(Modifier.fillMaxSize()) {
+            val c = Offset(size.width / 2f, size.height / 2f)
+            val r = min(size.width, size.height) / 2f * 0.92f
+            drawCircle(ink.copy(alpha = 0.06f), r)
+            drawCircle(ink.copy(alpha = 0.18f), r, style = Stroke(2f))
+            if (relBearing != null && active) {
+                val phi = Math.toRadians(relBearing.toDouble())
+                val tip = Offset(c.x + (r * 0.82f * sin(phi)).toFloat(), c.y - (r * 0.82f * cos(phi)).toFloat())
+                drawLine(color, c, tip, 9f)
+                drawCircle(color, 9f, tip)
+            } else {
+                drawCircle(ink.copy(alpha = 0.3f), 6f, c)
+            }
         }
+        Text(if (relBearing != null && active) "WARMER" else "turn\nslowly",
+            style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+            modifier = Modifier.align(Alignment.BottomCenter))
     }
-    Text("~${d.toInt()} m away · buzzes faster as you get warmer", style = MaterialTheme.typography.bodySmall,
+
+    Text("$rssi dB · $near", style = MaterialTheme.typography.headlineSmall, color = color,
+        fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+
+    // Proximity BAR — fills with strength, lights the colour, and flashes when very close.
+    Box(
+        Modifier.fillMaxWidth(0.82f).padding(top = 2.dp).drawBehind {
+            val h = size.height
+            val rr = androidx.compose.ui.geometry.CornerRadius(h / 2f, h / 2f)
+            drawRoundRect(Color.White.copy(alpha = 0.08f), cornerRadius = rr)
+            val w = size.width * strength.coerceIn(0.02f, 1f)
+            drawRoundRect(color.copy(alpha = barAlpha),
+                size = Size(w, h), cornerRadius = rr)
+        }.aspectRatio(10f),
+    ) {}
+
+    Text("~${d.toInt()} m away · ${if (active) "buzzes + flashes as you get warmer" else "paused"}",
+        style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
 }
 

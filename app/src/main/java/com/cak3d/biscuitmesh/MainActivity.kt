@@ -102,6 +102,7 @@ import com.cak3d.biscuitmesh.ui.WhisperThreadScreen
 import com.cak3d.biscuitmesh.ui.SignalDetailScreen
 import com.cak3d.biscuitmesh.ui.TpmsScreen
 import com.cak3d.biscuitmesh.ui.WatchlistScreen
+import com.cak3d.biscuitmesh.ui.TargetsScreen
 import com.cak3d.biscuitmesh.ui.ProximityBanner
 import com.cak3d.biscuitmesh.ui.SatellitesScreen
 import com.cak3d.biscuitmesh.ui.SensorsHubScreen
@@ -127,6 +128,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         handleUsbIntent(intent)
+        // The crow's call on a fresh launch (not on rotation / config recreate).
+        if (savedInstanceState == null) com.cak3d.biscuitmesh.audio.CrowCaw.play()
         setContent {
             val app = application as BiscuitMeshApp
             val feelName by app.settingsStore.appFeel.collectAsStateWithLifecycle(initialValue = "ROUNDED")
@@ -438,6 +441,7 @@ private fun MainShell(vm: MainViewModel) {
                         onOpenFlock = { nav.navigate("crew") })
                 }
                 composable("watchlist") { WatchlistScreen(vm = vm, onBack = { nav.popBackStack() }) }
+                composable("targets") { TargetsScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("signaldetail/{id}") { entry ->
                     val id = java.net.URLDecoder.decode(entry.arguments?.getString("id") ?: "", "UTF-8")
                     SignalDetailScreen(vm = vm, id = id, onBack = { nav.popBackStack() })

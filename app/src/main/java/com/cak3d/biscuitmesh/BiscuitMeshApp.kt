@@ -61,6 +61,11 @@ class BiscuitMeshApp : Application() {
         com.cak3d.biscuitmesh.data.WatchlistStore(this)
     }
 
+    /** Local-only saved targets (networks/devices/locations) to locate/watch. Never uploaded. */
+    val targetsStore: com.cak3d.biscuitmesh.data.TargetsStore by lazy {
+        com.cak3d.biscuitmesh.data.TargetsStore(this)
+    }
+
     /** Learned TPMS sensor-to-tire assignments for the tire dashboard. */
     val tpmsStore: com.cak3d.biscuitmesh.data.TpmsStore by lazy {
         com.cak3d.biscuitmesh.data.TpmsStore(this)

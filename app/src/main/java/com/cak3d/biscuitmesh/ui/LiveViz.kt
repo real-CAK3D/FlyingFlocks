@@ -21,7 +21,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -39,6 +42,7 @@ private val LV_GREEN = Color(0xFF53D38A)
 private val LV_AMBER = Color(0xFFF2AC2A)
 private val LV_BLOOD = Color(0xFFCA1C24)
 private val LV_PLUM = Color(0xFFB24BFF)
+private val LV_GRID = Color(0xFF26262E)
 private val LV_MONO = FontFamily.Monospace
 
 /** rssi (dBm) -> bar colour. */
@@ -46,6 +50,18 @@ private fun sigColor(rssi: Int): Color = when {
     rssi > -55 -> LV_BLOOD
     rssi > -75 -> LV_AMBER
     else -> LV_PLUM
+}
+
+/** Waterfall intensity ramp — dark → blue → plum → amber → white — matching the
+ *  firmware's wfColor() so the app waterfall reads identically to the T-Embed's. */
+private fun wfColor(rssi: Int): Color {
+    val t = ((rssi + 110f) / 90f).coerceIn(0f, 1f)
+    return when {
+        t < 0.25f -> { val u = t / 0.25f; Color(0f, 0f, (30 + 90 * u) / 255f) }
+        t < 0.5f -> { val u = (t - 0.25f) / 0.25f; Color((90 * u) / 255f, 0f, (120 + 60 * u) / 255f) }
+        t < 0.75f -> { val u = (t - 0.5f) / 0.25f; Color((90 + 150 * u) / 255f, (30 * u) / 255f, (180 - 140 * u) / 255f) }
+        else -> { val u = (t - 0.75f) / 0.25f; Color(1f, (70 + 185 * u) / 255f, (40 + 200 * u) / 255f) }
+    }
 }
 
 /** rssi (dBm, ~-110..-20) -> 0..1 height. */
@@ -80,6 +96,12 @@ fun LiveVizPanel(lines: List<BiscuitMessage>, activeOp: String?, modifier: Modif
         tail.lastOrNull { it.type == BiscuitMessage.Type.DATA && it.subtype == "SPECTRUM" }
             ?.let { parseSpectrumBins(it.payload) }
     }
+    // The running waterfall: the last N spectrum frames (oldest→newest), straight off
+    // the message stream — the board already streams one DATA:SPECTRUM line per sweep.
+    val spectrumHistory = remember(tail) {
+        tail.filter { it.type == BiscuitMessage.Type.DATA && it.subtype == "SPECTRUM" }
+            .takeLast(56).map { parseSpectrumBins(it.payload) }.filter { it.isNotEmpty() }
+    }
     val rfHits = remember(tail) {
         tail.filter { it.type == BiscuitMessage.Type.DATA && it.subtype == "RF" }
             .takeLast(24).mapNotNull { lastNumeric(it.payload) }
@@ -87,7 +109,7 @@ fun LiveVizPanel(lines: List<BiscuitMessage>, activeOp: String?, modifier: Modif
 
     val (label, content) = when {
         spectrum != null && (activeOp == "waterfall" || activeOp == "bandscan" || spectrum.isNotEmpty()) ->
-            "SPECTRUM" to VizKind.Spectrum(spectrum)
+            "SPECTRUM · WATERFALL" to VizKind.Spectrum(spectrum, spectrumHistory)
         apRssis.isNotEmpty() -> "WIFI · ${apRssis.size} APs" to VizKind.Bars(apRssis)
         btRssis.isNotEmpty() -> "BLE · ${btRssis.size} devices" to VizKind.Bars(btRssis)
         rfHits.isNotEmpty() -> "SUB-GHZ" to VizKind.Bars(rfHits)
@@ -100,9 +122,9 @@ fun LiveVizPanel(lines: List<BiscuitMessage>, activeOp: String?, modifier: Modif
             .padding(10.dp),
     ) {
         Text(label, color = LV_DIM, fontFamily = LV_MONO, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-        Box(Modifier.fillMaxWidth().height(96.dp).padding(top = 6.dp)) {
+        Box(Modifier.fillMaxWidth().height(118.dp).padding(top = 6.dp)) {
             when (content) {
-                is VizKind.Spectrum -> SpectrumViz(content.bins)
+                is VizKind.Spectrum -> SpectrumViz(content.bins, content.history)
                 is VizKind.Bars -> SignalBars(content.rssis)
                 VizKind.Idle -> ListeningPulse()
             }
@@ -111,7 +133,7 @@ fun LiveVizPanel(lines: List<BiscuitMessage>, activeOp: String?, modifier: Modif
 }
 
 private sealed interface VizKind {
-    data class Spectrum(val bins: List<Int>) : VizKind
+    data class Spectrum(val bins: List<Int>, val history: List<List<Int>>) : VizKind
     data class Bars(val rssis: List<Int>) : VizKind
     data object Idle : VizKind
 }
@@ -144,25 +166,62 @@ private fun SignalBars(rssis: List<Int>) {
     }
 }
 
-/** A running spectrum: bars across frequency, coloured by strength. */
+/**
+ * A running spectrum: live bars across frequency on top (with dB gridlines, crisp
+ * bright bar-caps, and a peak caret), and a scrolling waterfall heatmap below that
+ * accumulates the sweep history — the newest sweep on top — exactly like the T-Embed.
+ */
 @Composable
-private fun SpectrumViz(bins: List<Int>) {
+private fun SpectrumViz(bins: List<Int>, history: List<List<Int>>) {
     Canvas(Modifier.fillMaxSize()) {
         if (bins.isEmpty()) return@Canvas
         val n = bins.size
+        val barsH = size.height * 0.46f
+        val wfTop = barsH + 2f
+        val wfH = (size.height - wfTop).coerceAtLeast(1f)
+
+        // dB gridlines in the bar region
+        for (g in 1..3) {
+            val gy = barsH * g / 4f
+            drawLine(LV_GRID, Offset(0f, gy), Offset(size.width, gy), 1f)
+        }
+
+        // live spectrum bars
         val bw = (size.width / n).coerceAtLeast(1f)
+        var bestI = 0; var bestR = Int.MIN_VALUE
         bins.forEachIndexed { i, r ->
-            val h = sigFrac(r) * size.height
-            drawRect(
-                color = sigColor(r),
-                topLeft = androidx.compose.ui.geometry.Offset(i * bw, size.height - h),
-                size = androidx.compose.ui.geometry.Size(bw.coerceAtLeast(1f) - 0.5f, h),
-            )
+            if (r > bestR) { bestR = r; bestI = i }
+            val h = sigFrac(r) * barsH
+            val x = i * bw
+            drawRect(sigColor(r), Offset(x, barsH - h), Size((bw - 0.5f).coerceAtLeast(1f), h))
+            if (h > 1f) drawLine(LV_INK, Offset(x, barsH - h), Offset(x + bw - 0.5f, barsH - h), 1f)
+        }
+        // peak caret pointing down at the strongest bin
+        val px = bestI * bw + bw / 2f
+        drawPath(Path().apply { moveTo(px - 3f, 0f); lineTo(px + 3f, 0f); lineTo(px, 5f); close() }, LV_AMBER)
+        // separator between bars and waterfall
+        drawLine(LV_AMBER.copy(alpha = 0.5f), Offset(0f, barsH + 1f), Offset(size.width, barsH + 1f), 1f)
+
+        // scrolling waterfall — newest sweep at the top, older sweeps below
+        if (history.isNotEmpty()) {
+            val maxRows = wfH.toInt().coerceAtLeast(1)
+            val rows = history.takeLast(maxRows)
+            val rowH = (wfH / rows.size).coerceAtLeast(1f)
+            rows.asReversed().forEachIndexed { ri, frame ->
+                val y = wfTop + ri * rowH
+                val m = frame.size.coerceAtLeast(1)
+                val cw = size.width / m
+                frame.forEachIndexed { bi, r ->
+                    drawRect(wfColor(r), Offset(bi * cw, y), Size(cw.coerceAtLeast(1f), rowH + 0.5f))
+                }
+            }
+        } else {
+            drawLine(LV_DIM, Offset(0f, wfTop + wfH / 2f), Offset(size.width, wfTop + wfH / 2f), 1f)
         }
     }
 }
 
-/** A gentle animated sine pulse while nothing is actively scanning. */
+/** A crisp oscilloscope-style idle trace (glow + thin bright line) over a dim axis. */
 @Composable
 private fun ListeningPulse() {
     var t by remember { mutableStateOf(0f) }
@@ -171,16 +230,18 @@ private fun ListeningPulse() {
     }
     Canvas(Modifier.fillMaxSize()) {
         val mid = size.height / 2f
-        val steps = 80
-        var prev: androidx.compose.ui.geometry.Offset? = null
+        drawLine(LV_GRID, Offset(0f, mid), Offset(size.width, mid), 1f)   // scope baseline
+        val steps = 96
+        val path = Path()
         for (i in 0..steps) {
             val x = size.width * i / steps
             val phase = t * 2.4f + i * 0.22f
             val amp = (0.5f + 0.5f * sin(t * 1.3f)) * size.height * 0.32f
-            val y = mid + sin(phase) * amp * (0.4f + 0.6f * (1f - abs(i - steps / 2f) / (steps / 2f)))
-            val p = androidx.compose.ui.geometry.Offset(x, y)
-            prev?.let { drawLine(LV_GREEN.copy(alpha = 0.7f), it, p, strokeWidth = 2f) }
-            prev = p
+            val taper = 0.4f + 0.6f * (1f - abs(i - steps / 2f) / (steps / 2f))
+            val y = mid + sin(phase) * amp * taper
+            if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
         }
+        drawPath(path, LV_GREEN.copy(alpha = 0.18f), style = androidx.compose.ui.graphics.drawscope.Stroke(width = 5f))
+        drawPath(path, LV_GREEN, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.6f))
     }
 }

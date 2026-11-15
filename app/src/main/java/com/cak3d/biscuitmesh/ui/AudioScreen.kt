@@ -3,6 +3,8 @@ package com.cak3d.biscuitmesh.ui
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -48,6 +50,7 @@ private val AU_RED = Color(0xFFE5484D)
  * speaker controls (beep / click / alert). Starting the screen tells the node to
  * stream audio; leaving it stops the stream.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AudioScreen(vm: MainViewModel, onBack: () -> Unit) {
     val logFlow = vm.log ?: remember { MutableStateFlow(emptyList<LogEntry>()) }
@@ -125,6 +128,27 @@ fun AudioScreen(vm: MainViewModel, onBack: () -> Unit) {
             listOf(440, 880, 1760, 3520).forEach { f ->
                 OutlinedButton(onClick = { vm.beep(f, 150) }, modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(10.dp)) { Text("${f}Hz", style = MaterialTheme.typography.labelSmall) }
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+
+        Text("Calls & cues", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Text("The Flocked Up voice — plays on the node's speaker.",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(8.dp))
+        val calls = listOf(
+            "Caw" to "caw", "Chirp" to "chirp", "Trill" to "trill", "Success" to "success",
+            "Error" to "error", "Capture" to "capture", "Scan" to "scan", "Chime" to "chime",
+        )
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            calls.forEach { (label, key) ->
+                OutlinedButton(
+                    onClick = { if (key == "caw") vm.caw() else vm.playSound(key) },
+                    shape = RoundedCornerShape(10.dp),
+                ) { Text(label) }
             }
         }
     }
