@@ -103,6 +103,7 @@ import com.cak3d.biscuitmesh.ui.SignalDetailScreen
 import com.cak3d.biscuitmesh.ui.TpmsScreen
 import com.cak3d.biscuitmesh.ui.WatchlistScreen
 import com.cak3d.biscuitmesh.ui.TargetsScreen
+import com.cak3d.biscuitmesh.ui.RemoteScreen
 import com.cak3d.biscuitmesh.ui.ProximityBanner
 import com.cak3d.biscuitmesh.ui.SatellitesScreen
 import com.cak3d.biscuitmesh.ui.SensorsHubScreen
