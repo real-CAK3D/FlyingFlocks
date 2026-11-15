@@ -145,24 +145,29 @@ private fun parseSpectrumBins(payload: String): List<Int> {
     return csv.split(';').mapNotNull { it.trim().toIntOrNull() }
 }
 
-/** Animated signal-strength bars (one per AP/device), tallest = strongest. */
+/** Signal strengths drawn as the same green scope WAVE as the spectrum — one point per
+ *  AP/device (sorted strongest→weakest), joined into a filled waveform, with a strength-
+ *  tinted dot at each so you still read individual signals. No chunky bars anywhere. */
 @Composable
 private fun SignalBars(rssis: List<Int>) {
-    val sorted = remember(rssis) { rssis.sortedDescending().take(28) }
+    val sorted = remember(rssis) { rssis.sortedDescending().take(48) }
     Canvas(Modifier.fillMaxSize()) {
         if (sorted.isEmpty()) return@Canvas
         val n = sorted.size
-        val gap = 3f
-        val bw = ((size.width - gap * (n - 1)) / n).coerceAtLeast(2f)
-        sorted.forEachIndexed { i, r ->
-            val h = sigFrac(r) * size.height
-            val x = i * (bw + gap)
-            drawRect(
-                color = sigColor(r),
-                topLeft = androidx.compose.ui.geometry.Offset(x, size.height - h),
-                size = androidx.compose.ui.geometry.Size(bw, h),
-            )
+        for (g in 1..3) { val gy = size.height * g / 4f; drawLine(LV_GRID, Offset(0f, gy), Offset(size.width, gy), 1f) }
+        fun px(i: Int) = if (n > 1) size.width * i / (n - 1) else size.width / 2f
+        fun py(i: Int) = size.height - sigFrac(sorted[i]) * size.height
+        val top = Path(); val area = Path().apply { moveTo(0f, size.height) }
+        for (i in 0 until n) {
+            val x = px(i); val y = py(i)
+            if (i == 0) top.moveTo(x, y) else top.lineTo(x, y)
+            area.lineTo(x, y)
         }
+        area.lineTo(size.width, size.height); area.close()
+        drawPath(area, LV_GREEN.copy(alpha = 0.16f))
+        drawPath(top, LV_GREEN.copy(alpha = 0.25f), style = androidx.compose.ui.graphics.drawscope.Stroke(width = 4f))
+        drawPath(top, LV_GREEN, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.6f))
+        if (n <= 40) for (i in 0 until n) drawCircle(sigColor(sorted[i]), 2.2f, Offset(px(i), py(i)))
     }
 }
 

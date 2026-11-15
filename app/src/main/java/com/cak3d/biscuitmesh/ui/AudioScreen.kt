@@ -133,12 +133,18 @@ fun AudioScreen(vm: MainViewModel, onBack: () -> Unit) {
         Spacer(Modifier.height(16.dp))
 
         Text("Calls & cues", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        Text("The Flocked Up voice — plays on the node's speaker.",
+        Text("Real recorded sounds — on your phone and the node's speaker.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(8.dp))
         val calls = listOf(
-            "Caw" to "caw", "Chirp" to "chirp", "Trill" to "trill", "Success" to "success",
-            "Error" to "error", "Capture" to "capture", "Scan" to "scan", "Chime" to "chime",
+            "Caw" to "caw", "Click" to "click", "Beep" to "beep", "Success" to "success",
+            "Alert" to "error", "Capture" to "capture", "Scan" to "scan", "Chime" to "chime",
+        )
+        // Map each cue to one of the bundled real phone sounds (caw / click / beep / alert / success).
+        val appFx = mapOf(
+            "caw" to "caw", "click" to "click", "beep" to "beep", "chirp" to "beep",
+            "trill" to "beep", "success" to "success", "error" to "alert", "capture" to "click",
+            "scan" to "beep", "chime" to "success",
         )
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -146,7 +152,10 @@ fun AudioScreen(vm: MainViewModel, onBack: () -> Unit) {
         ) {
             calls.forEach { (label, key) ->
                 OutlinedButton(
-                    onClick = { if (key == "caw") vm.caw() else vm.playSound(key) },
+                    onClick = {
+                        com.cak3d.biscuitmesh.audio.CrowCaw.fx(appFx[key] ?: "click")   // real sound on the phone
+                        if (key == "caw") vm.caw() else vm.playSound(key)               // and on the node
+                    },
                     shape = RoundedCornerShape(10.dp),
                 ) { Text(label) }
             }

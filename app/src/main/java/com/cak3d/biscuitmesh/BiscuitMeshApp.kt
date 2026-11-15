@@ -289,6 +289,7 @@ class BiscuitMeshApp : Application() {
     override fun onCreate() {
         super.onCreate()
         usbDetector.start()
+        com.cak3d.biscuitmesh.audio.CrowCaw.init(this)   // preload the real sound effects
 
         // Board GPS: when enabled, the wardrive takes its fix from a connected Meshtastic
         // node's GPS (or the dongle's, if its firmware reports coordinates) instead of the phone.
