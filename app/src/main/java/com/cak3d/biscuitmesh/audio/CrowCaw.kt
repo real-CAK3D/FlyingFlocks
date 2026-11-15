@@ -4,16 +4,18 @@ import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.sin
 
 /**
- * Synthesises the Flocked Up crow "caw" on the phone speaker — the same rise-then-
- * harsh-fall, double-call shape the T-Embed firmware plays (spkCaw), so the app and
- * the device share one voice. Rendered to PCM and played on a daemon thread so it
- * never blocks the UI; failures are swallowed (a missing speaker shouldn't crash launch).
+ * Synthesises a SINGLE crow "caw" on the phone speaker — one short, harsh squawk, not a
+ * pitch-gliding siren. The caw character comes from harmonic-rich tone + a deep buzz/rasp
+ * + a touch of noise over a quick rise-then-fall pitch contour (matches the T-Embed's
+ * spkCaw). Rendered to PCM on a daemon thread so it never blocks the UI; failures swallowed.
  */
 object CrowCaw {
     private const val SR = 22050
+    private const val DUR_MS = 230
 
     fun play() {
         Thread {
@@ -45,40 +47,32 @@ object CrowCaw {
         }.apply { isDaemon = true }.start()
     }
 
-    // f0, f1 = pitch glide endpoints in Hz (0,0 = a silent gap); ms = duration.
-    private val PARTS = listOf(
-        Triple(680.0, 1120.0, 55),   // caw 1 — quick rise
-        Triple(1120.0, 470.0, 190),  // caw 1 — harsh fall
-        Triple(0.0, 0.0, 85),        // gap
-        Triple(680.0, 1120.0, 55),   // caw 2 — quick rise
-        Triple(1120.0, 470.0, 190),  // caw 2 — harsh fall
-    )
-
     private fun buildCaw(): ShortArray {
-        val total = PARTS.sumOf { it.third } * SR / 1000
-        val out = ShortArray(total)
-        var idx = 0
-        var ph = 0.0
-        var rph = 0.0
-        val raspDp = 2.0 * PI * 55.0 / SR
-        for ((f0, f1, ms) in PARTS) {
-            val n = ms * SR / 1000
-            val silent = f0 == 0.0 && f1 == 0.0
-            for (i in 0 until n) {
-                if (idx >= total) break
-                if (silent) { out[idx++] = 0; continue }
-                val t = if (n > 1) i.toDouble() / n else 0.0
-                val f = f0 + (f1 - f0) * t
-                val rasp = 0.55 + 0.45 * sin(rph)           // tremolo rasp
-                val env = when {                            // soft attack / decay
-                    t < 0.06 -> t / 0.06
-                    t > 0.85 -> (1.0 - t) / 0.15
-                    else -> 1.0
-                }
-                out[idx++] = (sin(ph) * 9000.0 * rasp * env).toInt().toShort()
-                ph += 2.0 * PI * f / SR; if (ph > 2 * PI) ph -= 2 * PI
-                rph += raspDp; if (rph > 2 * PI) rph -= 2 * PI
+        val n = DUR_MS * SR / 1000
+        val out = ShortArray(n)
+        var ph = 0.0      // tone phase
+        var bz = 0.0      // buzz/rasp phase
+        val rnd = java.util.Random(7)
+        for (i in 0 until n) {
+            val t = i.toDouble() / n
+            // Pitch: a fast rise, then a long fall — the crow's "caw" downglide (not up-and-down).
+            val f = if (t < 0.12) 720.0 + (1180.0 - 720.0) * (t / 0.12)
+                    else 1180.0 + (500.0 - 1180.0) * ((t - 0.12) / 0.88)
+            // Harsh, harmonic-rich tone (sawtooth-ish) — the brightness that makes it a squawk.
+            val tone = sin(ph) + 0.6 * sin(2 * ph) + 0.4 * sin(3 * ph) + 0.25 * sin(4 * ph)
+            // Deep buzz/rasp (~80 Hz AM) + a little noise — the scratchy crow texture, kills the
+            // pure-tone siren quality.
+            val rasp = 0.28 + 0.72 * abs(sin(bz))
+            val noise = (rnd.nextDouble() - 0.5) * 0.20
+            val env = when {                     // fast attack, sustain, decay tail
+                t < 0.035 -> t / 0.035
+                t > 0.78 -> (1.0 - t) / 0.22
+                else -> 1.0
             }
+            val s = (tone * 0.42 + noise) * rasp * env * 10500.0
+            out[i] = s.coerceIn(-31000.0, 31000.0).toInt().toShort()
+            ph += 2.0 * PI * f / SR; if (ph > 2 * PI) ph -= 2 * PI
+            bz += 2.0 * PI * 80.0 / SR; if (bz > 2 * PI) bz -= 2 * PI
         }
         return out
     }
