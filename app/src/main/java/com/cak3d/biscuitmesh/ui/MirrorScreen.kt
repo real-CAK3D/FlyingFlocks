@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
@@ -132,7 +134,8 @@ fun MirrorScreen(vm: MainViewModel, address: String?, onBack: () -> Unit) {
         },
     ) { padding ->
         Column(
-            Modifier.fillMaxSize().padding(padding).padding(16.dp),
+            Modifier.fillMaxSize().padding(padding).padding(16.dp)
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             PhoneStatusBar(
@@ -165,6 +168,9 @@ fun MirrorScreen(vm: MainViewModel, address: String?, onBack: () -> Unit) {
                 log.filter { it.address == address }.map { it.message }
             }
             LiveVizPanel(lines = vizLines, activeOp = device?.status?.activeOp)
+
+            // Clean, labelled results — SSIDs/names with signal bars, or an NFC/IR card.
+            ScanResults(lines = vizLines, activeOp = device?.status?.activeOp)
 
             Text(
                 "Tap a row to jump to it and select. ▲/▼ moves the highlight, ● selects, ◀ goes back — " +
