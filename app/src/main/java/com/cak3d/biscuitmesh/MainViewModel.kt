@@ -369,8 +369,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      *  Progress 0..100 streams in [fwPush]. ~1.5 MB over BLE takes a few minutes. */
     fun pushFirmwareToNode(name: String, bytes: ByteArray) = viewModelScope.launch {
         fun send(n: String, p: String = "") { fleet?.broadcast(command(n, p)); appRef.biscuitSerial.send(command(n, p)) }
+        val total = bytes.size.toLong().coerceAtLeast(1)
         val safe = name.substringAfterLast('/').substringAfterLast('\\').ifBlank { "FlockedUp.bin" }
             .let { if (it.endsWith(".bin")) it else "$it.bin" }
+        // The board writes each chunk to the SD and reports DATA:PUT:ack,<bytesWritten>; it
+        // finishes with DATA:PUT:done. The sender outruns the board (chunks queue in the BLE
+        // buffer), so progress MUST track the board's acks, not bytes queued — otherwise it
+        // reads 100% while the file is still half-written, and a flash then would be corrupt.
+        fun latestPut(): String =
+            log?.value?.lastOrNull {
+                it.message.type == com.cak3d.biscuitmesh.protocol.BiscuitMessage.Type.DATA &&
+                    it.message.subtype == "PUT"
+            }?.message?.payload ?: ""
+        fun ackBytes(): Long {
+            val p = latestPut()
+            return if (p.startsWith("ack,")) p.removePrefix("ack,").trim().toLongOrNull() ?: 0L else 0L
+        }
         _fwPush.value = 0
         send("putfw", safe)
         kotlinx.coroutines.delay(200)
@@ -380,12 +394,26 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val end = minOf(i + 300, b64.length)
             send("putb64", b64.substring(i, end))
             i = end
-            _fwPush.value = (i.toLong() * 100 / b64.length).toInt().coerceIn(0, 99)
+            _fwPush.value = (ackBytes() * 100 / total).toInt().coerceIn(0, 98)
             kotlinx.coroutines.delay(25)
         }
         send("putend", "")
+        // Follow the board's acks until the file is fully written (done / acked ≥ total) or it
+        // stalls — only THEN is it safe to flash.
+        val deadline = System.currentTimeMillis() + 12 * 60 * 1000
+        var lastA = -1L; var lastChange = System.currentTimeMillis()
+        while (System.currentTimeMillis() < deadline) {
+            val p = latestPut()
+            if (p.startsWith("done")) break
+            val a = ackBytes()
+            if (a != lastA) { lastA = a; lastChange = System.currentTimeMillis() }
+            else if (System.currentTimeMillis() - lastChange > 30000) break   // stalled 30 s
+            _fwPush.value = (a * 100 / total).toInt().coerceIn(0, 99)
+            if (a >= total) break
+            kotlinx.coroutines.delay(400)
+        }
         _fwPush.value = 100
-        kotlinx.coroutines.delay(2500)
+        kotlinx.coroutines.delay(3000)
         _fwPush.value = -1
     }
 
