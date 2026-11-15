@@ -1,5 +1,7 @@
 package com.cak3d.biscuitmesh.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -49,7 +51,28 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.cak3d.biscuitmesh.MainViewModel
 import com.cak3d.biscuitmesh.data.Target
 import com.cak3d.biscuitmesh.data.TargetKind
+import com.cak3d.biscuitmesh.sensors.PhoneScanRow
 import com.cak3d.biscuitmesh.ui.theme.appCardShape
+
+/** A canScan target seen in the live phone scan within the last 30 s → its RSSI, else null. */
+private fun inRangeRssi(t: Target, scan: List<PhoneScanRow>): Int? {
+    if (t.kind == TargetKind.LOCATION) return null
+    val now = System.currentTimeMillis()
+    return scan.firstOrNull {
+        (it.id.equals(t.value, true) || it.label.equals(t.value, true)) && now - it.lastSeenMs < 30_000L
+    }?.rssi
+}
+
+/** Metres from the current GPS fix to a LOCATION target, or null. */
+private fun distanceM(t: Target, fix: Pair<Double, Double>?): Float? {
+    val ll = t.latLon ?: return null
+    val f = fix ?: return null
+    val out = FloatArray(1)
+    android.location.Location.distanceBetween(f.first, f.second, ll.first, ll.second, out)
+    return out[0]
+}
+
+private fun fmtDist(m: Float): String = if (m < 1000f) "${m.toInt()} m" else "%.1f km".format(m / 1000f)
 
 private fun kindIcon(kind: TargetKind): ImageVector = when (kind) {
     TargetKind.NETWORK -> Icons.Default.Wifi
@@ -73,6 +96,8 @@ private fun kindTint(kind: TargetKind): Color = when (kind) {
 @Composable
 fun TargetsScreen(vm: MainViewModel, onBack: () -> Unit) {
     val targets by vm.targets.collectAsStateWithLifecycle(initialValue = emptyList())
+    val scan by vm.phoneScanResults.collectAsStateWithLifecycle(initialValue = emptyList())
+    val fix by vm.currentFix.collectAsStateWithLifecycle(initialValue = null)
     var showAdd by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -134,6 +159,8 @@ fun TargetsScreen(vm: MainViewModel, onBack: () -> Unit) {
                     }
                     items(rows, key = { it.id }) { t ->
                         TargetRow(t,
+                            rssi = if (t.canScan) inRangeRssi(t, scan) else null,
+                            distanceM = if (t.canScan) distanceM(t, fix) else null,
                             onToggle = { vm.setTargetScan(t.id, it) },
                             onDelete = { vm.removeTarget(t.id) })
                     }
@@ -148,9 +175,15 @@ fun TargetsScreen(vm: MainViewModel, onBack: () -> Unit) {
 }
 
 @Composable
-private fun TargetRow(t: Target, onToggle: (Boolean) -> Unit, onDelete: () -> Unit) {
-    Card(Modifier.fillMaxWidth(), shape = appCardShape(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+private fun TargetRow(t: Target, rssi: Int?, distanceM: Float?, onToggle: (Boolean) -> Unit, onDelete: () -> Unit) {
+    val inRange = rssi != null || distanceM != null
+    val live = Color(0xFF34D399)
+    Card(
+        Modifier.fillMaxWidth()
+            .then(if (inRange) Modifier.border(1.5.dp, live.copy(alpha = 0.7f), appCardShape()) else Modifier),
+        shape = appCardShape(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically) {
             Icon(kindIcon(t.kind), contentDescription = null, tint = kindTint(t.kind),
@@ -159,6 +192,14 @@ private fun TargetRow(t: Target, onToggle: (Boolean) -> Unit, onDelete: () -> Un
                 Text(t.label.ifBlank { t.value }, style = MaterialTheme.typography.bodyLarge, maxLines = 1)
                 Text(t.value, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), maxLines = 1)
+            }
+            when {
+                rssi != null -> InRangeBadge("IN RANGE", "$rssi dBm", live)
+                distanceM != null -> InRangeBadge("GPS", fmtDist(distanceM), Color(0xFF22D3EE))
+                t.canScan -> Text("scanning…", style = MaterialTheme.typography.labelSmall,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f),
+                    modifier = Modifier.padding(end = 8.dp))
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("Scan", style = MaterialTheme.typography.labelSmall,
@@ -170,6 +211,21 @@ private fun TargetRow(t: Target, onToggle: (Boolean) -> Unit, onDelete: () -> Un
                     tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
             }
         }
+    }
+}
+
+@Composable
+private fun InRangeBadge(label: String, value: String, tint: Color) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.padding(end = 8.dp)
+            .background(tint.copy(alpha = 0.14f), appCardShape())
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+    ) {
+        Text("● $label", style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Bold, color = tint)
+        Text(value, style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace,
+            color = tint.copy(alpha = 0.85f))
     }
 }
 
