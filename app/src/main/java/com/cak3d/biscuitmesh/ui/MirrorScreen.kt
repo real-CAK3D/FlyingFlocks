@@ -267,9 +267,18 @@ private fun TuneView(ui: MirrorUi) {
 
 @Composable
 private fun LogView(ui: MirrorUi) {
+    // The device's own on-screen log. During a scan it fills with raw DATA: telemetry — that
+    // belongs in the clean wave/list panels below, NOT dumped as text in the replica — so hide
+    // those lines and show only the device's human-readable log, or a scanning hint.
+    val clean = ui.log.filterNot { it.startsWith("DATA:") }
     Column(Modifier.fillMaxSize()) {
-        if (ui.log.isEmpty()) Text("listening…", color = TE_DIM, fontFamily = MONO, fontSize = 12.sp)
-        ui.log.forEachIndexed { i, line ->
+        if (clean.isEmpty()) {
+            Text(
+                if (ui.log.isEmpty()) "listening…" else "scanning… (results below)",
+                color = TE_DIM, fontFamily = MONO, fontSize = 12.sp,
+            )
+        }
+        clean.forEachIndexed { i, line ->
             Text(line, color = if (i == 0) TE_INK else TE_DIM, fontFamily = MONO, fontSize = 11.sp, maxLines = 1)
         }
     }
