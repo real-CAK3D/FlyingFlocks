@@ -419,7 +419,11 @@ class WardriveManager(
     }
 
     private fun scanCommand(mode: WardriveMode): ByteArray = when (mode) {
-        WardriveMode.ALL -> command("scanall")
+        // ALL uses the firmware's combined wardrive engine (Wi-Fi + BLE + sub-GHz),
+        // which streams DATA:AP/DATA:BT/DATA:RF to the host. NOT "scanall" — on the
+        // T-Embed that command means a sub-GHz-only sweep, so it produced no device
+        // pins on the map. WIFI/BT keep their dedicated single-radio scans.
+        WardriveMode.ALL -> command("wardrive")
         WardriveMode.WIFI -> command("scanap")
         WardriveMode.BT -> command("sniffbt", "type=all")
     }
