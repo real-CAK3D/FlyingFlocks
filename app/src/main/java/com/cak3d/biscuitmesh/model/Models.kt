@@ -47,8 +47,15 @@ data class BiscuitDevice(
      *  self-reported model, else the GATT model/firmware strings. */
     fun typeLabel(): String? = status?.model ?: model ?: firmware
 
-    /** True when the board reports a link-code gate that hasn't been satisfied yet. */
-    val needsLink: Boolean get() = status?.link == "required"
+    /** True when the board reports a link-code gate that hasn't been satisfied yet.
+     *  The live DATA:HEALTH heartbeat wins over the one-shot STATUS snapshot: a board
+     *  that auto-relinks (or links after the STATUS read) keeps reporting link=ok in
+     *  its heartbeat even though status.link stays stale at "required". Trust health. */
+    val needsLink: Boolean get() = when (health?.link) {
+        "ok" -> false
+        "required" -> true
+        else -> status?.link == "required"   // no live heartbeat yet — fall back to STATUS
+    }
 
     /** A short human status line for the card. */
     fun statusLabel(): String = when {
