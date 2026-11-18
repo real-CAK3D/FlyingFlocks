@@ -54,6 +54,9 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.cak3d.biscuitmesh.MainViewModel
+import com.cak3d.biscuitmesh.geo.AdsbClient
+import com.cak3d.biscuitmesh.geo.Aircraft
+import kotlinx.coroutines.delay
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -91,6 +94,23 @@ fun SkyArScreen(vm: MainViewModel, onBack: () -> Unit) {
 
     // Keep the GNSS feed running while the AR view is open.
     DisposableEffect(Unit) { vm.startGnss(); onDispose { vm.stopGnss() } }
+
+    // Live aircraft overhead (reuses the no-key airplanes.live ADS-B client), polled
+    // around the current fix and placed by bearing + computed elevation.
+    val adsb = remember { AdsbClient() }
+    var fix by remember { mutableStateOf<Pair<Double, Double>?>(null) }
+    var planes by remember { mutableStateOf<List<Aircraft>>(emptyList()) }
+    LaunchedEffect(Unit) {
+        runCatching { vm.locationUpdates().collect { fix = it.latitude to it.longitude } }
+    }
+    val fixKey = fix?.let { Math.round(it.first * 50) to Math.round(it.second * 50) }
+    LaunchedEffect(fixKey) {
+        val f = fix ?: return@LaunchedEffect
+        while (true) {
+            planes = adsb.nearby(f.first, f.second, 60)
+            delay(12_000)
+        }
+    }
 
     // Device attitude as a rotation matrix (device -> world ENU), updated from the sensor.
     var rm by remember { mutableStateOf(FloatArray(9) { if (it % 4 == 0) 1f else 0f }) }
@@ -165,6 +185,12 @@ fun SkyArScreen(vm: MainViewModel, onBack: () -> Unit) {
                         6f + (s.cn0 / 50f).coerceIn(0f, 1f) * 8f,
                     ))
                 }
+                // Aircraft: azimuth = bearing to the plane, elevation from its altitude vs ground distance.
+                planes.forEach { a ->
+                    val distM = (a.distanceKm * 1000.0).coerceAtLeast(1.0)
+                    val el = Math.toDegrees(atan2(a.altFt * 0.3048, distM)).toFloat()
+                    add(SkyTarget(a.bearingDeg, el, a.flight.ifBlank { a.hex }, Color(0xFFFFD166), 8f))
+                }
             }
 
             Canvas(Modifier.fillMaxSize()) {
@@ -213,7 +239,7 @@ fun SkyArScreen(vm: MainViewModel, onBack: () -> Unit) {
             Column(Modifier.fillMaxWidth().padding(12.dp)) {
                 Text("$card  ${heading.toInt()}°", style = MaterialTheme.typography.titleMedium,
                     fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, color = Color.White)
-                Text("${gnss.sats.count { it.elevationDeg >= 0f }} satellites in view · point at the sky",
+                Text("${gnss.sats.count { it.elevationDeg >= 0f }} sats · ${planes.size} aircraft · point at the sky",
                     style = MaterialTheme.typography.labelMedium, color = Color.White.copy(alpha = 0.8f),
                     modifier = Modifier.background(Color.Black.copy(alpha = 0.25f)))
             }
