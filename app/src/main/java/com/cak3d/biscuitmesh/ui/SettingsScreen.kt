@@ -178,6 +178,7 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit, onOpenDeadZones: () ->
                     }
                     3 -> {
                         ExportSection(vm)
+                        ApiKeysSection(vm)
                         WdgSection(vm)
                         androidx.compose.material3.OutlinedButton(
                             onClick = onOpenWigle, modifier = Modifier.fillMaxWidth(),
@@ -762,6 +763,43 @@ private fun ToggleRow(title: String, subtitle: String, checked: Boolean, onChang
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
         }
         Switch(checked = checked, onCheckedChange = onChange)
+    }
+}
+
+@Composable
+private fun ApiKeysSection(vm: MainViewModel) {
+    val keys by vm.apiKeys.collectAsStateWithLifecycle()
+    SectionCard(
+        title = "API keys",
+        subtitle = "Optional keys for the live feeds — ADS-B aircraft, traffic cameras, webcams and scanner audio. " +
+            "Everything works on the open/anonymous path without them; add a key only to raise limits or unlock a source. " +
+            "OpenStreetMap, Overpass and OpenMHz need no key. Keys are stored only on this device.",
+    ) {
+        com.cak3d.biscuitmesh.data.ApiKeys.services.forEach { svc ->
+            ApiKeyField(svc, keys[svc.id] ?: "") { vm.setApiKey(svc.id, it) }
+        }
+    }
+}
+
+@Composable
+private fun ApiKeyField(svc: com.cak3d.biscuitmesh.data.ApiService, saved: String, onSave: (String) -> Unit) {
+    var field by remember(saved) { mutableStateOf(saved) }
+    OutlinedTextField(
+        value = field,
+        onValueChange = { field = it },
+        label = { Text(svc.label) },
+        singleLine = true,
+        visualTransformation = if (svc.secret) androidx.compose.ui.text.input.PasswordVisualTransformation()
+        else androidx.compose.ui.text.input.VisualTransformation.None,
+        modifier = Modifier.fillMaxWidth(),
+    )
+    Text(
+        svc.hint + if (svc.url.isNotBlank()) "  ${svc.url}" else "",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+    )
+    OutlinedButton(onClick = { onSave(field) }, enabled = field.trim() != saved) {
+        Text(if (saved.isBlank()) "Save" else "Update")
     }
 }
 

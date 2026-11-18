@@ -223,4 +223,45 @@ class SettingsStore(private val context: Context) {
     suspend fun setAppAccent(name: String) {
         context.settingsDataStore.edit { it[appAccentKey] = name }
     }
+
+    // --- API keys ------------------------------------------------------------
+    // One place for every optional third-party credential (ADS-B, traffic cams,
+    // webcams, scanner feeds, …). Each service's value is stored under "api_<id>";
+    // the catalog of services lives in [ApiKeys]. Empty = not configured, and the
+    // app falls back to the no-key/anonymous path for that source.
+
+    /** The stored value for one service id (empty when unset). */
+    fun apiKey(id: String): Flow<String> =
+        context.settingsDataStore.data.map { it[stringPreferencesKey("api_$id")] ?: "" }
+
+    /** Every known service id → its stored value (empty string when unset). */
+    val allApiKeys: Flow<Map<String, String>> =
+        context.settingsDataStore.data.map { prefs ->
+            ApiKeys.services.associate { it.id to (prefs[stringPreferencesKey("api_${it.id}")] ?: "") }
+        }
+
+    suspend fun setApiKey(id: String, value: String) {
+        context.settingsDataStore.edit { it[stringPreferencesKey("api_$id")] = value.trim() }
+    }
+}
+
+/** A third-party service whose optional key/credential the app can store. */
+data class ApiService(val id: String, val label: String, val hint: String, val url: String, val secret: Boolean = false)
+
+/** The catalog of services shown in Settings → API Keys. Add a row to add a field. */
+object ApiKeys {
+    val services = listOf(
+        ApiService("opensky_client_id", "OpenSky client ID",
+            "Higher ADS-B limits for live aircraft — planes still work anonymously without it.", "https://opensky-network.org"),
+        ApiService("opensky_client_secret", "OpenSky client secret",
+            "Paired with the OpenSky client ID.", "https://opensky-network.org", secret = true),
+        ApiService("dot511_key", "511 / DOT cameras key",
+            "Some state traffic-camera feeds need a free developer key; many are open.", ""),
+        ApiService("windy_webcams", "Windy Webcams key",
+            "Optional public-webcam source near you.", "https://api.windy.com/webcams"),
+        ApiService("broadcastify_user", "Broadcastify username",
+            "Live police/fire scanner feeds (optional — OpenMHz needs no key).", "https://www.broadcastify.com"),
+        ApiService("broadcastify_pass", "Broadcastify password",
+            "Paired with the Broadcastify username.", "https://www.broadcastify.com", secret = true),
+    )
 }
