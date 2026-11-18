@@ -112,6 +112,7 @@ import com.cak3d.biscuitmesh.ui.SensorsHubScreen
 import com.cak3d.biscuitmesh.ui.TrackerScreen
 import com.cak3d.biscuitmesh.ui.WigleStatsScreen
 import com.cak3d.biscuitmesh.ui.ConstellationBackground
+import com.cak3d.biscuitmesh.ui.EyesightArScreen
 import com.cak3d.biscuitmesh.ui.ForceGraphScreen
 import com.cak3d.biscuitmesh.ui.MiscScreen
 import com.cak3d.biscuitmesh.ui.SkyArScreen
@@ -410,6 +411,7 @@ private fun MainShell(vm: MainViewModel) {
                 }
                 composable("devicegraph") { ForceGraphScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("skyar") { SkyArScreen(vm = vm, onBack = { nav.popBackStack() }) }
+                composable("eyesight") { EyesightArScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("globe") { GlobeScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("orbit") { OrbitScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("globalstats") { GlobalStatsScreen(vm = vm, onBack = { nav.popBackStack() }) }
