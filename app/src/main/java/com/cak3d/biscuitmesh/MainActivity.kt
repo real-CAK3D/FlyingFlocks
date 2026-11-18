@@ -342,7 +342,7 @@ private fun MainShell(vm: MainViewModel) {
                     MeshNodeDetailScreen(vm = vm, num = num, onBack = { nav.popBackStack() })
                 }
                 composable("fleethealth") { FleetHealthScreen(vm = vm, onBack = { nav.popBackStack() }) }
-                composable("wardrive") { WardriveScreen(vm) }
+                composable("wardrive") { WardriveScreen(vm, onOpenEyesight = { nav.navigate("eyesight") }) }
                 composable("wifi") {
                     WifiScreen(vm, onOpenTool = { nav.navigate("runtool/$it") },
                         onLocate = { nav.navigate("navlocate/${java.net.URLEncoder.encode(it, "UTF-8")}") })

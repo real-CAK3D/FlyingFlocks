@@ -49,6 +49,7 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Streetview
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedButton
@@ -105,7 +106,7 @@ import org.osmdroid.views.overlay.gestures.RotationGestureOverlay
 import kotlin.math.roundToInt
 
 @Composable
-fun WardriveScreen(vm: MainViewModel) {
+fun WardriveScreen(vm: MainViewModel, onOpenEyesight: () -> Unit = {}) {
     val stateFlow = vm.wardriveState
     val samplesFlow = vm.wardriveSamples
     val trackFlow = vm.wardriveTrack
@@ -613,6 +614,12 @@ fun WardriveScreen(vm: MainViewModel) {
                     checked = hudOn, onCheckedChange = { vm.setHudEnabled(it) },
                     modifier = Modifier.size(44.dp), colors = mapBtnColors,
                 ) { Icon(Icons.Default.Speed, contentDescription = if (hudOn) "Hide HUD" else "Show HUD") }
+                // Eyesight — drop into camera AR of the plots around you.
+                FilledIconButton(
+                    onClick = onOpenEyesight,
+                    modifier = Modifier.size(44.dp),
+                    colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.surface),
+                ) { Icon(Icons.Default.Streetview, contentDescription = "Eyesight AR") }
             }
         }
 
