@@ -15,6 +15,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Flight
 import androidx.compose.material.icons.filled.Campaign
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Explore
@@ -72,6 +73,7 @@ fun SensorsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
             HubEntry("Device Graph", "APs, their clients & BLE as a live force-directed web", Icons.Default.Hub, "devicegraph", Color(0xFFA855F7)),
         )),
         HubSection("Sky", listOf(
+            HubEntry("Sky AR", "Point your phone at the sky — satellites overlaid live on the camera", Icons.Default.CameraAlt, "skyar", Color(0xFFA78BFA)),
             HubEntry("GPS Satellites", "Live 3D sky dome — every GPS/GLONASS/Galileo sat your phone sees", Icons.Default.SatelliteAlt, "satellites", Color(0xFF22D3EE)),
             HubEntry("Orbit", "Satellites, aircraft & space weather — flip between the three in one view", Icons.Default.Public, "orbit", Color(0xFF38BDF8)),
         )),

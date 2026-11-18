@@ -114,6 +114,7 @@ import com.cak3d.biscuitmesh.ui.WigleStatsScreen
 import com.cak3d.biscuitmesh.ui.ConstellationBackground
 import com.cak3d.biscuitmesh.ui.ForceGraphScreen
 import com.cak3d.biscuitmesh.ui.MiscScreen
+import com.cak3d.biscuitmesh.ui.SkyArScreen
 import com.cak3d.biscuitmesh.ui.PlacesScreen
 import com.cak3d.biscuitmesh.ui.RareBirdsScreen
 import com.cak3d.biscuitmesh.ui.RunToolScreen
@@ -408,6 +409,7 @@ private fun MainShell(vm: MainViewModel) {
                     SatellitesScreen(vm = vm, onBack = { nav.popBackStack() }, onOpenGlobe = { nav.navigate("globe") })
                 }
                 composable("devicegraph") { ForceGraphScreen(vm = vm, onBack = { nav.popBackStack() }) }
+                composable("skyar") { SkyArScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("globe") { GlobeScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("orbit") { OrbitScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("globalstats") { GlobalStatsScreen(vm = vm, onBack = { nav.popBackStack() }) }

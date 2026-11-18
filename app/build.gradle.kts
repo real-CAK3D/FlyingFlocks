@@ -12,8 +12,8 @@ android {
         applicationId = "com.cak3d.biscuitmesh"
         minSdk = 26
         targetSdk = 36
-        versionCode = 149
-        versionName = "0.132.0"
+        versionCode = 150
+        versionName = "0.133.0"
         vectorDrawables { useSupportLibrary = true }
     }
 
@@ -74,5 +74,10 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.osmdroid.android)
     implementation(libs.play.services.location)
+    // CameraX — the AR sky camera's live preview.
+    implementation("androidx.camera:camera-core:1.3.4")
+    implementation("androidx.camera:camera-camera2:1.3.4")
+    implementation("androidx.camera:camera-lifecycle:1.3.4")
+    implementation("androidx.camera:camera-view:1.3.4")
     debugImplementation(libs.androidx.ui.tooling)
 }
