@@ -68,10 +68,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.cak3d.biscuitmesh.MainViewModel
+import com.cak3d.biscuitmesh.model.LogEntry
+import com.cak3d.biscuitmesh.protocol.BiscuitMessage
 import com.cak3d.biscuitmesh.sensors.PhoneScanRow
 import com.cak3d.biscuitmesh.tools.Tool
 import com.cak3d.biscuitmesh.tools.ToolCatalog
 import com.cak3d.biscuitmesh.wardrive.SampleKind
+import kotlinx.coroutines.flow.MutableStateFlow
 
 private val WIFI_CYAN = Color(0xFF22D3EE)
 private val BT_BLUE = Color(0xFF7C9CFF)
@@ -237,21 +240,63 @@ fun BluetoothScreen(vm: MainViewModel, onOpenTool: (String) -> Unit, onLocate: (
 
 private fun plural(n: Int) = if (n == 1) "" else "s"
 
+/**
+ * The Device Lab (the "Misc" tab). Was a flat list of command launchers; now it leads
+ * with live meters built from the board streams the rest of the app only logged —
+ * DATA:PKT (frame mix + deauth alarm), DATA:PROBE (probed SSIDs), DATA:STA (client
+ * stations), DATA:WARDRIVE (capture counts) and DATA:MODE (running engines). The
+ * per-board MaurCAK3D / T-Embed command launchers stay underneath.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MiscScreen(onOpenTool: (String) -> Unit) {
-    TabbedToolScreen(
-        title = "Misc Tools",
-        leadingIcon = Icons.Default.Dashboard,
-        // MaurCAK3D = the ESP32-Marauder-on-C5 Biscuit build; T-Embed = the CC1101 Plus
-        // image (sub-GHz + NFC + IR + Wi-Fi). Each board's options get their own tab here.
-        tabs = listOf(
-            "Tools" to ToolCatalog.misc,
-            "MaurCAK3D" to ToolCatalog.marauder,
-            "T-Embed" to ToolCatalog.tembed,
-        ),
-        onOpenTool = onOpenTool,
+fun MiscScreen(vm: MainViewModel, onOpenTool: (String) -> Unit) {
+    val logFlow = vm.log ?: remember { MutableStateFlow(emptyList<LogEntry>()) }
+    val log by logFlow.collectAsStateWithLifecycle(initialValue = emptyList())
+    var tab by remember { mutableIntStateOf(0) }
+    val tabs = listOf(
+        "Tools" to ToolCatalog.misc,
+        "MaurCAK3D" to ToolCatalog.marauder,
+        "T-Embed" to ToolCatalog.tembed,
     )
+    val liveSubtypes = setOf("PKT", "PROBE", "STA", "WARDRIVE", "MODE")
+    val hasLive = log.any {
+        it.message.type == BiscuitMessage.Type.DATA && it.message.subtype in liveSubtypes
+    }
+    val accent = MaterialTheme.colorScheme.primary
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        item("head") {
+            com.cak3d.biscuitmesh.ui.theme.ThemedCard(Modifier.fillMaxWidth()) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Icon(Icons.Default.Dashboard, contentDescription = null, tint = accent, modifier = Modifier.size(30.dp))
+                    Column {
+                        Text("Device Lab", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        Text("Live meters from the T-Embed and Marauder boards — run a scan below to light them up.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f))
+                    }
+                }
+            }
+        }
+        item("modes") { ModeChips(log) }
+        item("pkt") { PacketMonitorCard(log) }
+        item("probe") { ProbeRequestCard(log) }
+        item("sta") { StationListCard(log) }
+        item("cap") { CaptureCounterCard(log) }
+        if (!hasLive) item("hint") {
+            EmptyScanHint(false, "the boards' frame, probe and station streams — run Packet Monitor, Probe Sniff or a wardrive below", accent)
+        }
+
+        item("tlabel") { SectionLabel("TOOLS", accent) }
+        item("tabs") { ToolTabRow(tabs.map { it.first }, tab) { tab = it } }
+        items(tabs[tab.coerceIn(0, tabs.lastIndex)].second, key = { "mt-${it.key}" }) {
+            ToolRow(it, Icons.Default.Dashboard) { onOpenTool(it.key) }
+        }
+    }
 }
 
 /** Dashboard header: icon + title + live count, and a full-width Scan/Stop control. */

@@ -439,7 +439,10 @@ class WardriveManager(
         val f = msg.payload.split(",")
         return when (msg.subtype) {
             "AP" -> if (f.size >= 4) WardriveSample(SampleKind.AP, f[1], f[0], lat, lon, f[3].toIntOrNull() ?: 0, timeMs, acc, channel = f[2].toIntOrNull() ?: 0) else null
-            "STA" -> if (f.size >= 4) WardriveSample(SampleKind.STATION, f[0], f[0], lat, lon, f[3].toIntOrNull() ?: 0, timeMs, acc, channel = f.getOrNull(2)?.toIntOrNull() ?: 0) else null
+            // DATA:STA:<srcMac>,<bssid>,<rssi> — the firmware sends 3 fields (rssi last),
+            // so key each client by its MAC and read the signal from index 2. (Was guarded
+            // at >=4 with rssi at f[3], which silently dropped every station.)
+            "STA" -> if (f.size >= 3) WardriveSample(SampleKind.STATION, f[0], f[0], lat, lon, f[2].toIntOrNull() ?: 0, timeMs, acc) else null
             "BT" -> if (f.size >= 3) WardriveSample(SampleKind.BT, f[1], f[0], lat, lon, f[2].toIntOrNull() ?: 0, timeMs, acc) else null
             // Sub-GHz activity from a CC1101: DATA:RF:<freqMHz>,<rssi>. There's no device
             // id, so key each ping by frequency + a ~11 m location bucket — a spot that keeps

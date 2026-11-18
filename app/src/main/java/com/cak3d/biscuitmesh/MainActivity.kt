@@ -368,7 +368,7 @@ private fun MainShell(vm: MainViewModel) {
                 composable("audio") {
                     AudioScreen(vm, onBack = { nav.popBackStack() })
                 }
-                composable("misc") { MiscScreen(onOpenTool = { nav.navigate("runtool/$it") }) }
+                composable("misc") { MiscScreen(vm, onOpenTool = { nav.navigate("runtool/$it") }) }
                 composable("rarebirds") {
                     RareBirdsScreen(
                         vm = vm,
