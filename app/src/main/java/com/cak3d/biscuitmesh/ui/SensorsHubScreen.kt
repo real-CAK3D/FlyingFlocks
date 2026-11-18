@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.SatelliteAlt
 import androidx.compose.material.icons.filled.Sensors
 import androidx.compose.material.icons.filled.SettingsRemote
 import androidx.compose.material.icons.filled.SportsEsports
+import androidx.compose.material.icons.filled.Terrain
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.Science
 import androidx.compose.material.icons.filled.Streetview
@@ -73,6 +74,7 @@ fun SensorsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
             HubEntry("Watchlist", "Flag MACs or names and spot them in range", Icons.Default.Visibility, "watchlist", Color(0xFF34D399)),
             HubEntry("Targets", "Networks, devices & locations to locate — scan toggles, local only", Icons.Default.GpsFixed, "targets", Color(0xFFF59E0B)),
             HubEntry("Device Graph", "APs, their clients & BLE as a live force-directed web", Icons.Default.Hub, "devicegraph", Color(0xFFA855F7)),
+            HubEntry("3D Terrain", "Your drive tilted onto the real landscape — free elevation + imagery, then drop to street level", Icons.Default.Terrain, "terrain3d", Color(0xFF8FD694)),
             HubEntry("Eyesight AR", "Point the phone at the street — your plotted points within ~1 km, through the camera", Icons.Default.Streetview, "eyesight", Color(0xFF00E5A0)),
         )),
         HubSection("Sky", listOf(

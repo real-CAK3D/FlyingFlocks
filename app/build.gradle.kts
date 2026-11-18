@@ -12,8 +12,8 @@ android {
         applicationId = "com.cak3d.biscuitmesh"
         minSdk = 26
         targetSdk = 36
-        versionCode = 157
-        versionName = "0.140.0"
+        versionCode = 158
+        versionName = "0.141.0"
         vectorDrawables { useSupportLibrary = true }
     }
 
@@ -79,5 +79,7 @@ dependencies {
     implementation("androidx.camera:camera-camera2:1.3.4")
     implementation("androidx.camera:camera-lifecycle:1.3.4")
     implementation("androidx.camera:camera-view:1.3.4")
+    // MapLibre GL Native — the 3D-terrain "Eyesight" middle stage (free DEM + imagery, no key).
+    implementation("org.maplibre.gl:android-sdk:11.8.8")
     debugImplementation(libs.androidx.ui.tooling)
 }

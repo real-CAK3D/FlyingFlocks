@@ -68,6 +68,7 @@ import androidx.navigation.compose.rememberNavController
 import com.cak3d.biscuitmesh.ui.BluetoothScreen
 import com.cak3d.biscuitmesh.ui.DebugScreen
 import com.cak3d.biscuitmesh.ui.FeedsScreen
+import com.cak3d.biscuitmesh.ui.Terrain3DScreen
 import com.cak3d.biscuitmesh.ui.DeviceDetailScreen
 import com.cak3d.biscuitmesh.ui.MirrorScreen
 import com.cak3d.biscuitmesh.ui.DrivesScreen
@@ -343,7 +344,7 @@ private fun MainShell(vm: MainViewModel) {
                     MeshNodeDetailScreen(vm = vm, num = num, onBack = { nav.popBackStack() })
                 }
                 composable("fleethealth") { FleetHealthScreen(vm = vm, onBack = { nav.popBackStack() }) }
-                composable("wardrive") { WardriveScreen(vm, onOpenEyesight = { nav.navigate("eyesight") }) }
+                composable("wardrive") { WardriveScreen(vm, onOpenEyesight = { nav.navigate("terrain3d") }) }
                 composable("wifi") {
                     WifiScreen(vm, onOpenTool = { nav.navigate("runtool/$it") },
                         onLocate = { nav.navigate("navlocate/${java.net.URLEncoder.encode(it, "UTF-8")}") })
@@ -413,6 +414,7 @@ private fun MainShell(vm: MainViewModel) {
                 composable("devicegraph") { ForceGraphScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("skyar") { SkyArScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("feeds") { FeedsScreen(vm = vm, onBack = { nav.popBackStack() }) }
+                composable("terrain3d") { Terrain3DScreen(vm = vm, onBack = { nav.popBackStack() }, onOpenEyesight = { nav.navigate("eyesight") }) }
                 composable("eyesight") { EyesightArScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("globe") { GlobeScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("orbit") { OrbitScreen(vm = vm, onBack = { nav.popBackStack() }) }
