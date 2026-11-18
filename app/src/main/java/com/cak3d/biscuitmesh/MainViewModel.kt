@@ -83,6 +83,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setWtfSourceEnabled(on: Boolean) { viewModelScope.launch { appRef.settingsStore.setWtfSourceEnabled(on) } }
 
+    // --- What the Flock dongle over BLE (wireless, no USB tether) ----------
+    val wtfBleLink: StateFlow<com.cak3d.biscuitmesh.usb.WtfLinkState> = appRef.wtfBle.link
+    val wtfBleDeviceName: StateFlow<String?> = appRef.wtfBle.deviceName
+    /** Start (and remember) a wireless link to a WTF dongle. */
+    fun connectWtfBle() {
+        viewModelScope.launch { appRef.settingsStore.setWtfBleEnabled(true) }
+        appRef.wtfBle.connect()
+    }
+    /** Drop the wireless link and stop reconnecting. */
+    fun disconnectWtfBle() {
+        viewModelScope.launch { appRef.settingsStore.setWtfBleEnabled(false) }
+        appRef.wtfBle.disconnect()
+    }
+
     /** Link state / name of a plugged-in ESP Marauder. */
     val marauderLink: StateFlow<com.cak3d.biscuitmesh.usb.WtfLinkState> = appRef.marauderSerial.link
     val marauderDeviceName: StateFlow<String?> = appRef.marauderSerial.deviceName

@@ -220,44 +220,18 @@ class WtfSerialSource(context: Context, private val scope: CoroutineScope) {
     }
 
     private fun handleLine(l: String) {
-        if (l.firstOrNull() != '{') return
-        val ev = runCatching { JSONObject(l) }.getOrNull() ?: return
-        when (ev.optString("event")) {
-            "detection" -> emit(ev, live = true)
-            "session_det" -> emit(ev, live = false)
-            "sd_det" -> emit(ev, live = false)   // a line of the board's microSD detection log
-            "sd_info" -> {                        // board status, incl. GPS module/fix/sats
-                if (ev.has("gps") || ev.has("gps_fix") || ev.has("sats")) {
-                    val g = WtfGps(ev.optInt("gps") == 1, ev.optInt("gps_fix") == 1, ev.optInt("sats"),
-                        if (ev.has("lat") && !ev.isNull("lat")) ev.optDouble("lat") else null,
-                        if (ev.has("lon") && !ev.isNull("lon")) ev.optDouble("lon") else null)
-                    _gps.value = g
-                    android.util.Log.d(TAG, "GPS present=${g.present} fix=${g.fix} sats=${g.sats}")
-                }
+        when (val e = WtfProtocol.parseLine(l)) {
+            is WtfEvent.Sighting -> {
+                val d = e.detection
+                android.util.Log.d(TAG, "sighting mac=${d.mac} tier=${d.tier} loc=${d.lat},${d.lon} live=${d.live}")
+                _detections.tryEmit(d)
             }
-            // session_begin/end, sd_end, config, *_error carry no sighting.
-            else -> Unit
+            is WtfEvent.Gps -> {
+                _gps.value = e.gps
+                android.util.Log.d(TAG, "GPS present=${e.gps.present} fix=${e.gps.fix} sats=${e.gps.sats}")
+            }
+            null -> Unit
         }
-    }
-
-    private fun emit(ev: JSONObject, live: Boolean) {
-        val mac = (ev.optString("mac_address").ifEmpty { ev.optString("mac") }).lowercase()
-        if (mac.isEmpty()) return
-        val det = WtfDetection(
-            mac = mac,
-            tier = ev.optInt("detection_tier", ev.optInt("tier", 0)),
-            method = ev.optString("detection_method", ev.optString("method", "unknown")),
-            lat = if (ev.has("lat") && !ev.isNull("lat")) ev.optDouble("lat") else null,
-            lon = if (ev.has("lon") && !ev.isNull("lon")) ev.optDouble("lon") else null,
-            rssi = ev.optInt("rssi", -127),
-            ssid = ev.optString("ssid", ""),
-            name = ev.optString("device_name", ""),
-            protocol = ev.optString("protocol", ""),
-            channel = if (ev.has("channel")) ev.optInt("channel") else if (ev.has("ch")) ev.optInt("ch") else null,
-            live = live,
-        )
-        android.util.Log.d(TAG, "sighting mac=${det.mac} tier=${det.tier} loc=${det.lat},${det.lon} live=$live")
-        _detections.tryEmit(det)
     }
 
     /** Pull the sightings the dongle saved while it was unplugged. */

@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.LocationOff
 import androidx.compose.material.icons.filled.Usb
+import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Straighten
 import androidx.compose.material3.AlertDialog
@@ -564,6 +565,40 @@ private fun WtfSection(vm: MainViewModel) {
         } else {
             Button(onClick = { vm.connectWtf() }, enabled = !connecting, modifier = Modifier.fillMaxWidth()) {
                 Text("Connect dongle")
+            }
+        }
+
+        // Wireless link — the same dongle over BLE, no cable. Needs the BLE-bridge
+        // firmware flashed; works alongside a USB tether (sightings dedup by MAC).
+        val bleLink by vm.wtfBleLink.collectAsStateWithLifecycle()
+        val bleName by vm.wtfBleDeviceName.collectAsStateWithLifecycle()
+        val bleConnected = bleLink == com.cak3d.biscuitmesh.usb.WtfLinkState.CONNECTED
+        val bleConnecting = bleLink == com.cak3d.biscuitmesh.usb.WtfLinkState.CONNECTING
+        Spacer(Modifier.height(8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Icon(
+                Icons.Default.Bluetooth,
+                contentDescription = null,
+                tint = if (bleConnected) Color(0xFF3DDC84) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+            )
+            Text(
+                when {
+                    bleConnected -> bleName ?: "Wireless: connected"
+                    bleConnecting -> "Wireless: searching…"
+                    else -> "Wireless: off"
+                },
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+        if (bleConnected || bleConnecting) {
+            OutlinedButton(onClick = { vm.disconnectWtfBle() }, modifier = Modifier.fillMaxWidth()) {
+                Text("Disconnect wireless")
+            }
+        } else {
+            OutlinedButton(onClick = { vm.connectWtfBle() }, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Default.Bluetooth, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Connect over BLE")
             }
         }
 

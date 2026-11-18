@@ -123,6 +123,9 @@ class BiscuitMeshApp : Application() {
     /** The plugged-in What the Flock dongle (USB-serial), when connected. */
     val wtfSerial: WtfSerialSource by lazy { WtfSerialSource(this, appScope) }
 
+    /** The same What the Flock dongle reached wirelessly over BLE (no USB tether). */
+    val wtfBle: com.cak3d.biscuitmesh.usb.WtfBleSource by lazy { com.cak3d.biscuitmesh.usb.WtfBleSource(this, appScope) }
+
     /** A Biscuit board attached over USB-serial (speaks the same CMD:/DATA: protocol as BLE). */
     val biscuitSerial: BiscuitSerialSource by lazy { BiscuitSerialSource(this, appScope) }
 
@@ -294,10 +297,15 @@ class BiscuitMeshApp : Application() {
         // Board GPS: when enabled, the wardrive takes its fix from a connected Meshtastic
         // node's GPS (or the dongle's, if its firmware reports coordinates) instead of the phone.
         locationProvider.externalFix = {
-            mesh.myGpsFix() ?: wtfSerial.gps.value?.let { g ->
-                val la = g.lat; val lo = g.lon
-                if (la != null && lo != null) la to lo else null
-            }
+            mesh.myGpsFix()
+                ?: wtfSerial.gps.value?.let { g ->
+                    val la = g.lat; val lo = g.lon
+                    if (la != null && lo != null) la to lo else null
+                }
+                ?: wtfBle.gps.value?.let { g ->
+                    val la = g.lat; val lo = g.lon
+                    if (la != null && lo != null) la to lo else null
+                }
         }
         appScope.launch { settingsStore.boardGps.collect { locationProvider.useBoard = it } }
         // Load the bundled IEEE OUI registry off the main thread for vendor lookups.
@@ -364,6 +372,20 @@ class BiscuitMeshApp : Application() {
                 ))
             }
         }
+        // The same dongle reached over BLE: identical sighting → hazard pipeline, same
+        // MAC key so a cable sighting and a wireless one dedup to one pin.
+        appScope.launch {
+            wtfBle.detections.collect { d ->
+                if (!wtfEnabled) return@collect
+                val lat = d.lat ?: (if (d.live) wardrive?.state?.value?.lastLat else null) ?: return@collect
+                val lon = d.lon ?: (if (d.live) wardrive?.state?.value?.lastLon else null) ?: return@collect
+                hazardStore.merge(listOf(
+                    Hazard("wtf:${d.mac}", HazardKind.FLOCK, lat, lon, d.ssid.ifBlank { d.mac })
+                ))
+            }
+        }
+        // Resume the wireless WTF link on launch if the operator turned it on before.
+        appScope.launch { if (settingsStore.wtfBleEnabled.first()) wtfBle.connect() }
 
         // An ESP Marauder on USB streams scan output; each parsed sighting is geo-tagged with
         // the phone's current fix (the Marauder has no GPS) and dropped onto the wardrive map,

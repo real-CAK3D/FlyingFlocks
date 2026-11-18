@@ -25,6 +25,7 @@ class SettingsStore(private val context: Context) {
     private val voiceAlertsKey = booleanPreferencesKey("voice_alerts")
     private val mapStyleKey = stringPreferencesKey("map_style")
     private val wtfSourceEnabledKey = booleanPreferencesKey("wtf_source_enabled")
+    private val wtfBleEnabledKey = booleanPreferencesKey("wtf_ble_enabled")
     private val marauderSourceEnabledKey = booleanPreferencesKey("marauder_source_enabled")
     private val keepAwakeKey = booleanPreferencesKey("keep_awake")
     private val vibrateAlertsKey = booleanPreferencesKey("vibrate_alerts")
@@ -123,6 +124,14 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setWtfSourceEnabled(enabled: Boolean) {
         context.settingsDataStore.edit { it[wtfSourceEnabledKey] = enabled }
+    }
+
+    /** Keep a wireless (BLE) link to a What the Flock dongle, reconnecting across drops. Off by default. */
+    val wtfBleEnabled: Flow<Boolean> =
+        context.settingsDataStore.data.map { it[wtfBleEnabledKey] ?: false }
+
+    suspend fun setWtfBleEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit { it[wtfBleEnabledKey] = enabled }
     }
 
     /** Ingest live sightings from a plugged-in ESP Marauder onto the map. On by default. */
