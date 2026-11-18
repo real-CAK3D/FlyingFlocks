@@ -63,6 +63,10 @@ class WtfBleSource(context: Context, private val scope: CoroutineScope) {
     private val _detections = MutableSharedFlow<WtfDetection>(replay = 0, extraBufferCapacity = 64)
     val detections: SharedFlow<WtfDetection> = _detections.asSharedFlow()
 
+    /** Decoded QR/barcode results from the dongle's camera scan mode. */
+    private val _scans = MutableSharedFlow<WtfEvent.Scan>(replay = 0, extraBufferCapacity = 8)
+    val scans: SharedFlow<WtfEvent.Scan> = _scans.asSharedFlow()
+
     private var scanner: BluetoothLeScanner? = null
     private var scanCb: ScanCallback? = null
     private var gatt: BluetoothGatt? = null
@@ -213,9 +217,13 @@ class WtfBleSource(context: Context, private val scope: CoroutineScope) {
         when (val e = WtfProtocol.parseLine(l)) {
             is WtfEvent.Sighting -> _detections.tryEmit(e.detection)
             is WtfEvent.Gps -> _gps.value = e.gps
+            is WtfEvent.Scan -> _scans.tryEmit(e)
             null -> Unit
         }
     }
+
+    /** Ask the dongle to run a camera QR/barcode scan; the result arrives on [scans]. */
+    fun requestQrScan() { send(JSONObject().put("cmd", "qrscan")) }
 
     fun requestDump() { send(JSONObject().put("cmd", "dump_session").put("source", "prev")) }
     fun requestSdDump() { send(JSONObject().put("cmd", "sd_dump").put("from", 0).put("max", 1000)) }

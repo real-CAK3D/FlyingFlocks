@@ -15,6 +15,8 @@ sealed interface WtfEvent {
     data class Sighting(val detection: WtfDetection) : WtfEvent
     /** The board's GPS status, from its `sd_info` report. */
     data class Gps(val gps: WtfGps) : WtfEvent
+    /** A decoded QR/barcode from the dongle's camera scan mode. */
+    data class Scan(val data: String, val isUrl: Boolean) : WtfEvent
 }
 
 object WtfProtocol {
@@ -43,6 +45,11 @@ object WtfProtocol {
                         )
                     )
                 } else null
+            }
+            "scan" -> {                                 // QR/barcode decode from camera mode
+                val d = ev.optString("data")
+                if (d.isNotEmpty()) WtfEvent.Scan(d, ev.optString("kind") == "url") else null
+                // scan start/timeout/error lines carry no data → handled quietly
             }
             // session_begin/end, sd_end, config, *_error carry no sighting.
             else -> null

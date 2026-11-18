@@ -36,6 +36,10 @@ import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.LocationOff
 import androidx.compose.material.icons.filled.Usb
 import androidx.compose.material.icons.filled.Bluetooth
+import androidx.compose.material.icons.filled.QrCodeScanner
+import android.content.Intent
+import android.net.Uri
+import kotlinx.coroutines.delay
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Straighten
 import androidx.compose.material3.AlertDialog
@@ -62,6 +66,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -493,6 +498,12 @@ private fun WtfSection(vm: MainViewModel) {
     val importResult by vm.importResult.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
+    // QR/barcode scan: trigger the dongle's camera, show the decoded result.
+    var scanResult by remember { mutableStateOf<com.cak3d.biscuitmesh.usb.WtfEvent.Scan?>(null) }
+    var scanning by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { vm.wtfScans.collect { scanResult = it; scanning = false } }
+    LaunchedEffect(scanning) { if (scanning) { delay(9000); scanning = false } }
+
     // Fire a toast when an import finishes, then clear it so it shows only once.
     androidx.compose.runtime.LaunchedEffect(importResult) {
         importResult?.let {
@@ -602,6 +613,18 @@ private fun WtfSection(vm: MainViewModel) {
             }
         }
 
+        if (connected || bleConnected) {
+            OutlinedButton(
+                onClick = { vm.scanWtf(); scanning = true },
+                enabled = !scanning,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(Icons.Default.QrCodeScanner, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text(if (scanning) "Scanning… aim the camera at a code" else "Scan QR / barcode")
+            }
+        }
+
         ToggleRow("Plot dongle sightings", "Add live detections to the map", sourceOn) { vm.setWtfSourceEnabled(it) }
 
         OutlinedButton(
@@ -612,6 +635,41 @@ private fun WtfSection(vm: MainViewModel) {
             Spacer(Modifier.width(8.dp))
             Text("Import What the Flock backup")
         }
+    }
+
+    scanResult?.let { sc ->
+        AlertDialog(
+            onDismissRequest = { scanResult = null },
+            title = { Text(if (sc.isUrl) "Scanned link" else "Scanned code") },
+            text = {
+                Column {
+                    Text(sc.data, style = MaterialTheme.typography.bodyMedium)
+                    if (sc.isUrl) {
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            "Opens in your browser — check the address first.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                if (sc.isUrl) {
+                    TextButton(onClick = {
+                        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(sc.data))) }
+                        scanResult = null
+                    }) { Text("Open") }
+                } else {
+                    TextButton(onClick = {
+                        val cm = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                        cm.setPrimaryClip(android.content.ClipData.newPlainText("scan", sc.data))
+                        scanResult = null
+                    }) { Text("Copy") }
+                }
+            },
+            dismissButton = { TextButton(onClick = { scanResult = null }) { Text("Close") } },
+        )
     }
 }
 

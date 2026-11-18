@@ -97,6 +97,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         appRef.wtfBle.disconnect()
     }
 
+    /** QR/barcode scan results from the WTF dongle's camera (USB or BLE). */
+    val wtfScans: kotlinx.coroutines.flow.Flow<com.cak3d.biscuitmesh.usb.WtfEvent.Scan> =
+        kotlinx.coroutines.flow.merge(appRef.wtfSerial.scans, appRef.wtfBle.scans)
+
+    /** Ask the connected dongle to run a camera QR/barcode scan; the result arrives on [wtfScans]. */
+    fun scanWtf() {
+        if (appRef.wtfBle.link.value == com.cak3d.biscuitmesh.usb.WtfLinkState.CONNECTED) appRef.wtfBle.requestQrScan()
+        if (appRef.wtfSerial.link.value == com.cak3d.biscuitmesh.usb.WtfLinkState.CONNECTED) appRef.wtfSerial.requestQrScan()
+    }
+
     /** Link state / name of a plugged-in ESP Marauder. */
     val marauderLink: StateFlow<com.cak3d.biscuitmesh.usb.WtfLinkState> = appRef.marauderSerial.link
     val marauderDeviceName: StateFlow<String?> = appRef.marauderSerial.deviceName

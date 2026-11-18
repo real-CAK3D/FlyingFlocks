@@ -80,6 +80,10 @@ class WtfSerialSource(context: Context, private val scope: CoroutineScope) {
     private val _detections = MutableSharedFlow<WtfDetection>(replay = 0, extraBufferCapacity = 64)
     val detections: SharedFlow<WtfDetection> = _detections.asSharedFlow()
 
+    /** Decoded QR/barcode results from the dongle's camera scan mode. */
+    private val _scans = MutableSharedFlow<WtfEvent.Scan>(replay = 0, extraBufferCapacity = 8)
+    val scans: SharedFlow<WtfEvent.Scan> = _scans.asSharedFlow()
+
     private var connection: UsbDeviceConnection? = null
     private var dataIntf: UsbInterface? = null
     private var ctrlIntf: UsbInterface? = null
@@ -230,9 +234,13 @@ class WtfSerialSource(context: Context, private val scope: CoroutineScope) {
                 _gps.value = e.gps
                 android.util.Log.d(TAG, "GPS present=${e.gps.present} fix=${e.gps.fix} sats=${e.gps.sats}")
             }
+            is WtfEvent.Scan -> _scans.tryEmit(e)
             null -> Unit
         }
     }
+
+    /** Ask the dongle to run a camera QR/barcode scan; the result arrives on [scans]. */
+    fun requestQrScan() { send(JSONObject().put("cmd", "qrscan")) }
 
     /** Pull the sightings the dongle saved while it was unplugged. */
     fun requestDump() {
