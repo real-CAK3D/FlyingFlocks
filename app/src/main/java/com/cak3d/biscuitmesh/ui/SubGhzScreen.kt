@@ -230,6 +230,9 @@ fun SubGhzScreen(vm: MainViewModel, onOpenMap: () -> Unit, onOpenSaved: () -> Un
             Text("SPECTRUM", style = MaterialTheme.typography.labelMedium, color = RF_AMBER,
                 fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
             SpectrumCard(sweeps)
+            Text("3D SPECTRAL SURFACE", style = MaterialTheme.typography.labelMedium, color = RF_AMBER,
+                fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+            Spectral3DCard(sweeps)
         }
 
         // Waterfall spectrogram — the last 60s of RF across 300–950 MHz.
@@ -391,6 +394,28 @@ private data class SpectrumSweep(val f0: Double, val step: Double, val rssis: In
             val vals = p[3].split(';').mapNotNull { it.trim().toIntOrNull() }
             if (vals.isEmpty()) return null
             return SpectrumSweep(f0, step, vals.toIntArray(), timeMs)
+        }
+    }
+}
+
+/** The fine-sweep spectrum rendered as a live 3D surface mesh (far→near = time). */
+@Composable
+private fun Spectral3DCard(sweeps: List<SpectrumSweep>) {
+    val rows = remember(sweeps) {
+        var lo = Int.MAX_VALUE; var hi = Int.MIN_VALUE
+        sweeps.forEach { s -> s.rssis.forEach { if (it < lo) lo = it; if (it > hi) hi = it } }
+        val span = (hi - lo).coerceAtLeast(1).toFloat()
+        sweeps.map { s -> FloatArray(s.rssis.size) { ((s.rssis[it] - lo) / span).coerceIn(0f, 1f) } }
+    }
+    Card(
+        Modifier.fillMaxWidth(),
+        shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF07040A)),
+    ) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Mesh3DSurface(rows, palette = MeshPalettes.Magenta, height = 230.dp)
+            Text("live CC1101 sweep · drag to orbit · far→near = time, left→right = frequency, height = signal",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f))
         }
     }
 }

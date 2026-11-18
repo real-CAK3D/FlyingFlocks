@@ -1,6 +1,8 @@
 package com.cak3d.biscuitmesh.ui
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -70,8 +72,18 @@ fun AudioScreen(vm: MainViewModel, onBack: () -> Unit) {
         log.lastOrNull { it.message.type == BiscuitMessage.Type.DATA && it.message.subtype == "ASPEC" }
             ?.message?.payload?.split(";")?.mapNotNull { it.trim().toIntOrNull() } ?: emptyList()
     }
+    // History of the last ~26 ASPEC frames → rows for the 3D spectrogram (time axis).
+    val spectroHistory = remember(log) {
+        log.asSequence()
+            .filter { it.message.type == BiscuitMessage.Type.DATA && it.message.subtype == "ASPEC" }
+            .map { e -> e.message.payload.split(";").mapNotNull { it.trim().toIntOrNull() } }
+            .filter { it.isNotEmpty() }
+            .toList()
+            .takeLast(26)
+            .map { frame -> FloatArray(frame.size) { (frame[it] / 100f).coerceIn(0f, 1f) } }
+    }
 
-    Column(Modifier.fillMaxSize().padding(16.dp)) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, contentDescription = "Back") }
             Icon(Icons.Default.GraphicEq, contentDescription = null, tint = AU_AMBER)
@@ -113,6 +125,20 @@ fun AudioScreen(vm: MainViewModel, onBack: () -> Unit) {
         if (bins.isEmpty()) {
             Text("Waiting for audio… open the node and make some noise near the mic.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Spacer(Modifier.height(16.dp))
+
+        // 3D spectrogram — the FFT bins stacked over time as a live surface mesh.
+        Text("3D spectrogram", style = MaterialTheme.typography.labelLarge)
+        Spacer(Modifier.height(4.dp))
+        Card(Modifier.fillMaxWidth()) {
+            if (spectroHistory.isEmpty()) {
+                Text("Waiting for audio… drag to orbit once sound comes in.",
+                    Modifier.padding(16.dp), style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } else {
+                Mesh3DSurface(spectroHistory, palette = MeshPalettes.Matrix, height = 220.dp)
+            }
         }
         Spacer(Modifier.height(16.dp))
 
