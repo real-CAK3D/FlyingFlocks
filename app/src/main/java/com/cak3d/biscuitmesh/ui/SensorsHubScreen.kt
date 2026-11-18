@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.Leaderboard
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Lock
@@ -68,6 +69,7 @@ fun SensorsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
             HubEntry("Tracker Check", "Is a BLE tracker following you? Best-effort anti-stalking", Icons.Default.PersonSearch, "trackers", Color(0xFFFF5470)),
             HubEntry("Watchlist", "Flag MACs or names and spot them in range", Icons.Default.Visibility, "watchlist", Color(0xFF34D399)),
             HubEntry("Targets", "Networks, devices & locations to locate — scan toggles, local only", Icons.Default.GpsFixed, "targets", Color(0xFFF59E0B)),
+            HubEntry("Device Graph", "APs, their clients & BLE as a live force-directed web", Icons.Default.Hub, "devicegraph", Color(0xFFA855F7)),
         )),
         HubSection("Sky", listOf(
             HubEntry("GPS Satellites", "Live 3D sky dome — every GPS/GLONASS/Galileo sat your phone sees", Icons.Default.SatelliteAlt, "satellites", Color(0xFF22D3EE)),
