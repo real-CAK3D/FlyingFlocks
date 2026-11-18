@@ -31,6 +31,18 @@ data class MeshNode(
     val lat: Double?,
     val lon: Double?,
     val battery: Int? = null,
+    /** Link quality of the last packet heard from this node, dB. */
+    val snr: Float? = null,
+    /** Epoch seconds we last heard this node (0/unknown = null). */
+    val lastHeardSec: Long? = null,
+    /** LoRa hops away; 0 = a direct neighbour. */
+    val hopsAway: Int? = null,
+    val voltage: Float? = null,
+    /** Channel utilization %, from the node's DeviceMetrics. */
+    val channelUtil: Float? = null,
+    /** Airtime spent transmitting %, from DeviceMetrics. */
+    val airUtilTx: Float? = null,
+    val uptimeSec: Long? = null,
 )
 
 enum class MeshLinkState { DISCONNECTED, SCANNING, CONNECTING, CONNECTED }
@@ -427,7 +439,9 @@ class MeshtasticManager(private val context: Context, private val adapter: Bluet
 
     private fun parseNodeInfo(buf: ByteArray) {
         val r = Pb(buf)
-        var num = 0L; var name = ""; var lat: Double? = null; var lon: Double? = null; var batt: Int? = null
+        var num = 0L; var name = ""; var lat: Double? = null; var lon: Double? = null
+        var batt: Int? = null; var snr: Float? = null; var lastHeard: Long? = null; var hops: Int? = null
+        var volt: Float? = null; var chUtil: Float? = null; var airUtil: Float? = null; var uptime: Long? = null
         while (r.has()) {
             val (field, wire) = r.tag()
             when {
@@ -436,12 +450,33 @@ class MeshtasticManager(private val context: Context, private val adapter: Bluet
                 field == 3 && wire == 2 -> {                               // position
                     val p = parsePosition(r.lenBytes()); lat = p.first; lon = p.second
                 }
-                field == 6 && wire == 2 -> batt = parseBattery(r.lenBytes()) // device_metrics
+                field == 4 && wire == 5 -> snr = Float.fromBits(r.fixed32().toInt())  // snr
+                field == 5 && wire == 5 -> lastHeard = r.fixed32()                    // last_heard (epoch s)
+                field == 6 && wire == 2 -> {                               // device_metrics
+                    val m = parseDeviceMetrics(r.lenBytes())
+                    batt = m.battery; volt = m.voltage; chUtil = m.channelUtil; airUtil = m.airUtilTx; uptime = m.uptimeSec
+                }
+                field == 9 && wire == 0 -> hops = r.varint().toInt()       // hops_away
                 else -> r.skip(wire)
             }
         }
         if (num != 0L) {
-            val node = MeshNode(num, name.ifBlank { "!%08x".format(num) }, lat, lon, batt)
+            // Merge onto any existing entry so a partial NodeInfo doesn't wipe telemetry
+            // we already have (and position updates preserve these fields too).
+            val ex = _nodes.value[num]
+            val label = name.ifBlank { ex?.name ?: "!%08x".format(num) }
+            val node = (ex ?: MeshNode(num, label, null, null)).copy(
+                name = label,
+                lat = lat ?: ex?.lat, lon = lon ?: ex?.lon,
+                battery = batt ?: ex?.battery,
+                snr = snr ?: ex?.snr,
+                lastHeardSec = lastHeard ?: ex?.lastHeardSec,
+                hopsAway = hops ?: ex?.hopsAway,
+                voltage = volt ?: ex?.voltage,
+                channelUtil = chUtil ?: ex?.channelUtil,
+                airUtilTx = airUtil ?: ex?.airUtilTx,
+                uptimeSec = uptime ?: ex?.uptimeSec,
+            )
             _nodes.value = _nodes.value + (num to node)
             Log.d(TAG, "node $node")
         }
@@ -474,16 +509,26 @@ class MeshtasticManager(private val context: Context, private val adapter: Bluet
         return lat to lon
     }
 
-    private fun parseBattery(buf: ByteArray): Int? {
-        val r = Pb(buf); var b: Int? = null
+    private class Metrics(
+        val battery: Int?, val voltage: Float?, val channelUtil: Float?,
+        val airUtilTx: Float?, val uptimeSec: Long?,
+    )
+
+    private fun parseDeviceMetrics(buf: ByteArray): Metrics {
+        val r = Pb(buf)
+        var b: Int? = null; var v: Float? = null; var cu: Float? = null; var au: Float? = null; var up: Long? = null
         while (r.has()) {
             val (field, wire) = r.tag()
             when {
-                field == 1 && wire == 0 -> b = r.varint().toInt()  // battery_level
+                field == 1 && wire == 0 -> b = r.varint().toInt()                 // battery_level
+                field == 2 && wire == 5 -> v = Float.fromBits(r.fixed32().toInt()) // voltage
+                field == 3 && wire == 5 -> cu = Float.fromBits(r.fixed32().toInt()) // channel_utilization
+                field == 4 && wire == 5 -> au = Float.fromBits(r.fixed32().toInt()) // air_util_tx
+                field == 5 && wire == 0 -> up = r.varint()                         // uptime_seconds
                 else -> r.skip(wire)
             }
         }
-        return b
+        return Metrics(b, v, cu, au, up)
     }
 
     private fun cleanup() {

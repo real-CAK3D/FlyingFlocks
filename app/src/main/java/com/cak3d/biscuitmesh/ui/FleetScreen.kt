@@ -57,6 +57,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.clickable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.cak3d.biscuitmesh.MainViewModel
 import com.cak3d.biscuitmesh.R
@@ -66,7 +67,7 @@ import com.cak3d.biscuitmesh.usb.UsbDeviceInfo
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FleetScreen(vm: MainViewModel, onOpen: (String) -> Unit = {}, onHealth: () -> Unit = {}) {
+fun FleetScreen(vm: MainViewModel, onOpen: (String) -> Unit = {}, onHealth: () -> Unit = {}, onOpenMesh: (Long) -> Unit = {}) {
     val devicesFlow = vm.devices
     if (devicesFlow == null) {
         BluetoothUnavailable()
@@ -150,6 +151,7 @@ fun FleetScreen(vm: MainViewModel, onOpen: (String) -> Unit = {}, onHealth: () -
                     },
                     onSetHomeLocation = { showHomeLoc = true },
                     onClearHome = { vm.clearHomeBase() },
+                    onOpen = { num -> onOpenMesh(num) },
                 )
             }
         }
@@ -165,6 +167,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.meshFleetSection(
     onSetHome: (com.cak3d.biscuitmesh.mesh.MeshNode) -> Unit,
     onSetHomeLocation: () -> Unit,
     onClearHome: () -> Unit,
+    onOpen: (Long) -> Unit = {},
 ) {
     if (nodes.isEmpty() && home == null) return
     item(key = "mesh-header") {
@@ -177,20 +180,20 @@ private fun androidx.compose.foundation.lazy.LazyListScope.meshFleetSection(
     }
     home?.let { hb ->
         item(key = "mesh-home") {
-            MeshHomeCard(hb, nodes.firstOrNull { it.num == hb.num }, onSetHomeLocation, onClearHome)
+            MeshHomeCard(hb, nodes.firstOrNull { it.num == hb.num }, onSetHomeLocation, onClearHome, onOpen = { onOpen(hb.num) })
         }
     }
     val others = nodes.filter { home == null || it.num != home.num }
     items(others, key = { "mesh-${it.num}" }) { node ->
-        MeshNodeCard(node, onSetHome = { onSetHome(node) })
+        MeshNodeCard(node, onSetHome = { onSetHome(node) }, onOpen = { onOpen(node.num) })
     }
 }
 
 @Composable
-private fun MeshNodeCard(node: com.cak3d.biscuitmesh.mesh.MeshNode, onSetHome: () -> Unit) {
+private fun MeshNodeCard(node: com.cak3d.biscuitmesh.mesh.MeshNode, onSetHome: () -> Unit, onOpen: () -> Unit = {}) {
     val tint = MaterialTheme.colorScheme.secondary
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().clickable { onOpen() },
         shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
@@ -232,10 +235,11 @@ private fun MeshHomeCard(
     live: com.cak3d.biscuitmesh.mesh.MeshNode?,
     onSetLocation: () -> Unit,
     onClear: () -> Unit,
+    onOpen: () -> Unit = {},
 ) {
     val amber = Color(0xFFF0B429)
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().clickable { onOpen() },
         shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
@@ -378,8 +382,7 @@ private fun DeviceCard(
     onRename: () -> Unit,
 ) {
     Card(
-        onClick = onOpen,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().clickable { onOpen() },
         shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {

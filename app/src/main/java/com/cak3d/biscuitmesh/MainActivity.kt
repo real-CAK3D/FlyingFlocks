@@ -96,6 +96,7 @@ import com.cak3d.biscuitmesh.ui.LedgerScreen
 import com.cak3d.biscuitmesh.ui.LiveScreen
 import com.cak3d.biscuitmesh.ui.FlockChatScreen
 import com.cak3d.biscuitmesh.ui.MeshChatScreen
+import com.cak3d.biscuitmesh.ui.MeshNodeDetailScreen
 import com.cak3d.biscuitmesh.ui.ProfileScreen
 import com.cak3d.biscuitmesh.ui.WhisperListScreen
 import com.cak3d.biscuitmesh.ui.WhisperThreadScreen
@@ -327,7 +328,12 @@ private fun MainShell(vm: MainViewModel) {
                     FleetScreen(vm, onOpen = { address ->
                         vm.open(address)
                         nav.navigate("device")
-                    }, onHealth = { nav.navigate("fleethealth") })
+                    }, onHealth = { nav.navigate("fleethealth") },
+                        onOpenMesh = { num -> nav.navigate("meshnode/$num") })
+                }
+                composable("meshnode/{num}") { entry ->
+                    val num = entry.arguments?.getString("num")?.toLongOrNull()
+                    MeshNodeDetailScreen(vm = vm, num = num, onBack = { nav.popBackStack() })
                 }
                 composable("fleethealth") { FleetHealthScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("wardrive") { WardriveScreen(vm) }
