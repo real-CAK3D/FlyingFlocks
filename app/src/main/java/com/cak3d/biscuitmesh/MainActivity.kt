@@ -67,6 +67,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.cak3d.biscuitmesh.ui.BluetoothScreen
 import com.cak3d.biscuitmesh.ui.DebugScreen
+import com.cak3d.biscuitmesh.ui.FeedsScreen
 import com.cak3d.biscuitmesh.ui.DeviceDetailScreen
 import com.cak3d.biscuitmesh.ui.MirrorScreen
 import com.cak3d.biscuitmesh.ui.DrivesScreen
@@ -411,6 +412,7 @@ private fun MainShell(vm: MainViewModel) {
                 }
                 composable("devicegraph") { ForceGraphScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("skyar") { SkyArScreen(vm = vm, onBack = { nav.popBackStack() }) }
+                composable("feeds") { FeedsScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("eyesight") { EyesightArScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("globe") { GlobeScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("orbit") { OrbitScreen(vm = vm, onBack = { nav.popBackStack() }) }

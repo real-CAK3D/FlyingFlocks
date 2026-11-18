@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.SatelliteAlt
 import androidx.compose.material.icons.filled.Sensors
 import androidx.compose.material.icons.filled.SettingsRemote
 import androidx.compose.material.icons.filled.SportsEsports
+import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.Science
 import androidx.compose.material.icons.filled.Streetview
 import androidx.compose.material3.Card
@@ -78,6 +79,9 @@ fun SensorsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
             HubEntry("Sky AR", "Point your phone at the sky — satellites overlaid live on the camera", Icons.Default.CameraAlt, "skyar", Color(0xFFA78BFA)),
             HubEntry("GPS Satellites", "Live 3D sky dome — every GPS/GLONASS/Galileo sat your phone sees", Icons.Default.SatelliteAlt, "satellites", Color(0xFF22D3EE)),
             HubEntry("Orbit", "Satellites, aircraft & space weather — flip between the three in one view", Icons.Default.Public, "orbit", Color(0xFF38BDF8)),
+        )),
+        HubSection("Local feeds", listOf(
+            HubEntry("Live Feeds", "Surveillance cams, scanner audio & traffic webcams near you — all public, consume-only", Icons.Default.Videocam, "feeds", Color(0xFFFF5470)),
         )),
         HubSection("Comms", listOf(
             HubEntry("Caw", "Chat over your Meshtastic mesh — off-grid, no internet", Icons.Default.Forum, "meshchat", Color(0xFF00E5A0)),
