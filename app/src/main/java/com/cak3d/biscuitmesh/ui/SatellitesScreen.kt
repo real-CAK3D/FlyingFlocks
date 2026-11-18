@@ -118,6 +118,30 @@ fun SatellitesScreen(vm: MainViewModel, onBack: () -> Unit, onOpenGlobe: () -> U
                 }
             }
             if (gnss.sats.isNotEmpty()) {
+                item("sky3d") {
+                    Card(
+                        Modifier.fillMaxWidth(), shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF05080A)),
+                    ) {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("3D SKY DOME", style = MaterialTheme.typography.labelMedium, color = Color(0xFF22D3EE),
+                                fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                            val cloud = gnss.sats.filter { it.elevationDeg >= 0f }.map { s ->
+                                val el = Math.toRadians(s.elevationDeg.toDouble())
+                                val azr = Math.toRadians(s.azimuthDeg.toDouble())
+                                val rh = 0.5f * cos(el).toFloat()
+                                CloudPoint(
+                                    x = rh * sin(azr).toFloat(), y = 0.5f * sin(el).toFloat(), z = rh * cos(azr).toFloat(),
+                                    size = 5f + (s.cn0 / 50f).coerceIn(0f, 1f) * 7f,
+                                    color = constColor(s.constellation).copy(alpha = if (s.usedInFix) 1f else 0.5f),
+                                )
+                            }
+                            Point3DCloud(cloud, height = 240.dp)
+                            Text("drag to orbit · dome = your sky · dot size = signal · bright = used in fix",
+                                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f))
+                        }
+                    }
+                }
                 item("sky") {
                     Card(
                         Modifier.fillMaxWidth(), shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),

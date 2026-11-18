@@ -148,3 +148,92 @@ fun Mesh3DSurface(
         }
     }
 }
+
+/**
+ * A point in the 3D cloud, in world space roughly within [-0.5, 0.5] on each axis
+ * (same scale the surface mesh uses), with its own on-screen dot size and colour.
+ */
+data class CloudPoint(val x: Float, val y: Float, val z: Float, val size: Float, val color: Color)
+
+/**
+ * A 3D point cloud / LiDAR-style scatter — the GNSS satellite sky-dome and device
+ * clouds. Orbit by dragging; a faint hemisphere grid gives the dome its shape.
+ * Points are depth-sorted (painter's algorithm) so near dots sit over far ones.
+ */
+@Composable
+fun Point3DCloud(
+    points: List<CloudPoint>,
+    modifier: Modifier = Modifier,
+    height: Dp = 240.dp,
+    showDome: Boolean = true,
+    domeColor: Color = Color(0x3300E5A0),
+) {
+    var yaw by remember { mutableFloatStateOf(0f) }
+    var pitch by remember { mutableFloatStateOf(0.72f) }
+    val spin = rememberInfiniteTransition(label = "cloudspin")
+    val drift by spin.animateFloat(
+        0f, (2f * Math.PI).toFloat(),
+        infiniteRepeatable(tween(30000, easing = LinearEasing), RepeatMode.Restart), label = "drift",
+    )
+    Canvas(
+        modifier
+            .fillMaxWidth()
+            .height(height)
+            .pointerInput(Unit) {
+                detectDragGestures { _, d ->
+                    yaw += d.x * 0.008f
+                    pitch = (pitch + d.y * 0.006f).coerceIn(0.20f, 1.35f)
+                }
+            },
+    ) {
+        val cx = size.width / 2f
+        val cy = size.height * 0.58f
+        val minDim = minOf(size.width, size.height)
+        val totalYaw = yaw + 0.25f * sin(drift)
+        val cosY = cos(totalYaw); val sinY = sin(totalYaw)
+        val cosP = cos(pitch); val sinP = sin(pitch)
+        val camD = 2.4f
+
+        fun project(x: Float, y: Float, z: Float): Pair<Offset, Float> {
+            val x1 = x * cosY + z * sinY
+            val z1 = -x * sinY + z * cosY
+            val y2 = y * cosP - z1 * sinP
+            val z2 = y * sinP + z1 * cosP
+            val p = 1.5f / (camD + z2)
+            return Offset(cx + x1 * p * minDim, cy - y2 * p * minDim) to z2
+        }
+
+        if (showDome) {
+            // Elevation rings at 30° and 60°, plus azimuth spokes — the dome skeleton.
+            for (elDeg in intArrayOf(30, 60)) {
+                val el = Math.toRadians(elDeg.toDouble())
+                val rh = 0.5f * cos(el).toFloat(); val yy = 0.5f * sin(el).toFloat()
+                var prev: Offset? = null
+                var az = 0
+                while (az <= 360) {
+                    val a = Math.toRadians(az.toDouble())
+                    val pt = project(rh * sin(a).toFloat(), yy, rh * cos(a).toFloat()).first
+                    prev?.let { drawLine(domeColor, it, pt, 1f) }
+                    prev = pt; az += 15
+                }
+            }
+            var az = 0
+            while (az < 360) {
+                val a = Math.toRadians(az.toDouble())
+                val horizon = project(0.5f * sin(a).toFloat(), 0f, 0.5f * cos(a).toFloat()).first
+                val top = project(0f, 0.5f, 0f).first
+                drawLine(domeColor, horizon, top, 1f)
+                az += 45
+            }
+        }
+
+        // Far points first so near ones paint over them.
+        points.map { project(it.x, it.y, it.z) to it }
+            .sortedByDescending { it.first.second }
+            .forEach { (proj, cp) ->
+                val o = proj.first
+                drawCircle(cp.color.copy(alpha = 0.25f), cp.size + 3f, o)
+                drawCircle(cp.color, cp.size, o)
+            }
+    }
+}

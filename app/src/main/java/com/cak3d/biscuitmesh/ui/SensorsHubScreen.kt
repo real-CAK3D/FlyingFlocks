@@ -70,6 +70,7 @@ fun SensorsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
             HubEntry("Targets", "Networks, devices & locations to locate — scan toggles, local only", Icons.Default.GpsFixed, "targets", Color(0xFFF59E0B)),
         )),
         HubSection("Sky", listOf(
+            HubEntry("GPS Satellites", "Live 3D sky dome — every GPS/GLONASS/Galileo sat your phone sees", Icons.Default.SatelliteAlt, "satellites", Color(0xFF22D3EE)),
             HubEntry("Orbit", "Satellites, aircraft & space weather — flip between the three in one view", Icons.Default.Public, "orbit", Color(0xFF38BDF8)),
         )),
         HubSection("Comms", listOf(
