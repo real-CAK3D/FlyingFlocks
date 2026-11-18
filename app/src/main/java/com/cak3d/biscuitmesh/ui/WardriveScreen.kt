@@ -702,26 +702,72 @@ enum class MapViewMode(val label: String) {
  * overlap the colour stacks toward white-hot — so busy air glows and dead patches stay dark.
  * Only points in the current view are drawn.
  */
+/**
+ * A true density heatmap: the visible sightings are splatted into a coarse pixel grid
+ * with a Gaussian falloff, then each hot cell is drawn with a blue→green→yellow→red
+ * ramp so busy air glows hot while sparse edges stay cool.
+ */
 private class HeatOverlay(private val points: List<GeoPoint>) : Overlay() {
     private val paint = android.graphics.Paint().apply { isAntiAlias = true }
     private val pt = android.graphics.Point()
+    private val cell = 18                       // px per grid cell
+    private val kernel = floatArrayOf(1f, 0.6f, 0.25f, 0.08f)  // falloff by cell distance
+
     override fun draw(canvas: android.graphics.Canvas, mapView: MapView, shadow: Boolean) {
-        if (shadow) return
+        if (shadow || points.isEmpty()) return
         val proj = mapView.projection
         val bb = mapView.boundingBox
-        val r = 42f
+        val w = mapView.width; val h = mapView.height
+        if (w <= 0 || h <= 0) return
+        val cols = w / cell + 1; val rows = h / cell + 1
+        val grid = FloatArray(cols * rows)
+
+        fun add(cx: Int, cy: Int, wgt: Float) {
+            if (cx < 0 || cy < 0 || cx >= cols || cy >= rows) return
+            grid[cy * cols + cx] += wgt
+        }
         points.forEach { gp ->
             if (gp.latitude > bb.latNorth || gp.latitude < bb.latSouth ||
                 gp.longitude > bb.lonEast || gp.longitude < bb.lonWest) return@forEach
             proj.toPixels(gp, pt)
-            val x = pt.x.toFloat(); val y = pt.y.toFloat()
+            val cx = pt.x / cell; val cy = pt.y / cell
+            for (dy in -3..3) for (dx in -3..3) {
+                val d = maxOf(kotlin.math.abs(dx), kotlin.math.abs(dy))
+                add(cx + dx, cy + dy, kernel[d.coerceIn(0, 3)])
+            }
+        }
+        var maxV = 0f
+        for (v in grid) if (v > maxV) maxV = v
+        if (maxV <= 0f) return
+
+        for (cy in 0 until rows) for (cx in 0 until cols) {
+            val v = grid[cy * cols + cx]
+            if (v < maxV * 0.06f) continue
+            val t = (v / maxV).coerceIn(0f, 1f)
+            val x = (cx * cell + cell / 2).toFloat()
+            val y = (cy * cell + cell / 2).toFloat()
+            val core = heatColor(t)
+            val r = cell * 1.9f
             paint.shader = android.graphics.RadialGradient(
                 x, y, r,
-                intArrayOf(android.graphics.Color.argb(70, 255, 150, 40), android.graphics.Color.argb(0, 255, 150, 40)),
+                intArrayOf(core, core and 0x00FFFFFF),   // same hue, fade alpha to 0
                 null, android.graphics.Shader.TileMode.CLAMP,
             )
             canvas.drawCircle(x, y, r, paint)
         }
+        paint.shader = null
+    }
+
+    /** Classic heat ramp: cool blue → cyan → green → yellow → red, alpha rising with t. */
+    private fun heatColor(t: Float): Int {
+        val a = (40 + 150 * t).toInt().coerceIn(0, 210)
+        val (r, g, b) = when {
+            t < 0.25f -> Triple((40 * t * 4).toInt(), (120 * t * 4).toInt(), 255)
+            t < 0.5f -> { val u = (t - 0.25f) * 4; Triple(0, 180 + (60 * u).toInt(), 255 - (255 * u).toInt()) }
+            t < 0.75f -> { val u = (t - 0.5f) * 4; Triple((255 * u).toInt(), 240, 0) }
+            else -> { val u = (t - 0.75f) * 4; Triple(255, (240 - 200 * u).toInt(), 0) }
+        }
+        return android.graphics.Color.argb(a, r.coerceIn(0, 255), g.coerceIn(0, 255), b.coerceIn(0, 255))
     }
 }
 
