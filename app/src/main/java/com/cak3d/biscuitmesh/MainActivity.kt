@@ -97,6 +97,7 @@ import com.cak3d.biscuitmesh.ui.LiveScreen
 import com.cak3d.biscuitmesh.ui.FlockChatScreen
 import com.cak3d.biscuitmesh.ui.MeshChatScreen
 import com.cak3d.biscuitmesh.ui.MeshNodeDetailScreen
+import com.cak3d.biscuitmesh.ui.WtfDetailScreen
 import com.cak3d.biscuitmesh.ui.ProfileScreen
 import com.cak3d.biscuitmesh.ui.WhisperListScreen
 import com.cak3d.biscuitmesh.ui.WhisperThreadScreen
@@ -329,8 +330,10 @@ private fun MainShell(vm: MainViewModel) {
                         vm.open(address)
                         nav.navigate("device")
                     }, onHealth = { nav.navigate("fleethealth") },
-                        onOpenMesh = { num -> nav.navigate("meshnode/$num") })
+                        onOpenMesh = { num -> nav.navigate("meshnode/$num") },
+                        onOpenWtf = { nav.navigate("wtfdongle") })
                 }
+                composable("wtfdongle") { WtfDetailScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("meshnode/{num}") { entry ->
                     val num = entry.arguments?.getString("num")?.toLongOrNull()
                     MeshNodeDetailScreen(vm = vm, num = num, onBack = { nav.popBackStack() })

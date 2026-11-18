@@ -58,6 +58,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.cak3d.biscuitmesh.MainViewModel
 import com.cak3d.biscuitmesh.R
@@ -67,7 +68,7 @@ import com.cak3d.biscuitmesh.usb.UsbDeviceInfo
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FleetScreen(vm: MainViewModel, onOpen: (String) -> Unit = {}, onHealth: () -> Unit = {}, onOpenMesh: (Long) -> Unit = {}) {
+fun FleetScreen(vm: MainViewModel, onOpen: (String) -> Unit = {}, onHealth: () -> Unit = {}, onOpenMesh: (Long) -> Unit = {}, onOpenWtf: () -> Unit = {}) {
     val devicesFlow = vm.devices
     if (devicesFlow == null) {
         BluetoothUnavailable()
@@ -102,7 +103,13 @@ fun FleetScreen(vm: MainViewModel, onOpen: (String) -> Unit = {}, onHealth: () -
 
     Box(Modifier.fillMaxSize()) {
         if (all.isEmpty() && !hasMesh) {
-            EmptyState(Modifier.fillMaxSize(), scanning, usb, vm)
+            Column(
+                Modifier.fillMaxSize().padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                WtfFleetCard(vm, onOpen = onOpenWtf)
+                EmptyState(Modifier.weight(1f).fillMaxWidth(), scanning, usb, vm)
+            }
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
@@ -112,6 +119,7 @@ fun FleetScreen(vm: MainViewModel, onOpen: (String) -> Unit = {}, onHealth: () -
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 if (usb.isNotEmpty()) item("usb") { UsbBanner(usb, vm) }
+                item("wtf") { WtfFleetCard(vm, onOpen = onOpenWtf) }
                 if (all.isNotEmpty()) {
                     item("header") {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -159,6 +167,49 @@ fun FleetScreen(vm: MainViewModel, onOpen: (String) -> Unit = {}, onHealth: () -
 
     renaming?.let { RenameDialog(it, vm) { renaming = null } }
     if (showHomeLoc && homeBase != null) HomeLocationDialog(vm) { showHomeLoc = false }
+}
+
+@Composable
+private fun WtfFleetCard(vm: MainViewModel, onOpen: () -> Unit) {
+    val usbLink by vm.wtfLink.collectAsStateWithLifecycle()
+    val bleLink by vm.wtfBleLink.collectAsStateWithLifecycle()
+    val usbConnected = usbLink == com.cak3d.biscuitmesh.usb.WtfLinkState.CONNECTED
+    val bleConnected = bleLink == com.cak3d.biscuitmesh.usb.WtfLinkState.CONNECTED
+    val connecting = usbLink == com.cak3d.biscuitmesh.usb.WtfLinkState.CONNECTING ||
+        bleLink == com.cak3d.biscuitmesh.usb.WtfLinkState.CONNECTING
+    val connected = usbConnected || bleConnected
+    val purple = Color(0xFFB24BFF)   // crow/WTF accent
+    Card(
+        modifier = Modifier.fillMaxWidth().clickable { onOpen() },
+        shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(14.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Surface(shape = CircleShape, color = purple.copy(alpha = 0.15f), modifier = Modifier.size(44.dp)) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(Icons.Default.QrCodeScanner, contentDescription = null, tint = purple, modifier = Modifier.size(24.dp))
+                }
+            }
+            Column(Modifier.weight(1f)) {
+                Text("What the Flock", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(
+                    when {
+                        usbConnected -> "Connected · USB · camera scanner"
+                        bleConnected -> "Connected · BLE · camera scanner"
+                        connecting -> "Connecting…"
+                        else -> "Tap to connect · camera scanner"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (connected) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                )
+            }
+        }
+    }
 }
 
 private fun androidx.compose.foundation.lazy.LazyListScope.meshFleetSection(
