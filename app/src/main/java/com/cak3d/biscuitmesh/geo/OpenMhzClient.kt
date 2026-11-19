@@ -70,7 +70,8 @@ class OpenMhzClient(private val base: String = "https://api.openmhz.com") {
     private fun parseTime(iso: String): Long = runCatching {
         // OpenMHz returns ISO-8601; fall back to "now" if it won't parse.
         java.time.Instant.parse(iso).toEpochMilli()
-    }.getOrDefault(System.currentTimeMillis())
+        // Fully-qualified: the nested `System` data class shadows java.lang.System here.
+    }.getOrDefault(java.lang.System.currentTimeMillis())
 
     private fun get(url: String): String {
         val conn = (URL(url).openConnection() as HttpURLConnection).apply {
