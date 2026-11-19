@@ -112,7 +112,9 @@ class MeshtasticManager(private val context: Context, private val adapter: Bluet
         if (_link.value == MeshLinkState.SCANNING) failScan(
             "No Meshtastic node found nearby. Caw talks to a Meshtastic device (Heltec / T-Beam / RAK) " +
                 "over BLE — check it's powered, in range, has Bluetooth enabled, and isn't already " +
-                "connected in the official Meshtastic app (it allows only one BLE client). " +
+                "connected in the official Meshtastic app (it allows only one BLE client, and holds it " +
+                "even in the background). If your node is renamed, pair it once in Android's Bluetooth " +
+                "settings — Caw then finds it by that pairing even when the name doesn't match. " +
                 "Note: the wtBLEep board is not a Meshtastic node, so Caw can't connect to it.",
         )
     }
@@ -165,7 +167,28 @@ class MeshtasticManager(private val context: Context, private val adapter: Bluet
         runCatching { s.startScan(emptyList(), settings, scanCb) }
             .onSuccess { scanWatchdog.postDelayed(scanTimeout, 20_000) }
             .onFailure { failScan("Couldn't start a BLE scan — is Bluetooth on and the scan permission granted?") }
+
+        // Fallback: a node that's been paired before but whose advertisement doesn't match
+        // (renamed off the "Meshtastic" prefix, or only exposing the 128-bit service UUID in
+        // its GATT table, not the adv packet) still connects directly by address. Seed any
+        // mesh-looking bonded device as a weak candidate so the picker tries it when the live
+        // scan comes up empty — real advertisements have real RSSI and still win. A wrong pick
+        // is rejected at onServicesDiscovered (no mesh service), so this can't mis-connect.
+        bondedMeshCandidates().forEach { candidates.putIfAbsent(it, -100) }
+        if (candidates.isNotEmpty() && !pickScheduled) {
+            pickScheduled = true
+            scanWatchdog.postDelayed(picker, 2_000)
+        }
     }
+
+    /** Paired devices whose name looks like a Meshtastic node (best-effort). */
+    private fun bondedMeshCandidates(): List<android.bluetooth.BluetoothDevice> =
+        runCatching { adapter?.bondedDevices }.getOrNull().orEmpty().filter { d ->
+            val n = (runCatching { d.name }.getOrNull() ?: "").lowercase()
+            n.startsWith("meshtastic") || listOf(
+                "mesh", "heltec", "t-beam", "tbeam", "rak", "lora", "tracker", "t-deck", "tdeck", "station g",
+            ).any { it in n }
+        }
 
     private fun looksLikeMesh(result: ScanResult): Boolean {
         val rec = result.scanRecord
