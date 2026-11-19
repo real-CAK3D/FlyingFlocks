@@ -84,6 +84,7 @@ fun SensorsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
         )),
         HubSection("Local feeds", listOf(
             HubEntry("Live Feeds", "Surveillance cams, scanner audio & traffic webcams near you — all public, consume-only", Icons.Default.Videocam, "feeds", Color(0xFFFF5470)),
+            HubEntry("Traffic Dashboard", "Live scrolling charts — frame throughput, discovery rate, sub-GHz pings & per-board share", Icons.Default.Leaderboard, "traffic", Color(0xFF22D3EE)),
         )),
         HubSection("Comms", listOf(
             HubEntry("Caw", "Chat over your Meshtastic mesh — off-grid, no internet", Icons.Default.Forum, "meshchat", Color(0xFF00E5A0)),
