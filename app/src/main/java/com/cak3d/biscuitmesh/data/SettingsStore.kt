@@ -19,6 +19,7 @@ class SettingsStore(private val context: Context) {
     private val wdgAutoUploadKey = booleanPreferencesKey("wdg_auto_upload")
     private val wdgLastUploadKey = stringPreferencesKey("wdg_last_upload")
     private val phoneSensorsKey = booleanPreferencesKey("phone_sensors_enabled")
+    private val ignoreDeadZonesKey = booleanPreferencesKey("ignore_dead_zones")
     private val boardGpsKey = booleanPreferencesKey("board_gps_enabled")
     private val hudEnabledKey = booleanPreferencesKey("hud_enabled")
     private val useMphKey = booleanPreferencesKey("use_mph")
@@ -76,6 +77,14 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setPhoneSensors(enabled: Boolean) {
         context.settingsDataStore.edit { it[phoneSensorsKey] = enabled }
+    }
+
+    /** Testing aid: ignore all dead zones so scanning never pauses. Off by default. */
+    val ignoreDeadZones: Flow<Boolean> =
+        context.settingsDataStore.data.map { it[ignoreDeadZonesKey] ?: false }
+
+    suspend fun setIgnoreDeadZones(enabled: Boolean) {
+        context.settingsDataStore.edit { it[ignoreDeadZonesKey] = enabled }
     }
 
     /** Use a board's GPS (Meshtastic node / dongle) as the wardrive location when available. */

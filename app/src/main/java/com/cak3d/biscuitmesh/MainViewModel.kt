@@ -523,6 +523,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { appRef.settingsStore.setPhoneSensors(enabled) }
     }
 
+    /** Testing aid: ignore dead zones so scanning never pauses (e.g. bench-testing at home). */
+    val ignoreDeadZones: StateFlow<Boolean> =
+        appRef.settingsStore.ignoreDeadZones.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    fun setIgnoreDeadZones(enabled: Boolean) {
+        viewModelScope.launch { appRef.settingsStore.setIgnoreDeadZones(enabled) }
+    }
+
     /** Use a connected board's GPS (Meshtastic node / dongle) as the wardrive fix. */
     val boardGps: Flow<Boolean> = appRef.settingsStore.boardGps
     fun setBoardGps(enabled: Boolean) { viewModelScope.launch { appRef.settingsStore.setBoardGps(enabled) } }

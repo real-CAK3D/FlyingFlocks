@@ -175,6 +175,8 @@ class WardriveManager(
     @Volatile private var zones: List<DeadZone> = emptyList()
     /** True while suppressed, so we only broadcast on dead-zone transitions. */
     private var suppressed = false
+    /** Testing aid: when true, dead zones are ignored and scanning never pauses. */
+    @Volatile var ignoreDeadZones: Boolean = false
     /** Whether the phone's own radios are feeding this session. */
     private var phoneOn = false
 
@@ -232,7 +234,7 @@ class WardriveManager(
 
         locJob = scope.launch {
             location.locationUpdates().collect { loc ->
-                val zone = zoneAt(loc.latitude, loc.longitude)
+                val zone = if (ignoreDeadZones) null else zoneAt(loc.latitude, loc.longitude)
                 if (zone != null) {
                     // Inside a dead zone: stop the boards, record nothing, drop the
                     // tagging fix so no stray samples land, but keep the puck moving.

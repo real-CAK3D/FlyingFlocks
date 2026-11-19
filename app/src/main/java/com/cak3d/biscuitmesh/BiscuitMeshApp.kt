@@ -308,6 +308,7 @@ class BiscuitMeshApp : Application() {
                 }
         }
         appScope.launch { settingsStore.boardGps.collect { locationProvider.useBoard = it } }
+        appScope.launch { settingsStore.ignoreDeadZones.collect { wardrive?.ignoreDeadZones = it } }
         // Load the bundled IEEE OUI registry off the main thread for vendor lookups.
         appScope.launch(Dispatchers.IO) { com.cak3d.biscuitmesh.sensors.OuiDb.ensureLoaded(this@BiscuitMeshApp) }
         // Resume the Flock online layer if the operator has used it before.

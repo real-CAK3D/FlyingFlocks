@@ -195,6 +195,7 @@ fun WardriveScreen(vm: MainViewModel, onOpenEyesight: () -> Unit = {}) {
     }
 
     val phoneOn by vm.phoneSensors.collectAsStateWithLifecycle()
+    val ignoreDeadZones by vm.ignoreDeadZones.collectAsStateWithLifecycle()
 
     // Free two-finger rotation (re-added on each map update, which clears overlays).
     val rotationOverlay = remember { RotationGestureOverlay(mapView).apply { isEnabled = true } }
@@ -232,6 +233,20 @@ fun WardriveScreen(vm: MainViewModel, onOpenEyesight: () -> Unit = {}) {
 
     // What-the-Flock-style controls: follow the vehicle, layer toggles, telemetry.
     var followMode by remember { mutableStateOf(true) }
+    // A finger-drag disengages follow so the map stays where you pan it, instead of
+    // snapping back to the puck on the next redraw. The MyLocation button re-centres
+    // and re-engages follow. Returning false lets osmdroid still handle the gesture,
+    // and ACTION_MOVE never fires for programmatic setCenter, only real drags.
+    DisposableEffect(Unit) {
+        val touch = android.view.View.OnTouchListener { _, event ->
+            if (event.actionMasked == android.view.MotionEvent.ACTION_MOVE && followMode) {
+                followMode = false
+            }
+            false
+        }
+        mapView.setOnTouchListener(touch)
+        onDispose { mapView.setOnTouchListener(null) }
+    }
     var menuOpen by remember { mutableStateOf(false) }
     var showOffline by remember { mutableStateOf(false) }
     var viewMode by remember { mutableStateOf(MapViewMode.DEFAULT) }
@@ -569,6 +584,8 @@ fun WardriveScreen(vm: MainViewModel, onOpenEyesight: () -> Unit = {}) {
             territoryCount = cells.size,
             phoneOn = phoneOn,
             onTogglePhone = { vm.setPhoneSensors(it) },
+            ignoreDeadZones = ignoreDeadZones,
+            onToggleIgnoreDeadZones = { vm.setIgnoreDeadZones(it) },
             onUpload = { vm.uploadToWdg() },
             onLoadTerritory = { vm.fetchOwnedCells() },
             expanded = controlsExpanded,
@@ -607,9 +624,18 @@ fun WardriveScreen(vm: MainViewModel, onOpenEyesight: () -> Unit = {}) {
                     modifier = Modifier.size(44.dp), colors = mapBtnColors,
                 ) { Icon(Icons.Default.Explore, contentDescription = if (headingUp) "Heading up" else "North up") }
                 FilledIconToggleButton(
-                    checked = followMode, onCheckedChange = { followMode = it },
+                    checked = followMode,
+                    onCheckedChange = {
+                        followMode = it
+                        // Re-centre on the puck immediately when follow is turned back on,
+                        // rather than waiting for the next state redraw.
+                        if (it) {
+                            val lat = state.lastLat; val lon = state.lastLon
+                            if (lat != null && lon != null) mapView.controller.animateTo(GeoPoint(lat, lon))
+                        }
+                    },
                     modifier = Modifier.size(44.dp), colors = mapBtnColors,
-                ) { Icon(Icons.Default.MyLocation, contentDescription = if (followMode) "Following" else "Follow vehicle") }
+                ) { Icon(Icons.Default.MyLocation, contentDescription = if (followMode) "Following — tap to free the map" else "Re-centre on me") }
                 FilledIconToggleButton(
                     checked = hudOn, onCheckedChange = { vm.setHudEnabled(it) },
                     modifier = Modifier.size(44.dp), colors = mapBtnColors,
@@ -987,6 +1013,8 @@ private fun ControlPanel(
     territoryCount: Int,
     phoneOn: Boolean,
     onTogglePhone: (Boolean) -> Unit,
+    ignoreDeadZones: Boolean,
+    onToggleIgnoreDeadZones: (Boolean) -> Unit,
     onUpload: () -> Unit,
     onLoadTerritory: () -> Unit,
     expanded: Boolean,
@@ -1040,6 +1068,22 @@ private fun ControlPanel(
                         )
                     }
                     Switch(checked = phoneOn, onCheckedChange = onTogglePhone)
+                }
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Ignore dead zones", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            if (ignoreDeadZones) "Testing — scanning never pauses" else "Dead zones pause scanning",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (ignoreDeadZones) MaterialTheme.colorScheme.tertiary
+                                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        )
+                    }
+                    Switch(checked = ignoreDeadZones, onCheckedChange = onToggleIgnoreDeadZones)
                 }
                 if (!locationReady) {
                     Text(
