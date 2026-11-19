@@ -252,7 +252,7 @@ class WardriveManager(
                 } else {
                     if (suppressed) {
                         suppressed = false
-                        fleet.broadcast(scanCommand(_state.value.mode))
+                        broadcastScan(_state.value.mode)
                     }
                     if (isPlausibleFix(loc)) {
                         curLat = loc.latitude
@@ -296,14 +296,14 @@ class WardriveManager(
             }
         }
 
-        fleet.broadcast(scanCommand(mode))
+        broadcastScan(mode)
 
         // Some firmware scans once per command; re-arm periodically so a long drive
         // keeps producing pings instead of going quiet after the first sweep.
         rescanJob = scope.launch {
             while (true) {
                 delay(10_000)
-                if (_state.value.active && !suppressed) fleet.broadcast(scanCommand(_state.value.mode))
+                if (_state.value.active && !suppressed) broadcastScan(_state.value.mode)
             }
         }
 
@@ -368,7 +368,7 @@ class WardriveManager(
     fun setMode(mode: WardriveMode) {
         _state.update { it.copy(mode = mode) }
         // Don't wake the boards back up while we're parked in a dead zone.
-        if (_state.value.active && !suppressed) fleet.broadcast(scanCommand(mode))
+        if (_state.value.active && !suppressed) broadcastScan(mode)
         // Retarget the phone's radios to match the new mode.
         if (phoneOn) { phoneSensors?.stop(); startPhone(mode) }
     }
@@ -418,14 +418,25 @@ class WardriveManager(
         _state.update { it.copy(wifiCount = wifi, btCount = bt, sourceCounts = counts) }
     }
 
-    private fun scanCommand(mode: WardriveMode): ByteArray = when (mode) {
-        // ALL uses the firmware's combined wardrive engine (Wi-Fi + BLE + sub-GHz),
-        // which streams DATA:AP/DATA:BT/DATA:RF to the host. NOT "scanall" — on the
-        // T-Embed that command means a sub-GHz-only sweep, so it produced no device
-        // pins on the map. WIFI/BT keep their dedicated single-radio scans.
-        WardriveMode.ALL -> command("wardrive")
-        WardriveMode.WIFI -> command("scanap")
-        WardriveMode.BT -> command("sniffbt", "type=all")
+    /**
+     * Fan the right scan command(s) out to the whole fleet for [mode].
+     *
+     * ALL mode is the subtle one: the T-Embed runs its combined Wi-Fi+BLE+sub-GHz engine on
+     * `CMD:wardrive`, but every C5 board (c5biscuit / wtBLEep / MaurCAK3D) only starts a sweep
+     * on `CMD:scan*` — they don't know `wardrive`. So an All-mode drive that sent `wardrive`
+     * alone left all three C5 boards silent and only the T-Embed on the map.
+     *
+     * Fix: send `CMD:scan` first (every C5 board starts its DATA:AP sweep), then `CMD:wardrive`.
+     * The T-Embed's wardrive handler calls stopAll() first (which clears the scan flag the
+     * earlier `scan` set), so it ends in a clean combined sweep — no board is left behind and
+     * none needs reflashing. Order matters: scan before wardrive.
+     */
+    private fun broadcastScan(mode: WardriveMode) {
+        when (mode) {
+            WardriveMode.ALL -> { fleet.broadcast(command("scan")); fleet.broadcast(command("wardrive")) }
+            WardriveMode.WIFI -> fleet.broadcast(command("scanap"))
+            WardriveMode.BT -> fleet.broadcast(command("sniffbt", "type=all"))
+        }
     }
 
     private fun matchesMode(kind: SampleKind, mode: WardriveMode): Boolean = when (mode) {
