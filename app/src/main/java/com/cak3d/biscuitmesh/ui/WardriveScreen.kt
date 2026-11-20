@@ -196,6 +196,12 @@ fun WardriveScreen(vm: MainViewModel, onOpenEyesight: () -> Unit = {}) {
 
     val phoneOn by vm.phoneSensors.collectAsStateWithLifecycle()
     val ignoreDeadZones by vm.ignoreDeadZones.collectAsStateWithLifecycle()
+    // WhatTheFlock is connected over USB or BLE — show it in the BOARDS panel like a board
+    // (at 0 pings until it spots a camera), not only once it has sightings.
+    val wtfUsbLink by vm.wtfLink.collectAsStateWithLifecycle()
+    val wtfBleLink by vm.wtfBleLink.collectAsStateWithLifecycle()
+    val wtfConnected = wtfUsbLink == com.cak3d.biscuitmesh.usb.WtfLinkState.CONNECTED ||
+        wtfBleLink == com.cak3d.biscuitmesh.usb.WtfLinkState.CONNECTED
 
     // Free two-finger rotation (re-added on each map update, which clears overlays).
     val rotationOverlay = remember { RotationGestureOverlay(mapView).apply { isEnabled = true } }
@@ -559,7 +565,7 @@ fun WardriveScreen(vm: MainViewModel, onOpenEyesight: () -> Unit = {}) {
                 },
             )
         }
-        if (showBoards && viewMode == MapViewMode.DEFAULT) BoardsLegend(deviceMap, state.sourceCounts, phoneOn)
+        if (showBoards && viewMode == MapViewMode.DEFAULT) BoardsLegend(deviceMap, state.sourceCounts, phoneOn, wtfConnected)
         ControlPanel(
             modifier = Modifier,
             active = state.active,
@@ -1143,9 +1149,9 @@ private fun Stat(label: String, value: String) {
 }
 
 @Composable
-private fun BoardsLegend(devices: Map<String, BiscuitDevice>, counts: Map<String, Int>, phoneOn: Boolean) {
+private fun BoardsLegend(devices: Map<String, BiscuitDevice>, counts: Map<String, Int>, phoneOn: Boolean, wtfConnected: Boolean = false) {
     val live = devices.values.filter { it.isLive }
-    if (live.isEmpty() && !phoneOn) return
+    if (live.isEmpty() && !phoneOn && !wtfConnected) return
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
@@ -1163,13 +1169,13 @@ private fun BoardsLegend(devices: Map<String, BiscuitDevice>, counts: Map<String
                 LegendRow(Color(sourceColor(d.address)), d.displayName, meta)
             }
             // External USB/BLE feeds that aren't Biscuit GATT boards but drop sightings on the
-            // map (ESP Marauder, WhatTheFlock) — show them alongside the boards when contributing.
-            listOf(
-                com.cak3d.biscuitmesh.usb.MARAUDER_SOURCE to "ESP Marauder",
-                com.cak3d.biscuitmesh.usb.WTF_SOURCE to "WhatTheFlock",
-            ).forEach { (src, name) ->
-                val c = counts[src] ?: 0
-                if (c > 0) LegendRow(Color(sourceColor(src)), name, "$c pings")
+            // map. Show WhatTheFlock whenever it's connected (like a board, at 0 until it spots
+            // a camera); show the Marauder when it's actually contributing sightings.
+            val marC = counts[com.cak3d.biscuitmesh.usb.MARAUDER_SOURCE] ?: 0
+            if (marC > 0) LegendRow(Color(sourceColor(com.cak3d.biscuitmesh.usb.MARAUDER_SOURCE)), "ESP Marauder", "$marC pings")
+            val wtfC = counts[com.cak3d.biscuitmesh.usb.WTF_SOURCE] ?: 0
+            if (wtfConnected || wtfC > 0) {
+                LegendRow(Color(sourceColor(com.cak3d.biscuitmesh.usb.WTF_SOURCE)), "WhatTheFlock", "$wtfC pings")
             }
             if (phoneOn) {
                 LegendRow(Color(sourceColor(PHONE_SOURCE)), "This phone", "${counts[PHONE_SOURCE] ?: 0} pings")

@@ -68,6 +68,7 @@ import androidx.navigation.compose.rememberNavController
 import com.cak3d.biscuitmesh.ui.BluetoothScreen
 import com.cak3d.biscuitmesh.ui.DebugScreen
 import com.cak3d.biscuitmesh.ui.FeedsScreen
+import com.cak3d.biscuitmesh.ui.WeatherScreen
 import com.cak3d.biscuitmesh.ui.Terrain3DScreen
 import com.cak3d.biscuitmesh.ui.TrafficDashboardScreen
 import com.cak3d.biscuitmesh.ui.DeviceDetailScreen
@@ -415,6 +416,7 @@ private fun MainShell(vm: MainViewModel) {
                 composable("devicegraph") { ForceGraphScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("skyar") { SkyArScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("feeds") { FeedsScreen(vm = vm, onBack = { nav.popBackStack() }) }
+                composable("weather") { WeatherScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("traffic") { TrafficDashboardScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("terrain3d") { Terrain3DScreen(vm = vm, onBack = { nav.popBackStack() }, onOpenEyesight = { nav.navigate("eyesight") }) }
                 composable("eyesight") { EyesightArScreen(vm = vm, onBack = { nav.popBackStack() }) }

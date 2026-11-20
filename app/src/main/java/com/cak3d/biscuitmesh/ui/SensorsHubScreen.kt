@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Flight
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.WbTwilight
@@ -81,13 +82,14 @@ fun SensorsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
             HubEntry("Eyesight AR", "Point the phone at the street — your plotted points within ~1 km, through the camera", Icons.Default.Streetview, "eyesight", Color(0xFF00E5A0)),
         )),
         HubSection("Sky", listOf(
-            HubEntry("Sky AR", "Point your phone at the sky — satellites overlaid live on the camera", Icons.Default.CameraAlt, "skyar", Color(0xFFA78BFA)),
+            HubEntry("Sky AR", "Point your phone at the sky — satellites, planets, the Moon, constellations & aircraft live on the camera", Icons.Default.CameraAlt, "skyar", Color(0xFFA78BFA)),
             HubEntry("GPS Satellites", "Live 3D sky dome — every GPS/GLONASS/Galileo sat your phone sees", Icons.Default.SatelliteAlt, "satellites", Color(0xFF22D3EE)),
             HubEntry("Orbit", "Satellites, aircraft & space weather — flip between the three in one view", Icons.Default.Public, "orbit", Color(0xFF38BDF8)),
             HubEntry("Aircraft", "Live ADS-B traffic overhead — a dedicated full-screen radar", Icons.Default.Flight, "aircraft", Color(0xFF60A5FA)),
             HubEntry("Aurora", "Space weather & aurora forecast — Kp, solar wind, visibility", Icons.Default.WbTwilight, "aurora", Color(0xFF34D399)),
         )),
         HubSection("Local feeds", listOf(
+            HubEntry("Weather", "Current conditions, animated precipitation radar & the forecast into tomorrow", Icons.Default.Cloud, "weather", Color(0xFF5CB4E8)),
             HubEntry("Live Feeds", "Surveillance cams, scanner audio & traffic webcams near you — all public, consume-only", Icons.Default.Videocam, "feeds", Color(0xFFFF5470)),
             HubEntry("Traffic Dashboard", "Live scrolling charts — frame throughput, discovery rate, sub-GHz pings & per-board share", Icons.Default.Leaderboard, "traffic", Color(0xFF22D3EE)),
         )),
