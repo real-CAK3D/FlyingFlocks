@@ -1162,6 +1162,15 @@ private fun BoardsLegend(devices: Map<String, BiscuitDevice>, counts: Map<String
                 }.joinToString("  ·  ")
                 LegendRow(Color(sourceColor(d.address)), d.displayName, meta)
             }
+            // External USB/BLE feeds that aren't Biscuit GATT boards but drop sightings on the
+            // map (ESP Marauder, WhatTheFlock) — show them alongside the boards when contributing.
+            listOf(
+                com.cak3d.biscuitmesh.usb.MARAUDER_SOURCE to "ESP Marauder",
+                com.cak3d.biscuitmesh.usb.WTF_SOURCE to "WhatTheFlock",
+            ).forEach { (src, name) ->
+                val c = counts[src] ?: 0
+                if (c > 0) LegendRow(Color(sourceColor(src)), name, "$c pings")
+            }
             if (phoneOn) {
                 LegendRow(Color(sourceColor(PHONE_SOURCE)), "This phone", "${counts[PHONE_SOURCE] ?: 0} pings")
             }

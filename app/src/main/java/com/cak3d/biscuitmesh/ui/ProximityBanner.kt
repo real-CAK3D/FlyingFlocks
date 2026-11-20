@@ -12,6 +12,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -19,17 +21,21 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -100,19 +106,30 @@ fun ProximityBanner(vm: MainViewModel, onOpenMap: () -> Unit) {
     // Buzz once each time a new device enters range.
     LaunchedEffect(nearby?.key) { if (nearby != null) buzz(context) }
 
+    // Dismiss: swipe the banner sideways or tap ×. It stays hidden for THIS device
+    // until a different one comes into range (or this one leaves and returns).
+    var dismissedKey by remember { mutableStateOf<String?>(null) }
+    val shown = nearby?.takeUnless { it.key == dismissedKey }
+
     AnimatedVisibility(
-        visible = nearby != null,
+        visible = shown != null,
         enter = slideInVertically { -it } + fadeIn(),
         exit = slideOutVertically { -it } + fadeOut(),
     ) {
-        nearby?.let { n ->
+        shown?.let { n ->
             Card(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp).clickable { onOpenMap() },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp)
+                    .pointerInput(n.key) {
+                        detectHorizontalDragGestures { _, dragAmount ->
+                            if (kotlin.math.abs(dragAmount) > 6f) dismissedKey = n.key
+                        }
+                    }
+                    .clickable { onOpenMap() },
                 shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             ) {
                 Row(
-                    Modifier.fillMaxWidth().padding(12.dp),
+                    Modifier.fillMaxWidth().padding(start = 12.dp, top = 12.dp, bottom = 12.dp, end = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
@@ -124,6 +141,10 @@ fun ProximityBanner(vm: MainViewModel, onOpenMap: () -> Unit) {
                     }
                     Text("${n.distM} m  ${n.bearing}", style = MaterialTheme.typography.titleMedium,
                         color = n.accent, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                    IconButton(onClick = { dismissedKey = n.key }) {
+                        Icon(Icons.Default.Close, contentDescription = "Dismiss",
+                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                    }
                 }
             }
         }

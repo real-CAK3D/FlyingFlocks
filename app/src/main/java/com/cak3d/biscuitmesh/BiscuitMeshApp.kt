@@ -258,6 +258,18 @@ class BiscuitMeshApp : Application() {
     @Volatile private var vibrateEnabled = true
 
     /** Short buzz for a camera alert (respects the vibrate-on-alert setting at the call site). */
+    /** Feed a LIVE WhatTheFlock camera sighting to the wardrive as the "wtf" source, so the
+     *  WhatTheFlock board shows in the map's BOARDS legend with its own ping count alongside
+     *  the Biscuit boards. Saved/replayed sightings stay on the hazard-pin layer only. */
+    private fun plotWtfAsSource(d: com.cak3d.biscuitmesh.usb.WtfDetection) {
+        if (!d.live) return
+        val kind = if (d.protocol.contains("ble", ignoreCase = true))
+            com.cak3d.biscuitmesh.wardrive.SampleKind.BT
+        else com.cak3d.biscuitmesh.wardrive.SampleKind.AP
+        wardrive?.addExternalHit(kind, d.mac, d.ssid.ifBlank { "Flock cam" },
+            d.rssi, d.channel ?: 0, com.cak3d.biscuitmesh.usb.WTF_SOURCE)
+    }
+
     private fun buzz() {
         val v = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
             (getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? android.os.VibratorManager)?.defaultVibrator
@@ -371,6 +383,7 @@ class BiscuitMeshApp : Application() {
                 hazardStore.merge(listOf(
                     Hazard("wtf:${d.mac}", HazardKind.FLOCK, lat, lon, d.ssid.ifBlank { d.mac })
                 ))
+                plotWtfAsSource(d)
             }
         }
         // The same dongle reached over BLE: identical sighting → hazard pipeline, same
@@ -383,6 +396,7 @@ class BiscuitMeshApp : Application() {
                 hazardStore.merge(listOf(
                     Hazard("wtf:${d.mac}", HazardKind.FLOCK, lat, lon, d.ssid.ifBlank { d.mac })
                 ))
+                plotWtfAsSource(d)
             }
         }
         // Resume the wireless WTF link on launch if the operator turned it on before.

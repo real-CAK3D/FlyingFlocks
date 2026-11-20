@@ -14,6 +14,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Flight
+import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.WbTwilight
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.DirectionsCar
@@ -74,6 +76,7 @@ fun SensorsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
             HubEntry("Watchlist", "Flag MACs or names and spot them in range", Icons.Default.Visibility, "watchlist", Color(0xFF34D399)),
             HubEntry("Targets", "Networks, devices & locations to locate — scan toggles, local only", Icons.Default.GpsFixed, "targets", Color(0xFFF59E0B)),
             HubEntry("Device Graph", "APs, their clients & BLE as a live force-directed web", Icons.Default.Hub, "devicegraph", Color(0xFFA855F7)),
+            HubEntry("Live Signals", "Every signal as it's heard — tap one for its full readings", Icons.Default.GraphicEq, "live", Color(0xFFF472B6)),
             HubEntry("3D Terrain", "Your drive tilted onto the real landscape — free elevation + imagery, then drop to street level", Icons.Default.Terrain, "terrain3d", Color(0xFF8FD694)),
             HubEntry("Eyesight AR", "Point the phone at the street — your plotted points within ~1 km, through the camera", Icons.Default.Streetview, "eyesight", Color(0xFF00E5A0)),
         )),
@@ -81,6 +84,8 @@ fun SensorsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
             HubEntry("Sky AR", "Point your phone at the sky — satellites overlaid live on the camera", Icons.Default.CameraAlt, "skyar", Color(0xFFA78BFA)),
             HubEntry("GPS Satellites", "Live 3D sky dome — every GPS/GLONASS/Galileo sat your phone sees", Icons.Default.SatelliteAlt, "satellites", Color(0xFF22D3EE)),
             HubEntry("Orbit", "Satellites, aircraft & space weather — flip between the three in one view", Icons.Default.Public, "orbit", Color(0xFF38BDF8)),
+            HubEntry("Aircraft", "Live ADS-B traffic overhead — a dedicated full-screen radar", Icons.Default.Flight, "aircraft", Color(0xFF60A5FA)),
+            HubEntry("Aurora", "Space weather & aurora forecast — Kp, solar wind, visibility", Icons.Default.WbTwilight, "aurora", Color(0xFF34D399)),
         )),
         HubSection("Local feeds", listOf(
             HubEntry("Live Feeds", "Surveillance cams, scanner audio & traffic webcams near you — all public, consume-only", Icons.Default.Videocam, "feeds", Color(0xFFFF5470)),
