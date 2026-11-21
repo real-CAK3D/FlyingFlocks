@@ -89,6 +89,7 @@ import com.cak3d.biscuitmesh.ui.NavMode
 import com.cak3d.biscuitmesh.ui.GlobeScreen
 import com.cak3d.biscuitmesh.ui.OrbitScreen
 import com.cak3d.biscuitmesh.ui.GlobalStatsScreen
+import com.cak3d.biscuitmesh.ui.AlertsScreen
 import com.cak3d.biscuitmesh.ui.LandMode
 import com.cak3d.biscuitmesh.ui.LandscapeScreen
 import com.cak3d.biscuitmesh.ui.ScopeScreen
@@ -421,6 +422,7 @@ private fun MainShell(vm: MainViewModel) {
                 composable("skyar") { SkyArScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("feeds") { FeedsScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("weather") { WeatherScreen(vm = vm, onBack = { nav.popBackStack() }) }
+                composable("alerts") { AlertsScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("traffic") { TrafficDashboardScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("terrain3d") { LandscapeScreen(vm = vm, onBack = { nav.popBackStack() }, startMode = LandMode.TERRAIN) }
                 composable("eyesight") { LandscapeScreen(vm = vm, onBack = { nav.popBackStack() }, startMode = LandMode.EYESIGHT) }

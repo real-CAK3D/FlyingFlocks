@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.GpsFixed
 import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Nightlight
 import androidx.compose.material.icons.filled.PersonSearch
@@ -87,7 +88,8 @@ fun SensorsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
             HubEntry("Sky AR", "Point your phone at the sky — satellites, planets, the Moon, constellations & aircraft live on the camera", Icons.Default.CameraAlt, "skyar", Color(0xFFA78BFA)),
             HubEntry("Orbit", "Everything overhead in one window — GPS satellites, ADS-B aircraft & aurora/space weather, switchable", Icons.Default.Public, "orbit", Color(0xFF38BDF8)),
         )),
-        HubSection("Local feeds", listOf(
+        HubSection("Alerts & feeds", listOf(
+            HubEntry("Alerts & Threats", "Live security feed — NWS warnings for your area, earthquakes & global disasters, tap for detail", Icons.Default.Warning, "alerts", Color(0xFFFF9500)),
             HubEntry("Weather", "Current conditions, animated precipitation radar & the forecast into tomorrow", Icons.Default.Cloud, "weather", Color(0xFF5CB4E8)),
             HubEntry("Live Feeds", "Surveillance cams, scanner audio & traffic webcams near you — all public, consume-only", Icons.Default.Videocam, "feeds", Color(0xFFFF5470)),
         )),
