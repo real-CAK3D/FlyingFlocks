@@ -26,7 +26,7 @@ import com.cak3d.biscuitmesh.MainViewModel
 
 /** The signal visualizers, folded into one window with a view-switcher instead of five hub entries. */
 enum class SignalsView(val label: String) {
-    SCOPE("Scope"), LIVE("Live"), GRAPH("Graph"), DASHBOARD("Dashboard"), TRAFFIC("Traffic")
+    SCOPE("Scope"), LIVE("Live"), GRAPH("Graph"), DEVICES("Devices"), DASHBOARD("Dashboard"), TRAFFIC("Traffic")
 }
 
 /**
@@ -47,6 +47,7 @@ fun SignalsScreen(
             SignalsView.SCOPE -> ScopeScreen(vm, onBack)
             SignalsView.LIVE -> LiveScreen(vm, onBack, onOpenSignal)
             SignalsView.GRAPH -> ForceGraphScreen(vm, onBack)
+            SignalsView.DEVICES -> DevicesScreen(vm, onBack)
             SignalsView.DASHBOARD -> DashboardScreen(vm, onBack)
             SignalsView.TRAFFIC -> TrafficDashboardScreen(vm, onBack)
         }

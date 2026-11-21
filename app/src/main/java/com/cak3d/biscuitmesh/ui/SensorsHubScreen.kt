@@ -82,7 +82,7 @@ fun SensorsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
             HubEntry("3D Terrain & AR", "Your drive on the real landscape in 3D, or through the camera at street level — toggle between the two in one window", Icons.Default.Terrain, "terrain3d", Color(0xFF8FD694)),
         )),
         HubSection("Live Visuals", listOf(
-            HubEntry("Signals", "Every live RF visualizer in one window — the 3D scope, live console, device graph, dashboard & traffic charts, switchable at the bottom", Icons.Default.Equalizer, "signals", Color(0xFF22D3EE)),
+            HubEntry("Signals", "Every live RF visualizer in one window — the 3D scope, live console, device graph, per-device telemetry, dashboard & traffic charts, switchable at the bottom", Icons.Default.Equalizer, "signals", Color(0xFF22D3EE)),
         )),
         HubSection("Sky", listOf(
             HubEntry("Sky AR", "Point your phone at the sky — satellites, planets, the Moon, constellations & aircraft live on the camera", Icons.Default.CameraAlt, "skyar", Color(0xFFA78BFA)),
