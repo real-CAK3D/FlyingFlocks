@@ -81,11 +81,7 @@ fun SensorsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
             HubEntry("3D Terrain & AR", "Your drive on the real landscape in 3D, or through the camera at street level — toggle between the two in one window", Icons.Default.Terrain, "terrain3d", Color(0xFF8FD694)),
         )),
         HubSection("Live Visuals", listOf(
-            HubEntry("Spectrum Scope", "The big board — live 3D RF depth, channel waterfall, trace & signal feed", Icons.Default.Equalizer, "scope", Color(0xFF22D3EE)),
-            HubEntry("Signal Dashboard", "Every live reading in one place — counts, rates, bands & gauges", Icons.Default.Insights, "dashboard", Color(0xFFF472B6)),
-            HubEntry("Device Graph", "APs, their clients & BLE as a live force-directed web", Icons.Default.Hub, "devicegraph", Color(0xFFA855F7)),
-            HubEntry("Live Signals", "Every signal as it's heard — tap one for its full readings", Icons.Default.GraphicEq, "live", Color(0xFFF59E0B)),
-            HubEntry("Traffic Dashboard", "Live scrolling charts — throughput, discovery rate, sub-GHz pings & per-board share", Icons.Default.Leaderboard, "traffic", Color(0xFF34D399)),
+            HubEntry("Signals", "Every live RF visualizer in one window — the 3D scope, live console, device graph, dashboard & traffic charts, switchable at the bottom", Icons.Default.Equalizer, "signals", Color(0xFF22D3EE)),
         )),
         HubSection("Sky", listOf(
             HubEntry("Sky AR", "Point your phone at the sky — satellites, planets, the Moon, constellations & aircraft live on the camera", Icons.Default.CameraAlt, "skyar", Color(0xFFA78BFA)),

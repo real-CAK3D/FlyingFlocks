@@ -92,6 +92,8 @@ import com.cak3d.biscuitmesh.ui.GlobalStatsScreen
 import com.cak3d.biscuitmesh.ui.LandMode
 import com.cak3d.biscuitmesh.ui.LandscapeScreen
 import com.cak3d.biscuitmesh.ui.ScopeScreen
+import com.cak3d.biscuitmesh.ui.SignalsScreen
+import com.cak3d.biscuitmesh.ui.SignalsView
 import com.cak3d.biscuitmesh.ui.DashboardScreen
 import com.cak3d.biscuitmesh.ui.CrewScreen
 import com.cak3d.biscuitmesh.ui.DeadZonesScreen
@@ -450,6 +452,16 @@ private fun MainShell(vm: MainViewModel) {
                 composable("stats") { StatsScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("live") {
                     LiveScreen(vm = vm, onBack = { nav.popBackStack() },
+                        onOpenSignal = { nav.navigate("signaldetail/${java.net.URLEncoder.encode(it, "UTF-8")}") })
+                }
+                composable("signals") {
+                    SignalsScreen(vm = vm, onBack = { nav.popBackStack() },
+                        onOpenSignal = { nav.navigate("signaldetail/${java.net.URLEncoder.encode(it, "UTF-8")}") })
+                }
+                composable("signals/{view}") { entry ->
+                    val v = runCatching { SignalsView.valueOf(entry.arguments?.getString("view") ?: "SCOPE") }
+                        .getOrDefault(SignalsView.SCOPE)
+                    SignalsScreen(vm = vm, onBack = { nav.popBackStack() }, startView = v,
                         onOpenSignal = { nav.navigate("signaldetail/${java.net.URLEncoder.encode(it, "UTF-8")}") })
                 }
                 composable("hunts") { HuntsScreen(vm = vm, onBack = { nav.popBackStack() }) }
