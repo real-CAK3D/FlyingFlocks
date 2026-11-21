@@ -1,10 +1,18 @@
 package com.cak3d.biscuitmesh.ui
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -21,6 +29,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -28,6 +37,7 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.cak3d.biscuitmesh.MainViewModel
 import com.cak3d.biscuitmesh.model.LogEntry
@@ -180,6 +190,17 @@ fun ForceGraphScreen(vm: MainViewModel, onBack: () -> Unit) {
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
+                actions = {
+                    HelpButton(
+                        "Device Graph",
+                        "A live map of the radio devices around you — not a geographic map. Each dot is one " +
+                            "device the phone (or a connected board) can hear: Wi-Fi access points, the phone/laptop/TV " +
+                            "clients talking to them, and loose Bluetooth gadgets. A line is drawn when a board's sniff " +
+                            "catches a client using a particular access point, so you can see who's connected to what. " +
+                            "Dots repel each other and linked pairs pull together, so clusters are devices that belong " +
+                            "together. It fills in as you scan Wi-Fi/Bluetooth or run a station sniff on a board.",
+                    )
+                },
             )
         },
     ) { pad ->
@@ -210,21 +231,48 @@ fun ForceGraphScreen(vm: MainViewModel, onBack: () -> Unit) {
                     }
                 }
             }
+            // Always-on one-liner so the screen explains itself at a glance.
+            Text(
+                "Every radio device near you, linked by who's talking to whom — not a map.",
+                Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+            )
             if (graph.nodes.isEmpty()) {
                 Text(
-                    "No devices yet. Scan on the Wi-Fi or Bluetooth tab, or run a station sniff on a board to draw the links.",
-                    Modifier.fillMaxWidth().padding(24.dp),
+                    "No devices yet. Scan on the Wi-Fi or Bluetooth tab, or run a station sniff on a board, and the dots fill in.",
+                    Modifier.align(Alignment.Center).fillMaxWidth().padding(24.dp),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                 )
             } else {
-                Text(
-                    "${graph.nodes.count { it.type == AP }} APs · ${graph.nodes.count { it.type == STA }} clients · ${graph.nodes.count { it.type == BT }} BLE · ${graph.edges.size} links",
-                    Modifier.padding(12.dp), style = MaterialTheme.typography.labelMedium,
-                    fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary,
-                )
+                Column(
+                    Modifier.align(Alignment.BottomStart).padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                        LegendDot(NODE_AP, "Wi-Fi AP")
+                        LegendDot(NODE_STA, "Client")
+                        LegendDot(NODE_BT, "Bluetooth")
+                    }
+                    Text(
+                        "${graph.nodes.count { it.type == AP }} APs · ${graph.nodes.count { it.type == STA }} clients · ${graph.nodes.count { it.type == BT }} BLE · ${graph.edges.size} links",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun LegendDot(color: Color, label: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(9.dp).background(color, CircleShape))
+        Spacer(Modifier.width(5.dp))
+        Text(label, style = MaterialTheme.typography.labelSmall, fontSize = 10.sp,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f))
     }
 }

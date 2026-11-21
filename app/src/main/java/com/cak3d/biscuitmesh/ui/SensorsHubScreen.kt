@@ -78,8 +78,7 @@ fun SensorsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
             HubEntry("Tracker Check", "Is a BLE tracker following you? Best-effort anti-stalking", Icons.Default.PersonSearch, "trackers", Color(0xFFFF5470)),
             HubEntry("Watchlist", "Flag MACs or names and spot them in range", Icons.Default.Visibility, "watchlist", Color(0xFF34D399)),
             HubEntry("Targets", "Networks, devices & locations to locate — scan toggles, local only", Icons.Default.GpsFixed, "targets", Color(0xFFF59E0B)),
-            HubEntry("3D Terrain", "Your drive tilted onto the real landscape — free elevation + imagery, then drop to street level", Icons.Default.Terrain, "terrain3d", Color(0xFF8FD694)),
-            HubEntry("Eyesight AR", "Point the phone at the street — your plotted points within ~1 km, through the camera", Icons.Default.Streetview, "eyesight", Color(0xFF00E5A0)),
+            HubEntry("3D Terrain & AR", "Your drive on the real landscape in 3D, or through the camera at street level — toggle between the two in one window", Icons.Default.Terrain, "terrain3d", Color(0xFF8FD694)),
         )),
         HubSection("Live Visuals", listOf(
             HubEntry("Spectrum Scope", "The big board — live 3D RF depth, channel waterfall, trace & signal feed", Icons.Default.Equalizer, "scope", Color(0xFF22D3EE)),
@@ -90,10 +89,7 @@ fun SensorsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
         )),
         HubSection("Sky", listOf(
             HubEntry("Sky AR", "Point your phone at the sky — satellites, planets, the Moon, constellations & aircraft live on the camera", Icons.Default.CameraAlt, "skyar", Color(0xFFA78BFA)),
-            HubEntry("GPS Satellites", "Live 3D sky dome — every GPS/GLONASS/Galileo sat your phone sees", Icons.Default.SatelliteAlt, "satellites", Color(0xFF22D3EE)),
-            HubEntry("Orbit", "Satellites, aircraft & space weather — flip between the three in one view", Icons.Default.Public, "orbit", Color(0xFF38BDF8)),
-            HubEntry("Aircraft", "Live ADS-B traffic overhead — a dedicated full-screen radar", Icons.Default.Flight, "aircraft", Color(0xFF60A5FA)),
-            HubEntry("Aurora", "Space weather & aurora forecast — Kp, solar wind, visibility", Icons.Default.WbTwilight, "aurora", Color(0xFF34D399)),
+            HubEntry("Orbit", "Everything overhead in one window — GPS satellites, ADS-B aircraft & aurora/space weather, switchable", Icons.Default.Public, "orbit", Color(0xFF38BDF8)),
         )),
         HubSection("Local feeds", listOf(
             HubEntry("Weather", "Current conditions, animated precipitation radar & the forecast into tomorrow", Icons.Default.Cloud, "weather", Color(0xFF5CB4E8)),

@@ -89,6 +89,8 @@ import com.cak3d.biscuitmesh.ui.NavMode
 import com.cak3d.biscuitmesh.ui.GlobeScreen
 import com.cak3d.biscuitmesh.ui.OrbitScreen
 import com.cak3d.biscuitmesh.ui.GlobalStatsScreen
+import com.cak3d.biscuitmesh.ui.LandMode
+import com.cak3d.biscuitmesh.ui.LandscapeScreen
 import com.cak3d.biscuitmesh.ui.ScopeScreen
 import com.cak3d.biscuitmesh.ui.DashboardScreen
 import com.cak3d.biscuitmesh.ui.CrewScreen
@@ -418,8 +420,8 @@ private fun MainShell(vm: MainViewModel) {
                 composable("feeds") { FeedsScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("weather") { WeatherScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("traffic") { TrafficDashboardScreen(vm = vm, onBack = { nav.popBackStack() }) }
-                composable("terrain3d") { Terrain3DScreen(vm = vm, onBack = { nav.popBackStack() }, onOpenEyesight = { nav.navigate("eyesight") }) }
-                composable("eyesight") { EyesightArScreen(vm = vm, onBack = { nav.popBackStack() }) }
+                composable("terrain3d") { LandscapeScreen(vm = vm, onBack = { nav.popBackStack() }, startMode = LandMode.TERRAIN) }
+                composable("eyesight") { LandscapeScreen(vm = vm, onBack = { nav.popBackStack() }, startMode = LandMode.EYESIGHT) }
                 composable("globe") { GlobeScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("orbit") { OrbitScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("globalstats") { GlobalStatsScreen(vm = vm, onBack = { nav.popBackStack() }) }
