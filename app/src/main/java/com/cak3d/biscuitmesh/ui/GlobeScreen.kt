@@ -35,7 +35,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -120,6 +122,19 @@ fun GlobeScreen(vm: MainViewModel, onBack: () -> Unit) {
     )
     var selected by remember { mutableStateOf<Sat?>(null) }
 
+    // Each satellite's recent track across the sky (az, el), so the globe can draw its arc of motion.
+    val satTrails = remember { mutableStateMapOf<String, List<Pair<Float, Float>>>() }
+    LaunchedEffect(gnss.sats) {
+        gnss.sats.filter { it.elevationDeg >= 0f }.forEach { s ->
+            val key = "${s.constellation}-${s.svid}"
+            val prev = satTrails[key] ?: emptyList()
+            val last = prev.lastOrNull()
+            if (last == null || kotlin.math.abs(last.first - s.azimuthDeg) > 0.3f || kotlin.math.abs(last.second - s.elevationDeg) > 0.3f) {
+                satTrails[key] = (prev + (s.azimuthDeg to s.elevationDeg)).takeLast(60)
+            }
+        }
+    }
+
     Scaffold(
         containerColor = Color.Transparent,
         topBar = {
@@ -162,7 +177,7 @@ fun GlobeScreen(vm: MainViewModel, onBack: () -> Unit) {
                 Card(Modifier.fillMaxWidth(), shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
                     colors = CardDefaults.cardColors(containerColor = Color(0xFF04070A))) {
                     Box(Modifier.padding(10.dp)) {
-                        GlobeCanvas(gnss.sats, spin, Modifier.fillMaxWidth().aspectRatio(1f)) { selected = it }
+                        GlobeCanvas(gnss.sats, satTrails, spin, Modifier.fillMaxWidth().aspectRatio(1f)) { selected = it }
                     }
                 }
             }
@@ -235,7 +250,13 @@ private fun StatLine(label: String, value: String) {
 }
 
 @Composable
-private fun GlobeCanvas(sats: List<Sat>, spin: Float, modifier: Modifier, onSelect: (Sat) -> Unit) {
+private fun GlobeCanvas(
+    sats: List<Sat>,
+    trails: Map<String, List<Pair<Float, Float>>>,
+    spin: Float,
+    modifier: Modifier,
+    onSelect: (Sat) -> Unit,
+) {
     val cosS = cos(spin); val sinS = sin(spin)
     val tilt = 0.42f // ~24° so the poles show
     val cosT = cos(tilt); val sinT = sin(tilt)
@@ -326,6 +347,26 @@ private fun GlobeCanvas(sats: List<Sat>, spin: Float, modifier: Modifier, onSele
             val p = project(x * 1.5f, y * 1.5f, z * 1.5f, cosS, sinS, cosT, sinT)
             Triple(s, p, project(x, y, z, cosS, sinS, cosT, sinT)) // sat point + its surface anchor
         }.sortedBy { it.second.z }
+
+        // Satellite track arcs — the path each sat has traced across the sky this session.
+        fun domePt(azDeg: Float, elDeg: Float): Offset {
+            val el = Math.toRadians(elDeg.toDouble()); val az = Math.toRadians(azDeg.toDouble())
+            val x = (cos(el) * sin(az)).toFloat() * 1.5f
+            val y = sin(el).toFloat() * 1.5f
+            val z = (cos(el) * cos(az)).toFloat() * 1.5f
+            return scr(project(x, y, z, cosS, sinS, cosT, sinT))
+        }
+        sats.filter { it.elevationDeg >= 0f }.forEach { s ->
+            val tr = trails["${s.constellation}-${s.svid}"] ?: return@forEach
+            if (tr.size < 2) return@forEach
+            val col = constColorG(s.constellation)
+            var prev: Offset? = null
+            tr.forEachIndexed { i, pair ->
+                val pt = domePt(pair.first, pair.second)
+                prev?.let { drawLine(col.copy(alpha = 0.08f + 0.35f * i / tr.size), it, pt, 2f) }
+                prev = pt
+            }
+        }
 
         hitPoints.clear()
         drawn.forEach { (s, p, anchor) ->

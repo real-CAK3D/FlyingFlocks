@@ -37,12 +37,17 @@ enum class OrbitMode(val label: String) { SATELLITES("Satellites"), AIRCRAFT("Ai
  * floats at the bottom, mirroring how Sensors & Sky folds Compass/Radar/Locator into one.
  */
 @Composable
-fun OrbitScreen(vm: MainViewModel, onBack: () -> Unit, startMode: OrbitMode = OrbitMode.SATELLITES) {
+fun OrbitScreen(
+    vm: MainViewModel,
+    onBack: () -> Unit,
+    startMode: OrbitMode = OrbitMode.SATELLITES,
+    onOpenCockpit: (String) -> Unit = {},
+) {
     var mode by remember { mutableStateOf(startMode) }
     Box(Modifier.fillMaxSize()) {
         when (mode) {
             OrbitMode.SATELLITES -> GlobeScreen(vm, onBack)
-            OrbitMode.AIRCRAFT -> AircraftScreen(vm, onBack)
+            OrbitMode.AIRCRAFT -> AircraftScreen(vm, onBack, onOpenCockpit)
             OrbitMode.SPACE_WEATHER -> AuroraScreen(vm, onBack)
         }
         OrbitSwitcher(

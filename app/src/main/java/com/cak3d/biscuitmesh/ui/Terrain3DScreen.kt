@@ -58,7 +58,7 @@ import org.json.JSONObject
  */
 
 // Full MapLibre style: satellite raster + terrarium DEM, with 3D terrain + hillshade.
-private const val TERRAIN_STYLE = """
+internal const val TERRAIN_STYLE = """
 {
   "version": 8,
   "sources": {

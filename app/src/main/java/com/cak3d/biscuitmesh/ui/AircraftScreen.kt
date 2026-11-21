@@ -73,7 +73,7 @@ private val SKY = Color(0xFF38BDF8)
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AircraftScreen(vm: MainViewModel, onBack: () -> Unit) {
+fun AircraftScreen(vm: MainViewModel, onBack: () -> Unit, onOpenCockpit: (String) -> Unit = {}) {
     val client = remember { AdsbClient() }
     var lat by remember { mutableStateOf<Double?>(null) }
     var lon by remember { mutableStateOf<Double?>(null) }
@@ -182,15 +182,21 @@ fun AircraftScreen(vm: MainViewModel, onBack: () -> Unit) {
             }
         }
     }
-    selected?.let { AircraftDetailDialog(it) { selected = null } }
+    selected?.let { a ->
+        AircraftDetailDialog(
+            a,
+            onRide = { if (a.hex.isNotBlank()) { onOpenCockpit(a.hex); selected = null } },
+        ) { selected = null }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AircraftDetailDialog(a: Aircraft, onDismiss: () -> Unit) {
+private fun AircraftDetailDialog(a: Aircraft, onRide: () -> Unit = {}, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        confirmButton = { TextButton(onClick = onRide) { Text("Ride cockpit") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
         title = {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Icon(Icons.Default.Flight, contentDescription = null, tint = SKY,

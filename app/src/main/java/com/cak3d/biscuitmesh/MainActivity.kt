@@ -90,6 +90,7 @@ import com.cak3d.biscuitmesh.ui.GlobeScreen
 import com.cak3d.biscuitmesh.ui.OrbitScreen
 import com.cak3d.biscuitmesh.ui.GlobalStatsScreen
 import com.cak3d.biscuitmesh.ui.AlertsScreen
+import com.cak3d.biscuitmesh.ui.CockpitScreen
 import com.cak3d.biscuitmesh.ui.LandMode
 import com.cak3d.biscuitmesh.ui.LandscapeScreen
 import com.cak3d.biscuitmesh.ui.ScopeScreen
@@ -427,7 +428,10 @@ private fun MainShell(vm: MainViewModel) {
                 composable("terrain3d") { LandscapeScreen(vm = vm, onBack = { nav.popBackStack() }, startMode = LandMode.TERRAIN) }
                 composable("eyesight") { LandscapeScreen(vm = vm, onBack = { nav.popBackStack() }, startMode = LandMode.EYESIGHT) }
                 composable("globe") { GlobeScreen(vm = vm, onBack = { nav.popBackStack() }) }
-                composable("orbit") { OrbitScreen(vm = vm, onBack = { nav.popBackStack() }) }
+                composable("orbit") { OrbitScreen(vm = vm, onBack = { nav.popBackStack() }, onOpenCockpit = { nav.navigate("cockpit/$it") }) }
+                composable("cockpit/{hex}") { entry ->
+                    CockpitScreen(vm = vm, hex = entry.arguments?.getString("hex") ?: "", onBack = { nav.popBackStack() })
+                }
                 composable("globalstats") { GlobalStatsScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("scope") { ScopeScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("dashboard") { DashboardScreen(vm = vm, onBack = { nav.popBackStack() }) }
@@ -438,7 +442,7 @@ private fun MainShell(vm: MainViewModel) {
                 composable("game/blitz") { BandBlitzScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("compass") { NavigateScreen(vm = vm, onBack = { nav.popBackStack() }, startMode = NavMode.COMPASS, onOpenTargets = { nav.navigate("targets") }) }
                 composable("radar") { NavigateScreen(vm = vm, onBack = { nav.popBackStack() }, startMode = NavMode.RADAR, onOpenTargets = { nav.navigate("targets") }) }
-                composable("aircraft") { AircraftScreen(vm = vm, onBack = { nav.popBackStack() }) }
+                composable("aircraft") { AircraftScreen(vm = vm, onBack = { nav.popBackStack() }, onOpenCockpit = { nav.navigate("cockpit/$it") }) }
                 composable("aurora") { AuroraScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("locator") { NavigateScreen(vm = vm, onBack = { nav.popBackStack() }, startMode = NavMode.LOCATOR, onOpenTargets = { nav.navigate("targets") }) }
                 composable("trackers") { TrackerScreen(vm = vm, onBack = { nav.popBackStack() }) }
