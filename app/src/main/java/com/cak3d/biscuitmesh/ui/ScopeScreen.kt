@@ -703,11 +703,14 @@ private fun DrawScope.drawDepth(text: TextMeasurer, terrain: List<ScopeSlice>) {
     val height = size.height
     drawRect(Brush.verticalGradient(listOf(Color.Black, Color(0xFF270D0D), Color(0xFF090506))))
     val axis = height - 12.dp.toPx()
-    val focalBin = terrain.lastOrNull()?.peak?.bin ?: BINS / 2
+    // Anchor the grid on a FIXED spectrum centre (the whole band stays put) instead of recentring
+    // on the current peak — so the cyan peak column / "LAST" marker travel left-right across a
+    // stationary graph as the strongest frequency moves, rather than the graph sliding under them.
+    val focalBin = (BINS - 1) / 2f
     fun project(bin: Int, depth: Float, level: Float): Offset {
         val perspective = 1f - .88f * depth
         val relative = (bin - focalBin) / (BINS - 1f)
-        val x = width * (.59f - .15f * depth + relative * 1.12f * perspective)
+        val x = width * (.5f - .12f * depth + relative * .92f * perspective)
         val floor = axis * (.99f - .61f * depth)
         return Offset(x, floor - level * axis * (.36f - .19f * depth))
     }
