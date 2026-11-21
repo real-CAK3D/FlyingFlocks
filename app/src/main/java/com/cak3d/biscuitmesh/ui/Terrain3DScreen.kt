@@ -152,7 +152,8 @@ fun Terrain3DScreen(vm: MainViewModel, onBack: () -> Unit, onOpenEyesight: () ->
                 val pos = CameraPosition.Builder()
                     .target(LatLng(f.first, f.second))
                     .zoom(15.0).tilt(62.0).bearing(0.0).build()
-                map.moveCamera(CameraUpdateFactory.newCameraPosition(pos))
+                // Google-Earth-style fly-in from the wide view instead of a hard snap.
+                map.animateCamera(CameraUpdateFactory.newCameraPosition(pos), 1600)
             }
         }
         onDispose { }

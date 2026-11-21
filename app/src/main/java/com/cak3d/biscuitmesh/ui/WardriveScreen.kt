@@ -284,6 +284,25 @@ fun WardriveScreen(vm: MainViewModel, onOpenEyesight: () -> Unit = {}) {
     var pendingDeleteCam by remember { mutableStateOf<com.cak3d.biscuitmesh.geo.Hazard?>(null) }
     var selectedCam by remember { mutableStateOf<com.cak3d.biscuitmesh.geo.Hazard?>(null) }
     var selectedSampleId by remember { mutableStateOf<String?>(null) }
+    // Google-Earth-style fly-to: zoom smoothly into the selected blip/camera, then glide back.
+    val flyTarget = remember(selectedSampleId, selectedCam, samples) {
+        selectedSampleId?.let { samples[it] }?.let { GeoPoint(it.lat, it.lon) }
+            ?: selectedCam?.let { GeoPoint(it.lat, it.lon) }
+    }
+    var preFlyView by remember { mutableStateOf<Pair<GeoPoint, Double>?>(null) }
+    LaunchedEffect(flyTarget) {
+        if (flyTarget != null) {
+            if (preFlyView == null) {
+                val c = mapView.mapCenter
+                preFlyView = GeoPoint(c.latitude, c.longitude) to mapView.zoomLevelDouble
+            }
+            followMode = false
+            mapView.controller.animateTo(flyTarget, 19.0, 900L)
+        } else {
+            preFlyView?.let { (c, z) -> mapView.controller.animateTo(c, z, 700L) }
+            preFlyView = null
+        }
+    }
     var showPlaces by remember { mutableStateOf(true) }
     var showBoards by remember { mutableStateOf(true) }
     var controlsExpanded by remember { mutableStateOf(true) }
@@ -440,6 +459,7 @@ fun WardriveScreen(vm: MainViewModel, onOpenEyesight: () -> Unit = {}) {
                         m.icon = dot(AndroidColor.parseColor("#00E5A0"), 16)
                         m.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
                         m.title = node.name + (node.battery?.let { "  ·  $it%" } ?: "")
+                        m.flyOnTap(map)
                         map.overlays.add(m)
                     }
                 }
@@ -469,6 +489,7 @@ fun WardriveScreen(vm: MainViewModel, onOpenEyesight: () -> Unit = {}) {
                         m.icon = ring(AndroidColor.parseColor("#A3E635"), 14)
                         m.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
                         m.title = p.name
+                        m.flyOnTap(map)
                         map.overlays.add(m)
                     }
                 }
@@ -499,6 +520,7 @@ fun WardriveScreen(vm: MainViewModel, onOpenEyesight: () -> Unit = {}) {
                         m.icon = ring(AndroidColor.parseColor("#F0B429"), 22)
                         m.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
                         m.title = hb.label + "  ·  home base"
+                        m.flyOnTap(map)
                         map.overlays.add(m)
                     }
                 }
@@ -510,6 +532,7 @@ fun WardriveScreen(vm: MainViewModel, onOpenEyesight: () -> Unit = {}) {
                     m.icon = dot(AndroidColor.parseColor("#34D399"), 19)
                     m.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
                     m.title = w.handle?.takeIf { it.isNotBlank() } ?: "Wing ${w.userId.take(8)}"
+                    m.flyOnTap(map)
                     map.overlays.add(m)
                 }
 
@@ -824,6 +847,16 @@ private fun DetailRow(k: String, v: String) {
             modifier = Modifier.width(92.dp))
         Text(v, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
     }
+}
+
+/** Tapping this pin glides the camera into it (Google-Earth style) and shows its label. */
+private fun Marker.flyOnTap(map: MapView): Marker {
+    setOnMarkerClickListener { mk, _ ->
+        map.controller.animateTo(mk.position, 18.5, 900L)
+        mk.showInfoWindow()
+        true
+    }
+    return this
 }
 
 enum class MapStyle(val label: String) { DARK("Dark"), LIGHT("Light"), TOPO("Topo"), SATELLITE("Satellite") }
