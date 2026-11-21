@@ -14,8 +14,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.Equalizer
 import androidx.compose.material.icons.filled.Flight
 import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.WbTwilight
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.CameraAlt
@@ -76,10 +78,15 @@ fun SensorsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
             HubEntry("Tracker Check", "Is a BLE tracker following you? Best-effort anti-stalking", Icons.Default.PersonSearch, "trackers", Color(0xFFFF5470)),
             HubEntry("Watchlist", "Flag MACs or names and spot them in range", Icons.Default.Visibility, "watchlist", Color(0xFF34D399)),
             HubEntry("Targets", "Networks, devices & locations to locate — scan toggles, local only", Icons.Default.GpsFixed, "targets", Color(0xFFF59E0B)),
-            HubEntry("Device Graph", "APs, their clients & BLE as a live force-directed web", Icons.Default.Hub, "devicegraph", Color(0xFFA855F7)),
-            HubEntry("Live Signals", "Every signal as it's heard — tap one for its full readings", Icons.Default.GraphicEq, "live", Color(0xFFF472B6)),
             HubEntry("3D Terrain", "Your drive tilted onto the real landscape — free elevation + imagery, then drop to street level", Icons.Default.Terrain, "terrain3d", Color(0xFF8FD694)),
             HubEntry("Eyesight AR", "Point the phone at the street — your plotted points within ~1 km, through the camera", Icons.Default.Streetview, "eyesight", Color(0xFF00E5A0)),
+        )),
+        HubSection("Live Visuals", listOf(
+            HubEntry("Spectrum Scope", "The big board — live 3D RF depth, channel waterfall, trace & signal feed", Icons.Default.Equalizer, "scope", Color(0xFF22D3EE)),
+            HubEntry("Signal Dashboard", "Every live reading in one place — counts, rates, bands & gauges", Icons.Default.Insights, "dashboard", Color(0xFFF472B6)),
+            HubEntry("Device Graph", "APs, their clients & BLE as a live force-directed web", Icons.Default.Hub, "devicegraph", Color(0xFFA855F7)),
+            HubEntry("Live Signals", "Every signal as it's heard — tap one for its full readings", Icons.Default.GraphicEq, "live", Color(0xFFF59E0B)),
+            HubEntry("Traffic Dashboard", "Live scrolling charts — throughput, discovery rate, sub-GHz pings & per-board share", Icons.Default.Leaderboard, "traffic", Color(0xFF34D399)),
         )),
         HubSection("Sky", listOf(
             HubEntry("Sky AR", "Point your phone at the sky — satellites, planets, the Moon, constellations & aircraft live on the camera", Icons.Default.CameraAlt, "skyar", Color(0xFFA78BFA)),
@@ -91,7 +98,6 @@ fun SensorsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
         HubSection("Local feeds", listOf(
             HubEntry("Weather", "Current conditions, animated precipitation radar & the forecast into tomorrow", Icons.Default.Cloud, "weather", Color(0xFF5CB4E8)),
             HubEntry("Live Feeds", "Surveillance cams, scanner audio & traffic webcams near you — all public, consume-only", Icons.Default.Videocam, "feeds", Color(0xFFFF5470)),
-            HubEntry("Traffic Dashboard", "Live scrolling charts — frame throughput, discovery rate, sub-GHz pings & per-board share", Icons.Default.Leaderboard, "traffic", Color(0xFF22D3EE)),
         )),
         HubSection("Comms", listOf(
             HubEntry("Caw", "Chat over your Meshtastic mesh — off-grid, no internet", Icons.Default.Forum, "meshchat", Color(0xFF00E5A0)),

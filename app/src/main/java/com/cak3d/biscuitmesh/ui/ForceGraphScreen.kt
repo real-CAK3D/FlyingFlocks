@@ -97,7 +97,7 @@ private fun buildGraph(scan: List<com.cak3d.biscuitmesh.sensors.PhoneScanRow>, l
     return Graph(nodes, fixedEdges)
 }
 
-private fun step(g: Graph) {
+private fun step(g: Graph, alpha: Float) {
     val n = g.nodes
     val kRep = 0.00035f
     for (i in n.indices) {
@@ -129,9 +129,16 @@ private fun step(g: Graph) {
         a.vx += ux * f; a.vy += uy * f
         b.vx -= ux * f; b.vy -= uy * f
     }
+    // Cool-down: scale each step by alpha, and clamp the per-frame move so a node can
+    // never leap across the canvas — that leap was the "spazzing". The sim settles.
+    val maxStep = 0.012f
     for (node in n) {
-        node.x = (node.x + node.vx).coerceIn(0.04f, 0.96f)
-        node.y = (node.y + node.vy).coerceIn(0.04f, 0.96f)
+        var mvx = node.vx * alpha
+        var mvy = node.vy * alpha
+        val m = sqrt(mvx * mvx + mvy * mvy)
+        if (m > maxStep) { val k = maxStep / m; mvx *= k; mvy *= k }
+        node.x = (node.x + mvx).coerceIn(0.04f, 0.96f)
+        node.y = (node.y + mvy).coerceIn(0.04f, 0.96f)
     }
 }
 
@@ -151,7 +158,19 @@ fun ForceGraphScreen(vm: MainViewModel, onBack: () -> Unit) {
     val graph = remember(signature) { buildGraph(scan, log) }
     var tick by remember { mutableIntStateOf(0) }
     LaunchedEffect(graph) {
-        while (true) { withFrameNanos { }; step(graph); tick++ }
+        // Simulated-annealing cool-down: start hot, decay, then rest once settled. A new
+        // device set swaps `graph`, restarting this effect and re-heating the layout.
+        var alpha = 1f
+        while (true) {
+            withFrameNanos { }
+            if (alpha > 0.02f) {
+                step(graph, alpha)
+                alpha *= 0.985f
+                tick++
+            } else {
+                kotlinx.coroutines.delay(250)
+            }
+        }
     }
 
     Scaffold(

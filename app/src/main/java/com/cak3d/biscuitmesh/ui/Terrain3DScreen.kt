@@ -42,6 +42,7 @@ import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
+import org.maplibre.android.style.expressions.Expression
 import org.maplibre.android.style.layers.CircleLayer
 import org.maplibre.android.style.layers.PropertyFactory
 import org.maplibre.android.style.sources.GeoJsonSource
@@ -123,7 +124,9 @@ fun Terrain3DScreen(vm: MainViewModel, onBack: () -> Unit, onOpenEyesight: () ->
 
     // (Re)load the style + camera + points when the fix or samples change.
     val fixKey = fix?.let { Math.round(it.first * 1000) to Math.round(it.second * 1000) }
-    DisposableEffect(fixKey, samples.size) {
+    // Reload in batches (every ~40 new sightings) rather than on every single point, so the
+    // heavy style/DEM rebuild doesn't thrash as the drive fills in thousands of blips.
+    DisposableEffect(fixKey, samples.size / 40) {
         val f = fix
         mapView.getMapAsync { map ->
             map.setStyle(Style.Builder().fromJson(TERRAIN_STYLE)) { style ->
@@ -137,7 +140,7 @@ fun Terrain3DScreen(vm: MainViewModel, onBack: () -> Unit, onOpenEyesight: () ->
                     style.addLayer(
                         CircleLayer("ptsLayer", "pts").withProperties(
                             PropertyFactory.circleRadius(4.5f),
-                            PropertyFactory.circleColor("#22D3EE"),
+                            PropertyFactory.circleColor(Expression.get("c")),
                             PropertyFactory.circleOpacity(0.85f),
                             PropertyFactory.circleStrokeColor("#06202A"),
                             PropertyFactory.circleStrokeWidth(1f),
@@ -211,8 +214,14 @@ private fun featureCollection(
         }
     } else samples
     val feats = JSONArray()
-    ordered.take(1500).forEach { s ->
+    ordered.take(12000).forEach { s ->
         if (s.lat == 0.0 && s.lon == 0.0) return@forEach
+        val color = when (s.kind) {
+            com.cak3d.biscuitmesh.wardrive.SampleKind.RF -> "#F59E0B"
+            com.cak3d.biscuitmesh.wardrive.SampleKind.BT -> "#A855F7"
+            com.cak3d.biscuitmesh.wardrive.SampleKind.STATION -> "#FF5470"
+            com.cak3d.biscuitmesh.wardrive.SampleKind.AP -> if (s.is5GHz) "#60A5FA" else "#22D3EE"
+        }
         feats.put(
             JSONObject().apply {
                 put("type", "Feature")
@@ -220,7 +229,7 @@ private fun featureCollection(
                     put("type", "Point")
                     put("coordinates", JSONArray().apply { put(s.lon); put(s.lat) })
                 })
-                put("properties", JSONObject())
+                put("properties", JSONObject().apply { put("c", color) })
             },
         )
     }

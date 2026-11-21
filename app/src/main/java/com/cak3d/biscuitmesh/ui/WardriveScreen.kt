@@ -282,6 +282,8 @@ fun WardriveScreen(vm: MainViewModel, onOpenEyesight: () -> Unit = {}) {
     }
     var showCameras by remember { mutableStateOf(true) }
     var pendingDeleteCam by remember { mutableStateOf<com.cak3d.biscuitmesh.geo.Hazard?>(null) }
+    var selectedCam by remember { mutableStateOf<com.cak3d.biscuitmesh.geo.Hazard?>(null) }
+    var selectedSampleId by remember { mutableStateOf<String?>(null) }
     var showPlaces by remember { mutableStateOf(true) }
     var showBoards by remember { mutableStateOf(true) }
     var controlsExpanded by remember { mutableStateOf(true) }
@@ -393,10 +395,11 @@ fun WardriveScreen(vm: MainViewModel, onOpenEyesight: () -> Unit = {}) {
                             DotsOverlay.Dot(
                                 GeoPoint(s.lat, s.lon), color, szDp * 2.75f / 2f,
                                 "${s.label.ifBlank { s.id }}  ${s.rssi} dBm$ch$seenBy",
+                                s.id,
                             )
                         }
                         .toList()
-                    map.overlays.add(DotsOverlay(dots))
+                    map.overlays.add(DotsOverlay(dots) { tappedId -> selectedSampleId = tappedId })
                 }
 
                 // Heat view: a density heatmap of every sighting — busy air glows warm.
@@ -479,8 +482,8 @@ fun WardriveScreen(vm: MainViewModel, onOpenEyesight: () -> Unit = {}) {
                         m.icon = ring(color, if (viewMode == MapViewMode.FLOCK) 17 else 15)
                         m.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
                         m.title = hazardLabel(hz.kind) + if (hz.name.isNotBlank()) " · ${hz.name}" else ""
-                        // Tap a camera to remove it (confirm first) — clears stray test pins.
-                        m.setOnMarkerClickListener { _, _ -> pendingDeleteCam = hz; true }
+                        // Tap a camera for its details (remove is offered inside the sheet).
+                        m.setOnMarkerClickListener { _, _ -> selectedCam = hz; true }
                         map.overlays.add(m)
                     }
                 }
@@ -719,6 +722,107 @@ fun WardriveScreen(vm: MainViewModel, onOpenEyesight: () -> Unit = {}) {
                 },
             )
         }
+
+        // Tap a signal blip → its full readings.
+        selectedSampleId?.let { id ->
+            val s = samples[id]
+            if (s == null) { selectedSampleId = null } else {
+                SampleDetailDialog(s) { selectedSampleId = null }
+            }
+        }
+
+        // Tap a camera → its details, with Remove offered inside.
+        selectedCam?.let { cam ->
+            CameraDetailDialog(
+                cam = cam,
+                onRemove = { pendingDeleteCam = cam; selectedCam = null },
+                onClose = { selectedCam = null },
+            )
+        }
+    }
+}
+
+/** A signal blip's full readings — band, channel, strength, vendor, who saw it, when, where. */
+@Composable
+private fun SampleDetailDialog(s: com.cak3d.biscuitmesh.wardrive.WardriveSample, onClose: () -> Unit) {
+    val kindLabel = when (s.kind) {
+        SampleKind.AP -> "Wi-Fi access point"
+        SampleKind.STATION -> "Wi-Fi client"
+        SampleKind.BT -> "Bluetooth device"
+        SampleKind.RF -> "Sub-GHz RF signal"
+    }
+    val vendor = com.cak3d.biscuitmesh.sensors.OuiDb.vendor(s.id)
+    val band = when {
+        s.kind == SampleKind.AP || s.kind == SampleKind.STATION ->
+            (if (s.is5GHz) "5 GHz" else "2.4 GHz") + (if (s.channel > 0) " · ch ${s.channel}" else "")
+        else -> null
+    }
+    val seenBy = s.sources.joinToString(", ") { src ->
+        when (src) {
+            PHONE_SOURCE -> "Phone"
+            com.cak3d.biscuitmesh.usb.WTF_SOURCE -> "WhatTheFlock"
+            else -> src
+        }
+    }.ifBlank { "—" }
+    val lastSeen = java.text.SimpleDateFormat("MMM d · h:mm:ss a", java.util.Locale.US)
+        .format(java.util.Date(s.timeMs))
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onClose,
+        title = { Text(s.label.ifBlank { s.id }, maxLines = 2) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                DetailRow("Type", kindLabel)
+                DetailRow(if (s.kind == SampleKind.BT) "Address" else "MAC / BSSID", s.id)
+                if (vendor != null) DetailRow("Vendor", vendor)
+                if (band != null) DetailRow("Band", band)
+                DetailRow("Signal", "${s.rssi} dBm")
+                DetailRow("Seen by", seenBy)
+                DetailRow("Last seen", lastSeen)
+                DetailRow("Location", "%.5f, %.5f".format(s.lat, s.lon))
+            }
+        },
+        confirmButton = {
+            androidx.compose.material3.TextButton(onClick = onClose) { Text("Close") }
+        },
+    )
+}
+
+/** A camera blip's details, with Remove offered as a secondary action. */
+@Composable
+private fun CameraDetailDialog(
+    cam: com.cak3d.biscuitmesh.geo.Hazard,
+    onRemove: () -> Unit,
+    onClose: () -> Unit,
+) {
+    val src = if (cam.id.startsWith("node/")) "OpenStreetMap" else "Local / dongle"
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onClose,
+        title = { Text(hazardLabel(cam.kind) + if (cam.name.isNotBlank()) " · ${cam.name}" else "") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                DetailRow("Type", hazardLabel(cam.kind))
+                if (cam.name.isNotBlank()) DetailRow("Name", cam.name)
+                DetailRow("Source", src)
+                DetailRow("Ref", cam.id)
+                DetailRow("Location", "%.5f, %.5f".format(cam.lat, cam.lon))
+            }
+        },
+        confirmButton = {
+            androidx.compose.material3.TextButton(onClick = onClose) { Text("Close") }
+        },
+        dismissButton = {
+            androidx.compose.material3.TextButton(onClick = onRemove) { Text("Remove") }
+        },
+    )
+}
+
+@Composable
+private fun DetailRow(k: String, v: String) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(k, style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+            modifier = Modifier.width(92.dp))
+        Text(v, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
     }
 }
 
@@ -1398,8 +1502,11 @@ private fun dot(color: Int, sizeDp: Int): GradientDrawable =
  * overlay no matter how many points there are and only paints the ones currently
  * on screen; tap near a dot to read what it was.
  */
-internal class DotsOverlay(private val dots: List<Dot>) : Overlay() {
-    class Dot(val point: GeoPoint, val color: Int, val radiusPx: Float, val title: String)
+internal class DotsOverlay(
+    private val dots: List<Dot>,
+    private val onTap: (String) -> Unit = {},
+) : Overlay() {
+    class Dot(val point: GeoPoint, val color: Int, val radiusPx: Float, val title: String, val id: String = "")
 
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
     private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -1438,8 +1545,8 @@ internal class DotsOverlay(private val dots: List<Dot>) : Overlay() {
             if (sq < bestSq) { bestSq = sq; best = d }
         }
         val hit = best
-        if (hit != null && bestSq <= TOUCH_SLOP_SQ) {
-            Toast.makeText(map.context, hit.title, Toast.LENGTH_SHORT).show()
+        if (hit != null && bestSq <= TOUCH_SLOP_SQ && hit.id.isNotEmpty()) {
+            onTap(hit.id)
             return true
         }
         return false
