@@ -196,6 +196,8 @@ private fun WtfFleetCard(vm: MainViewModel, onOpen: () -> Unit) {
             }
             Column(Modifier.weight(1f)) {
                 Text("What the Flock", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text("XIAO ESP32-S3 Plus", style = MaterialTheme.typography.labelMedium,
+                    fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.primary)
                 Text(
                     when {
                         usbConnected -> "Connected · USB · camera scanner"

@@ -9,6 +9,18 @@ data class LogEntry(
     val timeMs: Long,
 )
 
+/** User-specified hardware type lines for the known fleet boards, keyed by BLE MAC. These are
+ *  what each board actually is, shown as the fleet/per-device subtitle regardless of what the
+ *  firmware self-reports. */
+private val KNOWN_BOARD_TYPES = mapOf(
+    "10:BD:A3:CA:30:82" to "XIAO ESP32-C5 (Biscuit)",             // CAK3D Biscuit
+    "10:BD:A3:CC:11:7A" to "XIAO ESP32-C5 (Marauder)",           // MaurCAK3D
+    "28:84:85:40:35:DD" to "LilyGo T-Embed ESP32-S3 CC1101 Plus", // Flocked Up
+    "10:BD:A3:CF:84:0A" to "XIAO ESP32-C5",                      // wtBLEep
+)
+
+fun knownBoardType(address: String): String? = KNOWN_BOARD_TYPES[address.uppercase()]
+
 /** Where a device sits in its connection lifecycle. */
 enum class ConnectionState {
     DISCOVERED,   // seen in a scan, not connected
@@ -43,9 +55,9 @@ data class BiscuitDevice(
             state == ConnectionState.CONNECTING ||
             state == ConnectionState.PROVISIONING
 
-    /** What kind of board this is (for the fleet card subtitle): the firmware's
-     *  self-reported model, else the GATT model/firmware strings. */
-    fun typeLabel(): String? = status?.model ?: model ?: firmware
+    /** What kind of board this is (for the fleet card subtitle): a known-board hardware
+     *  label by MAC, else the firmware's self-reported model / GATT strings. */
+    fun typeLabel(): String? = knownBoardType(address) ?: status?.model ?: model ?: firmware
 
     /** True when the board reports a link-code gate that hasn't been satisfied yet.
      *  The live DATA:HEALTH heartbeat wins over the one-shot STATUS snapshot: a board
