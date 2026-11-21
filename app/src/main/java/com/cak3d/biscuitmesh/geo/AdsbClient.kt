@@ -22,10 +22,11 @@ data class Aircraft(
 )
 
 /**
- * Live ADS-B over the public airplanes.live feed — aircraft broadcasting their position
- * right now, near a point. Free, no key. (Attribution: airplanes.live.)
+ * Live ADS-B over a public re-API feed — aircraft broadcasting their position right now, near a
+ * point. Free, no key. Uses adsb.lol (airplanes.live now gates anonymous access); the JSON shape
+ * (the `ac` array) is identical. (Attribution: adsb.lol / the ADSB.lol community.)
  */
-class AdsbClient(private val base: String = "https://api.airplanes.live/v2") {
+class AdsbClient(private val base: String = "https://api.adsb.lol/v2") {
 
     suspend fun nearby(lat: Double, lon: Double, radiusNm: Int = 100): List<Aircraft> =
         withContext(Dispatchers.IO) {
