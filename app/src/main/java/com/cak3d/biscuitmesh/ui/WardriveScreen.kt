@@ -305,6 +305,18 @@ fun WardriveScreen(vm: MainViewModel, onOpenEyesight: () -> Unit = {}) {
     }
     var showPlaces by remember { mutableStateOf(true) }
     var showBoards by remember { mutableStateOf(true) }
+    // Wave 4 — toggleable OSM safety layers: police + emergency (fire/hospital/ambulance).
+    var showPolice by remember { mutableStateOf(false) }
+    var showEmergency by remember { mutableStateOf(false) }
+    val overpass = remember { com.cak3d.biscuitmesh.geo.OverpassClient() }
+    var safety by remember { mutableStateOf<List<com.cak3d.biscuitmesh.geo.SafetyPoi>>(emptyList()) }
+    LaunchedEffect(showPolice || showEmergency) {
+        if ((showPolice || showEmergency) && safety.isEmpty()) {
+            vm.oneShotLocation()?.let { f ->
+                safety = runCatching { overpass.safetyPois(f.lat, f.lon) }.getOrDefault(emptyList())
+            }
+        }
+    }
     var controlsExpanded by remember { mutableStateOf(true) }
     var chromeHidden by remember { mutableStateOf(false) } // "plain map" — hide all overlays
     var mapStyle by remember { mutableStateOf(MapStyle.DARK) }
@@ -509,6 +521,27 @@ fun WardriveScreen(vm: MainViewModel, onOpenEyesight: () -> Unit = {}) {
                     }
                 }
 
+                // Safety / emergency layer (OSM) — police, fire, hospitals, ambulances. Toggleable.
+                if (viewMode == MapViewMode.DEFAULT && (showPolice || showEmergency)) {
+                    safety.forEach { poi ->
+                        val on = if (poi.kind == com.cak3d.biscuitmesh.geo.SafetyKind.POLICE) showPolice else showEmergency
+                        if (!on) return@forEach
+                        val (c, tag) = when (poi.kind) {
+                            com.cak3d.biscuitmesh.geo.SafetyKind.POLICE -> AndroidColor.parseColor("#2563EB") to "Police"
+                            com.cak3d.biscuitmesh.geo.SafetyKind.FIRE -> AndroidColor.parseColor("#EF4444") to "Fire station"
+                            com.cak3d.biscuitmesh.geo.SafetyKind.HOSPITAL -> AndroidColor.parseColor("#14B8A6") to "Hospital"
+                            com.cak3d.biscuitmesh.geo.SafetyKind.AMBULANCE -> AndroidColor.parseColor("#F59E0B") to "Ambulance"
+                        }
+                        val m = Marker(map)
+                        m.position = GeoPoint(poi.lat, poi.lon)
+                        m.icon = ring(c, 14)
+                        m.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                        m.title = tag + if (poi.name.isNotBlank()) " · ${poi.name}" else ""
+                        m.flyOnTap(map)
+                        map.overlays.add(m)
+                    }
+                }
+
                 // Home base: a fixed, always-on pin at the base node's pinned location,
                 // drawn in every view so the stationary home is always on the map.
                 homeBase?.let { hb ->
@@ -697,6 +730,8 @@ fun WardriveScreen(vm: MainViewModel, onOpenEyesight: () -> Unit = {}) {
                     showBoards = showBoards, onBoards = { showBoards = it },
                     showCameras = showCameras, onCameras = { showCameras = it },
                     showPlaces = showPlaces, onPlaces = { showPlaces = it },
+                    showPolice = showPolice, onPolice = { showPolice = it },
+                    showEmergency = showEmergency, onEmergency = { showEmergency = it },
                     style = mapStyle, onStyle = { mapStyle = it; vm.setMapStyle(it.name) },
                     camCount = hazards.size,
                     onOffline = { menuOpen = false; showOffline = true },
@@ -1015,6 +1050,8 @@ private fun MapMenu(
     showBoards: Boolean, onBoards: (Boolean) -> Unit,
     showCameras: Boolean, onCameras: (Boolean) -> Unit,
     showPlaces: Boolean, onPlaces: (Boolean) -> Unit,
+    showPolice: Boolean, onPolice: (Boolean) -> Unit,
+    showEmergency: Boolean, onEmergency: (Boolean) -> Unit,
     style: MapStyle, onStyle: (MapStyle) -> Unit,
     camCount: Int,
     onOffline: () -> Unit,
@@ -1027,6 +1064,8 @@ private fun MapMenu(
             Text("LAYERS", style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.secondary, modifier = Modifier.padding(top = 4.dp))
             MenuToggle("Cameras ($camCount)", showCameras, onCameras)
+            MenuToggle("Police", showPolice, onPolice)
+            MenuToggle("Emergency (fire/hospital)", showEmergency, onEmergency)
             MenuToggle("Saved places", showPlaces, onPlaces)
             Text("MAP STYLE", style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.secondary, modifier = Modifier.padding(top = 4.dp))

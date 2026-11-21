@@ -28,6 +28,43 @@ class OverpassClient(private val endpoint: String = "https://overpass-api.de/api
         runCatching { parseCameras(post(q)) }.getOrDefault(emptyList())
     }
 
+    /** Nearby safety / emergency places from OSM — police, fire, hospitals, ambulance stations. */
+    suspend fun safetyPois(lat: Double, lon: Double, radiusM: Int = 8000): List<SafetyPoi> = withContext(Dispatchers.IO) {
+        val q = """
+            [out:json][timeout:25];
+            (
+              nwr(around:$radiusM,$lat,$lon)["amenity"="police"];
+              nwr(around:$radiusM,$lat,$lon)["amenity"="fire_station"];
+              nwr(around:$radiusM,$lat,$lon)["amenity"="hospital"];
+              nwr(around:$radiusM,$lat,$lon)["emergency"="ambulance_station"];
+            );
+            out center tags 300;
+        """.trimIndent()
+        runCatching { parseSafety(post(q)) }.getOrDefault(emptyList())
+    }
+
+    private fun parseSafety(body: String): List<SafetyPoi> {
+        val els = JSONObject(body).optJSONArray("elements") ?: return emptyList()
+        val out = ArrayList<SafetyPoi>()
+        for (i in 0 until els.length()) {
+            val e = els.optJSONObject(i) ?: continue
+            val center = e.optJSONObject("center")
+            val plat = if (e.has("lat")) e.optDouble("lat") else center?.optDouble("lat") ?: Double.NaN
+            val plon = if (e.has("lon")) e.optDouble("lon") else center?.optDouble("lon") ?: Double.NaN
+            if (plat.isNaN() || plon.isNaN()) continue
+            val tags = e.optJSONObject("tags") ?: JSONObject()
+            val kind = when {
+                tags.optString("amenity") == "police" -> SafetyKind.POLICE
+                tags.optString("amenity") == "fire_station" -> SafetyKind.FIRE
+                tags.optString("amenity") == "hospital" -> SafetyKind.HOSPITAL
+                tags.optString("emergency") == "ambulance_station" -> SafetyKind.AMBULANCE
+                else -> continue
+            }
+            out.add(SafetyPoi("${e.optString("type")}/${e.optLong("id")}", kind, plat, plon, tags.optString("name")))
+        }
+        return out
+    }
+
     suspend fun nearestSpeedLimit(lat: Double, lon: Double, radiusM: Int = 45): SpeedLimit? = withContext(Dispatchers.IO) {
         val q = """
             [out:json][timeout:20];

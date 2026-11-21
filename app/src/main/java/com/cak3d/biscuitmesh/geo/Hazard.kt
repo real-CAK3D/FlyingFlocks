@@ -13,3 +13,7 @@ data class Hazard(
 
 /** Nearest posted road speed limit — canonical km/h plus the mph equivalent. */
 data class SpeedLimit(val kmh: Int, val mph: Int, val posted: String)
+
+/** A safety / emergency place from OpenStreetMap — a toggleable map layer. */
+enum class SafetyKind { POLICE, FIRE, HOSPITAL, AMBULANCE }
+data class SafetyPoi(val id: String, val kind: SafetyKind, val lat: Double, val lon: Double, val name: String = "")
