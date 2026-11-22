@@ -47,6 +47,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -70,7 +71,7 @@ import com.cak3d.biscuitmesh.data.VisionStore
 fun VisionScreen(vm: MainViewModel, onBack: () -> Unit) {
     val portals by vm.visionPortals.collectAsStateWithLifecycle()
     // Which portal is open full-screen (-1 = the list), and the add/edit dialog target.
-    var openIndex by remember { mutableIntStateOf(-1) }
+    var openIndex by rememberSaveable { mutableIntStateOf(-1) }
     var editing by remember { mutableStateOf<EditTarget?>(null) }
 
     val open = portals.getOrNull(openIndex)
