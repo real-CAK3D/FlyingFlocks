@@ -77,6 +77,7 @@ class VisionStore(private val context: Context) {
         /** Shipped portals. The owner's fork is the first; others replace/extend it in-app. */
         val DEFAULTS = listOf(
             VisionPortal("CAK3Dvision", "https://nukebox.tailac984b.ts.net:4173", builtIn = true),
+            VisionPortal("Conflictly", "https://www.conflictly.app/", builtIn = true),
         )
 
         /** Make a user-typed address into a loadable URL: default to https:// when no scheme. */
