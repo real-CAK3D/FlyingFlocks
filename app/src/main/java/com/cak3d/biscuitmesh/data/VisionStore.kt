@@ -77,6 +77,7 @@ class VisionStore(private val context: Context) {
         /** Shipped portals. The owner's fork is the first; others replace/extend it in-app. */
         val DEFAULTS = listOf(
             VisionPortal("CAK3Dvision", "https://nukebox.tailac984b.ts.net:4173", builtIn = true),
+            VisionPortal("CAK3Dvision (shared)", "https://nukebox.tailac984b.ts.net:8443", builtIn = true),
             VisionPortal("CAK3Dmap", "https://cak3dmap.vercel.app", builtIn = true),
             VisionPortal("CAK3D Monitor", "https://cak3dmonitor.vercel.app", builtIn = true),
             VisionPortal("Conflictly", "https://www.conflictly.app/", builtIn = true),
