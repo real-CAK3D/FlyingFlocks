@@ -746,6 +746,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         appRef.settingsStore.allApiKeys.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
     fun setApiKey(id: String, value: String) { viewModelScope.launch { appRef.settingsStore.setApiKey(id, value) } }
 
+    // --- Vision portals (external God's Eye View web apps) ------------------
+    val visionPortals: StateFlow<List<com.cak3d.biscuitmesh.data.VisionPortal>> =
+        appRef.visionStore.portals.stateIn(
+            viewModelScope, SharingStarted.WhileSubscribed(5000),
+            com.cak3d.biscuitmesh.data.VisionStore.DEFAULTS,
+        )
+    fun addVisionPortal(name: String, url: String) =
+        viewModelScope.launch { appRef.visionStore.add(name, url) }
+    fun updateVisionPortal(index: Int, name: String, url: String) =
+        viewModelScope.launch { appRef.visionStore.update(index, name, url) }
+    fun removeVisionPortal(index: Int) =
+        viewModelScope.launch { appRef.visionStore.remove(index) }
+    fun restoreVisionDefaults() =
+        viewModelScope.launch { appRef.visionStore.restoreDefaults() }
+
     // --- Tracker-following detector ----------------------------------------
     val trackerFollowers: StateFlow<List<com.cak3d.biscuitmesh.sensors.Follower>> = appRef.trackerFollow.followers
     fun recordTrackerSighting(mac: String, name: String, rssi: Int, lat: Double, lon: Double, timeMs: Long) =

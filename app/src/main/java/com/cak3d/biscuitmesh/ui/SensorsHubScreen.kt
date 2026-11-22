@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.Leaderboard
 import androidx.compose.material.icons.filled.ReceiptLong
+import androidx.compose.material.icons.filled.RemoveRedEye
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.GpsFixed
 import androidx.compose.material.icons.filled.Visibility
@@ -87,6 +88,7 @@ fun SensorsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
         HubSection("Sky", listOf(
             HubEntry("Sky AR", "Point your phone at the sky — satellites, planets, the Moon, constellations & aircraft live on the camera", Icons.Default.CameraAlt, "skyar", Color(0xFFA78BFA)),
             HubEntry("Orbit", "Everything overhead in one window — GPS satellites, ADS-B aircraft & aurora/space weather, switchable", Icons.Default.Public, "orbit", Color(0xFF38BDF8)),
+            HubEntry("Vision", "God's Eye View forks, live in-app — CAK3Dvision over Tailscale, plus any fork of your own you add", Icons.Default.RemoveRedEye, "vision", Color(0xFF8B5CF6)),
         )),
         HubSection("Alerts & feeds", listOf(
             HubEntry("Alerts & Threats", "Live security feed — NWS warnings for your area, earthquakes & global disasters, tap for detail", Icons.Default.Warning, "alerts", Color(0xFFFF9500)),

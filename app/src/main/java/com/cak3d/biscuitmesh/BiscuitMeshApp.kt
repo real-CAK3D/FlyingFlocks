@@ -56,6 +56,11 @@ class BiscuitMeshApp : Application() {
 
     val deadZonesStore: DeadZonesStore by lazy { DeadZonesStore(this) }
 
+    /** Local-only Vision portals (God's Eye View style web apps, e.g. CAK3Dvision over Tailscale). */
+    val visionStore: com.cak3d.biscuitmesh.data.VisionStore by lazy {
+        com.cak3d.biscuitmesh.data.VisionStore(this)
+    }
+
     /** Local-only watchlist of MACs/names to flag when seen. */
     val watchlistStore: com.cak3d.biscuitmesh.data.WatchlistStore by lazy {
         com.cak3d.biscuitmesh.data.WatchlistStore(this)

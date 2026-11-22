@@ -134,6 +134,7 @@ import com.cak3d.biscuitmesh.ui.StatsScreen
 import com.cak3d.biscuitmesh.ui.AudioScreen
 import com.cak3d.biscuitmesh.ui.SavedDevicesScreen
 import com.cak3d.biscuitmesh.ui.SubGhzScreen
+import com.cak3d.biscuitmesh.ui.VisionScreen
 import com.cak3d.biscuitmesh.ui.WardriveScreen
 import com.cak3d.biscuitmesh.ui.WifiScreen
 import com.cak3d.biscuitmesh.ui.theme.BiscuitMeshTheme
@@ -422,6 +423,7 @@ private fun MainShell(vm: MainViewModel) {
                 composable("devicegraph") { ForceGraphScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("skyar") { SkyArScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("feeds") { FeedsScreen(vm = vm, onBack = { nav.popBackStack() }) }
+                composable("vision") { VisionScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("weather") { WeatherScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("alerts") { AlertsScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("traffic") { TrafficDashboardScreen(vm = vm, onBack = { nav.popBackStack() }) }
