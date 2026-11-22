@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.RemoveRedEye
+import androidx.compose.material.icons.filled.SettingsBackupRestore
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -86,6 +87,9 @@ fun VisionScreen(vm: MainViewModel, onBack: () -> Unit) {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
                 actions = {
+                    IconButton(onClick = { vm.restoreVisionDefaults() }) {
+                        Icon(Icons.Default.SettingsBackupRestore, contentDescription = "Restore default portals")
+                    }
                     HelpButton(
                         "Vision portals",
                         "Open a God's Eye View style web app inside Flying Flocks. The app ships with " +
@@ -112,7 +116,7 @@ fun VisionScreen(vm: MainViewModel, onBack: () -> Unit) {
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                     )
-                    TextButton(onClick = { vm.restoreVisionDefaults() }) { Text("Restore CAK3Dvision") }
+                    TextButton(onClick = { vm.restoreVisionDefaults() }) { Text("Restore default portals") }
                 }
             }
         } else {
@@ -173,9 +177,7 @@ private fun PortalCard(portal: VisionPortal, onOpen: () -> Unit, onEdit: () -> U
                 )
             }
             IconButton(onClick = onEdit) { Icon(Icons.Default.Edit, contentDescription = "Edit") }
-            if (!portal.builtIn) {
-                IconButton(onClick = onRemove) { Icon(Icons.Default.Delete, contentDescription = "Remove") }
-            }
+            IconButton(onClick = onRemove) { Icon(Icons.Default.Delete, contentDescription = "Remove") }
         }
     }
 }

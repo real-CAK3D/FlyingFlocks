@@ -78,6 +78,9 @@ class VisionStore(private val context: Context) {
         val DEFAULTS = listOf(
             VisionPortal("CAK3Dvision", "https://nukebox.tailac984b.ts.net:4173", builtIn = true),
             VisionPortal("Conflictly", "https://www.conflictly.app/", builtIn = true),
+            VisionPortal("LeoLabs", "https://platform.leolabs.space/visualization", builtIn = true),
+            VisionPortal("Satellite Tracker 3D", "https://satellitetracker3d.com/?norad-id=81605", builtIn = true),
+            VisionPortal("Orbital Radar", "https://orbitalradar.com/", builtIn = true),
         )
 
         /** Make a user-typed address into a loadable URL: default to https:// when no scheme. */
