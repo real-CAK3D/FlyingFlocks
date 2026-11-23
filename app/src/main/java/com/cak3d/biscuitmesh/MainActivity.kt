@@ -70,6 +70,7 @@ import com.cak3d.biscuitmesh.ui.DebugScreen
 import com.cak3d.biscuitmesh.ui.FeedsScreen
 import com.cak3d.biscuitmesh.ui.OrbitGlobeScreen
 import com.cak3d.biscuitmesh.ui.SkyConditionsScreen
+import com.cak3d.biscuitmesh.ui.SpaceEventsScreen
 import com.cak3d.biscuitmesh.ui.WeatherScreen
 import com.cak3d.biscuitmesh.ui.Terrain3DScreen
 import com.cak3d.biscuitmesh.ui.TrafficDashboardScreen
@@ -440,6 +441,7 @@ private fun MainShell(vm: MainViewModel) {
                 composable("orbit") { OrbitScreen(vm = vm, onBack = { nav.popBackStack() }, onOpenCockpit = { nav.navigate("cockpit/$it") }) }
                 composable("orbitglobe") { OrbitGlobeScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("skyconditions") { SkyConditionsScreen(vm = vm, onBack = { nav.popBackStack() }) }
+                composable("spaceevents") { SpaceEventsScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("cockpit/{hex}") { entry ->
                     CockpitScreen(vm = vm, hex = entry.arguments?.getString("hex") ?: "", onBack = { nav.popBackStack() })
                 }

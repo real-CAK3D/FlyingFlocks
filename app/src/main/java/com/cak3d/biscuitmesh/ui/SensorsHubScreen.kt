@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.Leaderboard
 import androidx.compose.material.icons.filled.ReceiptLong
+import androidx.compose.material.icons.filled.RocketLaunch
 import androidx.compose.material.icons.filled.RemoveRedEye
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.GpsFixed
@@ -105,6 +106,7 @@ fun SensorsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
         )),
         HubSection("Alerts & feeds", Color(0xFFFF9500), Icons.Default.Warning, listOf(
             HubEntry("Alerts & Threats", "Live security feed — NWS warnings for your area, earthquakes & global disasters, tap for detail", Icons.Default.Warning, "alerts", Color(0xFFFF9500)),
+            HubEntry("Space Events", "Upcoming rocket launches worldwide with live countdowns, plus the current Kp geomagnetic storm index — native, keyless", Icons.Default.RocketLaunch, "spaceevents", Color(0xFFFFD166)),
             HubEntry("Weather", "Current conditions, animated precipitation radar & the forecast into tomorrow", Icons.Default.Cloud, "weather", Color(0xFF5CB4E8)),
             HubEntry("Live Feeds", "Surveillance cams, scanner audio & traffic webcams near you — all public, consume-only", Icons.Default.Videocam, "feeds", Color(0xFFFF5470)),
         )),
