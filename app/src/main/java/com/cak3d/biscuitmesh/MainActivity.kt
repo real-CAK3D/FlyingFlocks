@@ -179,6 +179,11 @@ class MainActivity : ComponentActivity() {
                     if (!tourSeen) {
                         com.cak3d.biscuitmesh.ui.WelcomeDialog(onDismiss = { vm.dismissTour() })
                     }
+                    // Branded launch splash — only on a fresh start, not on rotation / config change.
+                    var showSplash by remember { mutableStateOf(savedInstanceState == null) }
+                    if (showSplash) {
+                        com.cak3d.biscuitmesh.ui.FlockedUpSplash(onDone = { showSplash = false })
+                    }
                 }
             }
         }

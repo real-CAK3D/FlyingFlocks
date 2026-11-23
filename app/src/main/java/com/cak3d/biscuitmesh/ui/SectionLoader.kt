@@ -9,11 +9,14 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.SatelliteAlt
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -31,6 +34,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
@@ -186,6 +190,27 @@ fun SectionLoader(
                 )
             }
         }
+    }
+}
+
+/**
+ * The app's launch splash — the same living network sphere, branded FLOCKEDUP, over a solid
+ * background. Shows for a beat on a fresh start, then calls [onDone] to reveal the app.
+ */
+@Composable
+fun FlockedUpSplash(onDone: () -> Unit) {
+    LaunchedEffect(Unit) {
+        delay(2200)
+        onDone()
+    }
+    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        SectionLoader(
+            title = "FLOCKEDUP",
+            accent = MaterialTheme.colorScheme.primary,
+            icon = Icons.Default.SatelliteAlt,
+            seed = 73_261,
+            subtitle = "INITIALIZING",
+        )
     }
 }
 
