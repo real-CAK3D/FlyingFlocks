@@ -35,8 +35,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -46,10 +48,34 @@ import com.cak3d.biscuitmesh.geo.OrbitClass
 import com.cak3d.biscuitmesh.geo.SatGeo
 import com.cak3d.biscuitmesh.geo.Sgp4
 import com.cak3d.biscuitmesh.geo.TleClient
+import android.content.Context
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
 import kotlin.math.cos
 import kotlin.math.sin
+
+/** One coastline / country-border / lake outline as a flat [lon0, lat0, lon1, lat1, …] array. */
+private class GeoLine(val water: Boolean, val lonlat: FloatArray)
+
+/** Load the bundled Natural Earth vector outlines (countries + coastlines + lakes). */
+private fun loadWorldVec(ctx: Context): List<GeoLine> = runCatching {
+    ctx.assets.open("world_vec.txt").bufferedReader().useLines { lines ->
+        lines.mapNotNull { line ->
+            val bar = line.indexOf('|'); if (bar < 1) return@mapNotNull null
+            val water = line[0] == 'W'
+            val parts = line.substring(bar + 1).split(';')
+            val arr = FloatArray(parts.size * 2); var i = 0
+            for (p in parts) {
+                val comma = p.indexOf(','); if (comma < 1) return@mapNotNull null
+                arr[i++] = p.substring(0, comma).toFloat()
+                arr[i++] = p.substring(comma + 1).toFloat()
+            }
+            GeoLine(water, arr)
+        }.toList()
+    }
+}.getOrDefault(emptyList())
 
 private fun classColor(c: OrbitClass): Color = when (c) {
     OrbitClass.LEO -> Color(0xFFFFD166) // yellow
@@ -68,6 +94,9 @@ private fun classColor(c: OrbitClass): Color = when (c) {
 @Composable
 fun OrbitGlobeScreen(vm: MainViewModel, onBack: () -> Unit) {
     val tleClient = remember { TleClient() }
+    val ctx = LocalContext.current
+    var world by remember { mutableStateOf<List<GeoLine>>(emptyList()) }
+    androidx.compose.runtime.LaunchedEffect(Unit) { world = withContext(Dispatchers.Default) { loadWorldVec(ctx) } }
     var sats by remember { mutableStateOf<List<SatGeo>>(emptyList()) }
     var loaded by remember { mutableStateOf(false) }
     var observer by remember { mutableStateOf<Pair<Double, Double>?>(null) }
@@ -91,9 +120,9 @@ fun OrbitGlobeScreen(vm: MainViewModel, onBack: () -> Unit) {
             delay(1000)
         }
     }
-    // Idle auto-spin.
+    // Idle auto-spin (30 fps — lighter now the globe draws coastlines each frame).
     androidx.compose.runtime.LaunchedEffect(autoSpin) {
-        while (autoSpin) { rotY += 0.0025f; delay(16) }
+        while (autoSpin) { rotY += 0.005f; delay(33) }
     }
 
     Scaffold(
@@ -187,6 +216,24 @@ fun OrbitGlobeScreen(vm: MainViewModel, onBack: () -> Unit) {
                         }
                         prev = p; lat += 15
                     }
+                }
+
+                // Coastlines, country borders (green) & lakes (blue) — front hemisphere only.
+                if (world.isNotEmpty()) {
+                    val landPath = Path(); val waterPath = Path()
+                    world.forEach { gl ->
+                        val path = if (gl.water) waterPath else landPath
+                        var pen = false
+                        val a = gl.lonlat; var k = 0
+                        while (k < a.size) {
+                            val p = project(a[k + 1].toDouble(), a[k].toDouble(), r); k += 2
+                            if (p.third > 0f) {
+                                if (!pen) { path.moveTo(p.first, p.second); pen = true } else path.lineTo(p.first, p.second)
+                            } else pen = false
+                        }
+                    }
+                    drawPath(landPath, color = Color(0xFF4F9E74), style = Stroke(width = 1.1f))
+                    drawPath(waterPath, color = Color(0xFF3B8ED0), style = Stroke(width = 1f))
                 }
 
                 // Observer.
