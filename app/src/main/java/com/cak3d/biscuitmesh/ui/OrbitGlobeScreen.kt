@@ -1,6 +1,7 @@
 package com.cak3d.biscuitmesh.ui
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -128,14 +129,16 @@ fun OrbitGlobeScreen(vm: MainViewModel, onBack: () -> Unit) {
                         rotY += drag.x * 0.005f
                         rotX = (rotX + drag.y * 0.005f).coerceIn(-1.4f, 1.4f)
                     }
-                }.pointerInput(sats) {
+                }.pointerInput(Unit) {
                     detectTapGestures { tap ->
                         val near = hits.minByOrNull { (x, y, _) ->
                             val dx = x - tap.x; val dy = y - tap.y; dx * dx + dy * dy
                         }
-                        selected = near?.takeIf { (x, y, _) ->
+                        val hit = near?.takeIf { (x, y, _) ->
                             val dx = x - tap.x; val dy = y - tap.y; dx * dx + dy * dy < 90f * 90f
                         }?.third
+                        selected = hit
+                        if (hit != null) autoSpin = false   // freeze so the selected sat stays put
                     }
                 },
             ) {
@@ -242,9 +245,10 @@ fun OrbitGlobeScreen(vm: MainViewModel, onBack: () -> Unit) {
 @Composable
 private fun SatCard(s: SatGeo, modifier: Modifier) {
     Card(
-        modifier = modifier.fillMaxWidth().padding(12.dp),
+        modifier = modifier.fillMaxWidth().padding(12.dp)
+            .border(1.5.dp, classColor(s.orbitClass).copy(alpha = 0.7f), RoundedCornerShape(16.dp)),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
     ) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
