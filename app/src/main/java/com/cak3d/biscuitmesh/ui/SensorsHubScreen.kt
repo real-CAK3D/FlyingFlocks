@@ -99,6 +99,7 @@ fun SensorsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
         HubSection("Sky", Color(0xFF8B5CF6), Icons.Default.SatelliteAlt, listOf(
             HubEntry("Sky AR", "Point your phone at the sky — satellites, planets, the Moon, constellations & aircraft live on the camera", Icons.Default.CameraAlt, "skyar", Color(0xFFA78BFA)),
             HubEntry("Orbit", "Everything overhead in one window — GPS satellites, ADS-B aircraft & aurora/space weather, switchable", Icons.Default.Public, "orbit", Color(0xFF38BDF8)),
+            HubEntry("Orbit Globe", "Native SGP4 globe — the ISS, Tiangong & bright satellites tracked live, color-coded by orbit class. A preview of the native rebuild.", Icons.Default.SatelliteAlt, "orbitglobe", Color(0xFFFFD166)),
             HubEntry("Vision", "God's Eye View forks, live in-app — CAK3Dvision over Tailscale, plus any fork of your own you add", Icons.Default.RemoveRedEye, "vision", Color(0xFF8B5CF6)),
         )),
         HubSection("Alerts & feeds", Color(0xFFFF9500), Icons.Default.Warning, listOf(

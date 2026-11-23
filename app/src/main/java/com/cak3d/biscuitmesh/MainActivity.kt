@@ -68,6 +68,7 @@ import androidx.navigation.compose.rememberNavController
 import com.cak3d.biscuitmesh.ui.BluetoothScreen
 import com.cak3d.biscuitmesh.ui.DebugScreen
 import com.cak3d.biscuitmesh.ui.FeedsScreen
+import com.cak3d.biscuitmesh.ui.OrbitGlobeScreen
 import com.cak3d.biscuitmesh.ui.WeatherScreen
 import com.cak3d.biscuitmesh.ui.Terrain3DScreen
 import com.cak3d.biscuitmesh.ui.TrafficDashboardScreen
@@ -436,6 +437,7 @@ private fun MainShell(vm: MainViewModel) {
                 composable("eyesight") { LandscapeScreen(vm = vm, onBack = { nav.popBackStack() }, startMode = LandMode.EYESIGHT) }
                 composable("globe") { GlobeScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("orbit") { OrbitScreen(vm = vm, onBack = { nav.popBackStack() }, onOpenCockpit = { nav.navigate("cockpit/$it") }) }
+                composable("orbitglobe") { OrbitGlobeScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("cockpit/{hex}") { entry ->
                     CockpitScreen(vm = vm, hex = entry.arguments?.getString("hex") ?: "", onBack = { nav.popBackStack() })
                 }
