@@ -1,5 +1,6 @@
 package com.cak3d.biscuitmesh.ui
 
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -17,12 +18,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -33,15 +34,16 @@ import androidx.compose.ui.unit.sp
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
+import kotlin.math.sqrt
 
 /**
- * A branded loading screen in the Conflictly mould: a dark wireframe globe of dim dots, slowly
- * spinning, with a few bright "hotspots" throwing out pulsing rings — plus one extra motion layer
- * (radar sweep / orbiting satellite / pulse rings) chosen by [seed]. Tinted to [accent], centred on
- * [icon], captioned [title].
+ * A branded loading screen modelled on Conflictly's: a low-poly network sphere — nodes joined by
+ * thin lines — slowly spinning in [accent], with a couple of brighter "hotspot" nodes pulsing
+ * rings, an "● INITIALIZING" status and a LOADING-NN% counter ticking up. [icon] sits at the core
+ * and [title] captions it.
  *
- * [seed] makes every loader unique: it sets the spin speed and direction, the dot jitter, the
- * hotspot placements, and which extra motion plays — so each selection in the app gets its own.
+ * [seed] makes every loader unique: it drives the spin speed and direction, the node layout jitter
+ * and the hotspot placement, so each selection in the app loads with its own one-off sphere.
  */
 @Composable
 fun SectionLoader(
@@ -50,37 +52,38 @@ fun SectionLoader(
     icon: ImageVector,
     seed: Int,
     modifier: Modifier = Modifier,
-    subtitle: String = "LOADING",
+    subtitle: String = "INITIALIZING",
 ) {
     val rnd = remember(seed) { Lcg(seed) }
-    val archetype = remember(seed) { (seed.hashCode() and 0x7fffffff) % 3 } // 0 sweep, 1 orbiter, 2 rings
     val dir = remember(seed) { if (rnd.next() < 0.5f) 1f else -1f }
-    val spinMs = remember(seed) { 5500 + (rnd.next() * 4000).toInt() }
+    val spinMs = remember(seed) { 6000 + (rnd.next() * 4000).toInt() }
 
-    // The dim dot sphere (seeded jitter so no two look identical).
-    val dots = remember(seed) {
-        val list = ArrayList<Triple<Float, Float, Boolean>>() // lat, lon, isCyanSignal
-        val bands = 9
-        for (b in 0 until bands) {
-            val lat = (-PI / 2 + PI * (b + 0.5) / bands).toFloat()
-            val ring = (cos(lat.toDouble()) * 14).toInt().coerceAtLeast(3)
-            for (j in 0 until ring) {
-                val jitter = (rnd.next() - 0.5f) * 0.12f
-                val lon = (2 * PI * j / ring).toFloat() + jitter
-                val cyan = rnd.next() < 0.06f
-                list.add(Triple(lat + jitter, lon, cyan))
-            }
+    // Evenly spread nodes on a unit sphere (Fibonacci lattice) with a little seeded jitter.
+    val nodes = remember(seed) {
+        val n = 30
+        val golden = (PI * (3.0 - sqrt(5.0))).toFloat()
+        val base = rnd.next() * (2 * PI).toFloat()
+        Array(n) { i ->
+            val y = 1f - 2f * (i + 0.5f) / n + (rnd.next() - 0.5f) * 0.04f
+            val rr = sqrt((1f - y * y).coerceAtLeast(0f))
+            val th = i * golden + base
+            floatArrayOf(rr * cos(th), y, rr * sin(th))
+        }
+    }
+    // Edges between nearby nodes → the low-poly "network" look (capped so it isn't a hairball).
+    val edges = remember(seed) {
+        val list = ArrayList<Pair<Int, Int>>()
+        for (i in nodes.indices) for (j in i + 1 until nodes.size) {
+            val d = nodes[i][0] * nodes[j][0] + nodes[i][1] * nodes[j][1] + nodes[i][2] * nodes[j][2]
+            if (d > 0.62f) list.add(i to j)
+            if (list.size >= 46) break
         }
         list.toList()
     }
-    // Hotspots: 2–4 bright accent points that pulse rings.
+    // A few hotspot node indices that pulse rings.
     val hotspots = remember(seed) {
-        val n = 2 + (rnd.next() * 3).toInt()
-        (0 until n).map {
-            val lat = (rnd.next() - 0.5f) * (PI.toFloat() * 0.8f)
-            val lon = rnd.next() * (2 * PI).toFloat()
-            lat to lon
-        }
+        val n = 2 + (rnd.next() * 2).toInt()
+        (0 until n).map { (rnd.next() * nodes.size).toInt().coerceIn(0, nodes.size - 1) }.distinct()
     }
 
     val t = rememberInfiniteTransition(label = "loader")
@@ -88,102 +91,77 @@ fun SectionLoader(
         0f, dir * (2 * PI).toFloat(),
         infiniteRepeatable(tween(spinMs, easing = LinearEasing)), label = "spin",
     )
-    val motion by t.animateFloat(
-        0f, 1f,
-        infiniteRepeatable(tween(if (archetype == 0) 2600 else 2200, easing = LinearEasing)), label = "motion",
-    )
     val pulse by t.animateFloat(
-        0f, 1f,
-        infiniteRepeatable(tween(1600, easing = LinearEasing)), label = "pulse",
+        0f, 1f, infiniteRepeatable(tween(1600, easing = LinearEasing)), label = "pulse",
     )
     val breathe by t.animateFloat(
-        0.5f, 1f,
-        infiniteRepeatable(tween(1100, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "breathe",
+        0.5f, 1f, infiniteRepeatable(tween(1100, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "breathe",
     )
-
-    val cyan = Color(0xFF38E1D6)
+    // Monotonic 0→100 counter for the ~1.5s the loader is on screen.
+    val progress = remember { Animatable(0f) }
+    LaunchedEffect(Unit) { progress.animateTo(100f, tween(1350, easing = LinearEasing)) }
 
     Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(22.dp)) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(20.dp)) {
             Box(contentAlignment = Alignment.Center) {
                 Canvas(Modifier.size(210.dp)) {
-                    val r = size.minDimension / 2f * 0.84f
+                    val r = size.minDimension / 2f * 0.82f
                     val c = Offset(size.width / 2f, size.height / 2f)
 
-                    // Faint rim + latitude ellipses.
-                    drawCircle(accent.copy(alpha = 0.14f * breathe), radius = r, center = c, style = Stroke(width = 2f))
-                    for (k in -2..2) {
-                        val lat = k * (PI / 6)
-                        val rx = (r * cos(lat)).toFloat()
-                        val ry = (r * sin(lat)).toFloat()
-                        drawOval(accent.copy(alpha = 0.06f), topLeft = Offset(c.x - rx, c.y + ry - 1f), size = Size(rx * 2f, 2f))
+                    // Rotate every node around the Y axis by `spin`, project orthographically.
+                    val px = FloatArray(nodes.size)
+                    val py = FloatArray(nodes.size)
+                    val pz = FloatArray(nodes.size)
+                    val sa = sin(spin); val ca = cos(spin)
+                    for (k in nodes.indices) {
+                        val x = nodes[k][0]; val y = nodes[k][1]; val z = nodes[k][2]
+                        val xr = x * ca + z * sa
+                        val zr = -x * sa + z * ca
+                        px[k] = c.x + xr * r
+                        py[k] = c.y - y * r
+                        pz[k] = zr
                     }
 
-                    // Dim spinning dot sphere.
-                    dots.forEach { (lat, lon0, isCyan) ->
-                        val lon = lon0 + spin
-                        val x = cos(lat) * sin(lon)
-                        val z = cos(lat) * cos(lon)
-                        val y = sin(lat)
-                        if (z < -0.15f) return@forEach // cull far back
-                        val front = (z + 1f) / 2f
-                        val px = c.x + x * r
-                        val py = c.y - y * r
-                        val col = if (isCyan) cyan else accent
-                        val a = if (isCyan) 0.25f + 0.6f * front else 0.10f + 0.28f * front
-                        drawCircle(col.copy(alpha = a), radius = 1.1f + 1.8f * front, center = Offset(px, py))
+                    // Faint rim.
+                    drawCircle(accent.copy(alpha = 0.12f * breathe), radius = r, center = c, style = Stroke(width = 1.5f))
+
+                    // Network edges (dimmer on the far side).
+                    edges.forEach { (i, j) ->
+                        val front = ((pz[i] + pz[j]) / 2f + 1f) / 2f
+                        if (front < 0.28f) return@forEach
+                        drawLine(
+                            accent.copy(alpha = 0.06f + 0.22f * front),
+                            Offset(px[i], py[i]), Offset(px[j], py[j]),
+                            strokeWidth = 1f,
+                        )
                     }
 
-                    // Hotspots with expanding rings (the Conflictly signature).
-                    hotspots.forEach { (lat, lon0) ->
-                        val lon = lon0 + spin
-                        val x = cos(lat) * sin(lon)
-                        val z = cos(lat) * cos(lon)
-                        val y = sin(lat)
-                        if (z < 0f) return@forEach // only front-facing hotspots
-                        val px = c.x + x * r
-                        val py = c.y - y * r
-                        // Two staggered rings.
+                    // Nodes.
+                    for (k in nodes.indices) {
+                        val front = (pz[k] + 1f) / 2f
+                        drawCircle(
+                            accent.copy(alpha = 0.18f + 0.6f * front),
+                            radius = 1.3f + 1.8f * front,
+                            center = Offset(px[k], py[k]),
+                        )
+                    }
+
+                    // Hotspots: pulsing rings on a couple of front-facing nodes.
+                    hotspots.forEach { k ->
+                        if (pz[k] < 0f) return@forEach
+                        val o = Offset(px[k], py[k])
                         for (s in 0..1) {
                             val p = (pulse + s * 0.5f) % 1f
-                            drawCircle(
-                                accent.copy(alpha = (1f - p) * 0.5f),
-                                radius = 3f + p * 22f,
-                                center = Offset(px, py),
-                                style = Stroke(width = 1.5f),
-                            )
+                            drawCircle(accent.copy(alpha = (1f - p) * 0.55f), radius = 3f + p * 20f, center = o, style = Stroke(width = 1.4f))
                         }
-                        drawCircle(accent.copy(alpha = 0.95f), radius = 3.2f, center = Offset(px, py))
-                        drawCircle(accent.copy(alpha = 0.25f), radius = 6f, center = Offset(px, py))
-                    }
-
-                    // Extra motion layer, chosen by seed.
-                    when (archetype) {
-                        0 -> { // radar sweep
-                            val ang = motion * 2f * PI.toFloat()
-                            drawLine(accent.copy(alpha = 0.8f), c, Offset(c.x + sin(ang) * r, c.y - cos(ang) * r), strokeWidth = 2.5f)
-                        }
-                        1 -> { // orbiting satellite
-                            val ang = motion * 2f * PI.toFloat()
-                            val orx = r * 1.12f
-                            val ory = r * 0.42f
-                            val ox = c.x + sin(ang) * orx
-                            val oy = c.y - cos(ang) * ory * (if (sin(ang) > 0) 1f else 1f)
-                            drawOval(accent.copy(alpha = 0.12f), topLeft = Offset(c.x - orx, c.y - ory), size = Size(orx * 2f, ory * 2f), style = Stroke(width = 1f))
-                            drawCircle(cyan.copy(alpha = 0.9f), radius = 3.5f, center = Offset(ox, oy))
-                        }
-                        else -> { // concentric pulse rings from the core
-                            for (s in 0..2) {
-                                val p = (motion + s / 3f) % 1f
-                                drawCircle(accent.copy(alpha = (1f - p) * 0.4f), radius = p * r, center = c, style = Stroke(width = 1.5f))
-                            }
-                        }
+                        drawCircle(accent.copy(alpha = 0.95f), radius = 3.4f, center = o)
+                        drawCircle(accent.copy(alpha = 0.3f), radius = 6.5f, center = o)
                     }
                 }
-                Icon(icon, contentDescription = null, tint = accent.copy(alpha = breathe), modifier = Modifier.size(30.dp))
+                Icon(icon, contentDescription = null, tint = accent.copy(alpha = breathe), modifier = Modifier.size(28.dp))
             }
 
-            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
                     title.uppercase(),
                     color = accent,
@@ -193,10 +171,17 @@ fun SectionLoader(
                     letterSpacing = 2.5.sp,
                 )
                 Text(
-                    "• $subtitle •",
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f + 0.4f * breathe),
+                    "● ${subtitle.uppercase()}",
+                    color = accent.copy(alpha = 0.55f + 0.4f * breathe),
                     fontFamily = FontFamily.Monospace,
                     fontSize = 10.sp,
+                    letterSpacing = 3.sp,
+                )
+                Text(
+                    "LOADING ${progress.value.toInt()}%",
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 11.sp,
                     letterSpacing = 2.sp,
                 )
             }

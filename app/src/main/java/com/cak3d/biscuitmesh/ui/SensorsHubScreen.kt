@@ -192,7 +192,7 @@ fun SensorsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
             Box(
                 Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background.copy(alpha = 0.97f)),
             ) {
-                SectionLoader(title = p.label, accent = p.accent, icon = p.icon, seed = p.seed, subtitle = "OPENING")
+                SectionLoader(title = p.label, accent = p.accent, icon = p.icon, seed = p.seed)
             }
         }
       }
