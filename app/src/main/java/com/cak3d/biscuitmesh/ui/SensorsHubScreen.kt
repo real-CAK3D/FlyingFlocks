@@ -77,8 +77,8 @@ import kotlinx.coroutines.delay
 private data class HubEntry(val title: String, val sub: String, val icon: ImageVector, val route: String, val tint: Color)
 private data class HubSection(val title: String, val accent: Color, val loaderIcon: ImageVector, val entries: List<HubEntry>)
 
-/** A card tap that is showing its section's loading screen before the route opens. */
-private data class PendingOpen(val route: String, val label: String, val accent: Color, val icon: ImageVector)
+/** A card tap that is showing its own loading screen before the route opens. */
+private data class PendingOpen(val route: String, val label: String, val accent: Color, val icon: ImageVector, val seed: Int)
 
 /** A hub for the live sensing / sky tools, grouped so the long list doesn't crowd the screen. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -162,7 +162,7 @@ fun SensorsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
                 }
                 items(section.entries, key = { it.route }) { e ->
                     Card(
-                        onClick = { if (pending == null) pending = PendingOpen(e.route, e.title, section.accent, section.loaderIcon) },
+                        onClick = { if (pending == null) pending = PendingOpen(e.route, e.title, e.tint, e.icon, e.route.hashCode()) },
                         modifier = Modifier.fillMaxWidth(),
                         shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -192,7 +192,7 @@ fun SensorsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
             Box(
                 Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background.copy(alpha = 0.97f)),
             ) {
-                SectionLoader(title = p.label, accent = p.accent, icon = p.icon, subtitle = "OPENING")
+                SectionLoader(title = p.label, accent = p.accent, icon = p.icon, seed = p.seed, subtitle = "OPENING")
             }
         }
       }
