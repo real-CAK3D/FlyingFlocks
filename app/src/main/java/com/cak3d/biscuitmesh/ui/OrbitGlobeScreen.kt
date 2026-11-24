@@ -27,7 +27,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -101,6 +103,9 @@ fun OrbitGlobeScreen(vm: MainViewModel, onBack: () -> Unit) {
     var loaded by remember { mutableStateOf(false) }
     var observer by remember { mutableStateOf<Pair<Double, Double>?>(null) }
     var selected by remember { mutableStateOf<SatGeo?>(null) }
+    var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var pass by remember { mutableStateOf<com.cak3d.biscuitmesh.geo.PassPrediction?>(null) }
+    var passComputing by remember { mutableStateOf(false) }
 
     var rotY by remember { mutableFloatStateOf(0f) }
     var rotX by remember { mutableFloatStateOf(0.4f) }
@@ -116,8 +121,21 @@ fun OrbitGlobeScreen(vm: MainViewModel, onBack: () -> Unit) {
         loaded = true
         while (true) {
             val now = System.currentTimeMillis()
+            nowMs = now
             sats = tles.mapNotNull { Sgp4.geoNow(it, now) }
             delay(1000)
+        }
+    }
+    // Next-pass prediction for the selected satellite, recomputed off-thread when selection changes.
+    LaunchedEffect(selected?.tle?.noradId, observer) {
+        val s = selected; val obs = observer
+        pass = null
+        if (s != null && obs != null && !s.tle.isDeepSpace) {
+            passComputing = true
+            pass = withContext(Dispatchers.Default) {
+                Sgp4.nextPass(s.tle, obs.first, obs.second, 0.0, System.currentTimeMillis())
+            }
+            passComputing = false
         }
     }
     // Idle auto-spin (30 fps — lighter now the globe draws coastlines each frame).
@@ -283,23 +301,52 @@ fun OrbitGlobeScreen(vm: MainViewModel, onBack: () -> Unit) {
             }
 
             selected?.let { s ->
-                SatCard(s, Modifier.align(Alignment.BottomCenter))
+                SatCard(s, observer, pass, passComputing, nowMs, Modifier.align(Alignment.BottomCenter))
             }
         }
     }
 }
 
+/** 16-point-ish compass label for an azimuth in degrees from true north. */
+private fun compass(azDeg: Double): String {
+    val dirs = listOf("N", "NE", "E", "SE", "S", "SW", "W", "NW")
+    return dirs[(((azDeg % 360 + 360) % 360) / 45.0).toInt() % 8]
+}
+
+/** "2h 14m", "7m 30s", or "now" for a span in millis. */
+private fun fmtSpan(ms: Long): String {
+    if (ms <= 0) return "now"
+    val s = ms / 1000
+    val d = s / 86400; val h = (s % 86400) / 3600; val m = (s % 3600) / 60; val sec = s % 60
+    return when {
+        d > 0 -> "${d}d ${h}h"
+        h > 0 -> "${h}h ${m}m"
+        m > 0 -> "${m}m ${sec}s"
+        else -> "${sec}s"
+    }
+}
+
 @Composable
-private fun SatCard(s: SatGeo, modifier: Modifier) {
+private fun SatCard(
+    s: SatGeo,
+    observer: Pair<Double, Double>?,
+    pass: com.cak3d.biscuitmesh.geo.PassPrediction?,
+    passComputing: Boolean,
+    nowMs: Long,
+    modifier: Modifier,
+) {
+    val accent = classColor(s.orbitClass)
+    // Live elevation right now (one cheap SGP4 propagation per recomposition).
+    val live = observer?.let { Sgp4.lookAngle(s.tle, it.first, it.second, 0.0, nowMs) }
     Card(
         modifier = modifier.fillMaxWidth().padding(12.dp)
-            .border(1.5.dp, classColor(s.orbitClass).copy(alpha = 0.7f), RoundedCornerShape(16.dp)),
+            .border(1.5.dp, accent.copy(alpha = 0.7f), RoundedCornerShape(16.dp)),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
     ) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text(s.tle.name, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = classColor(s.orbitClass))
+                Text(s.tle.name, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = accent)
                 Text("NORAD ${s.tle.noradId}", fontFamily = FontFamily.Monospace, fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
             }
@@ -313,6 +360,48 @@ private fun SatCard(s: SatGeo, modifier: Modifier) {
                 fontFamily = FontFamily.Monospace, fontSize = 11.sp,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
             )
+
+            // --- Pass intel (needs an observer fix) ---
+            androidx.compose.material3.HorizontalDivider(
+                Modifier.padding(vertical = 2.dp),
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+            )
+            when {
+                observer == null ->
+                    Text("◎ enable location for pass times",
+                        fontFamily = FontFamily.Monospace, fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f))
+                live != null && live.elDeg >= 0 && pass != null && pass.inProgress -> {
+                    Text("● OVERHEAD NOW", fontFamily = FontFamily.Monospace, fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold, color = Color(0xFF5FD36A))
+                    Text("el ${"%.1f".format(live.elDeg)}° ${compass(live.azDeg)} · sets in ${fmtSpan(pass.losMs - nowMs)} · peak ${pass.peakElDeg.toInt()}°",
+                        fontFamily = FontFamily.Monospace, fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                }
+                live != null && live.elDeg >= 0 -> {
+                    Text("● ABOVE HORIZON", fontFamily = FontFamily.Monospace, fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold, color = Color(0xFF5FD36A))
+                    Text("el ${"%.1f".format(live.elDeg)}° ${compass(live.azDeg)} · range ${live.rangeKm.toInt()} km",
+                        fontFamily = FontFamily.Monospace, fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                }
+                passComputing && pass == null ->
+                    Text("◴ computing next pass…", fontFamily = FontFamily.Monospace, fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f))
+                pass != null -> {
+                    Text("↑ NEXT PASS in ${fmtSpan(pass.aosMs - nowMs)}",
+                        fontFamily = FontFamily.Monospace, fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                        color = accent)
+                    Text("rises ${compass(pass.aosAzDeg)} · peak ${pass.peakElDeg.toInt()}° · sets ${compass(pass.losAzDeg)} · visible ${fmtSpan(pass.losMs - pass.aosMs)}",
+                        fontFamily = FontFamily.Monospace, fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                }
+                else ->
+                    Text("○ no pass over you in the next 8 h",
+                        fontFamily = FontFamily.Monospace, fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f))
+            }
+
             Text("tap empty space to close", fontSize = 10.sp,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f),
                 modifier = Modifier.padding(top = 2.dp))

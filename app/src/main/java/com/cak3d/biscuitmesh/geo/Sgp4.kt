@@ -2,6 +2,7 @@ package com.cak3d.biscuitmesh.geo
 
 import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.asin
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.pow
@@ -30,6 +31,24 @@ data class Tle(val name: String, val line1: String, val line2: String) {
 }
 
 enum class OrbitClass { LEO, MEO, GEO, HEO }
+
+/** Observer look-angles to a satellite: elevation & azimuth (deg) and slant range (km). */
+data class LookAngle(val elDeg: Double, val azDeg: Double, val rangeKm: Double)
+
+/**
+ * A satellite's next pass over an observer: acquisition-of-signal (rise), culmination (peak) and
+ * loss-of-signal (set) times in epoch millis, the peak elevation, and the rise/set azimuths.
+ * [inProgress] is true when the pass is already overhead at the time the prediction was made.
+ */
+data class PassPrediction(
+    val aosMs: Long,
+    val peakMs: Long,
+    val losMs: Long,
+    val peakElDeg: Double,
+    val aosAzDeg: Double,
+    val losAzDeg: Double,
+    val inProgress: Boolean,
+)
 
 /** Geodetic sub-point + altitude of a satellite, with its orbit class. */
 data class SatGeo(
@@ -238,5 +257,105 @@ object Sgp4 {
             n <= 1.1 -> OrbitClass.GEO            // ~geosynchronous
             else -> OrbitClass.MEO
         }
+    }
+
+    private const val OBS_A = 6378.137                 // WGS-84 equatorial radius (km)
+    private const val OBS_F = 1.0 / 298.257223563      // WGS-84 flattening
+
+    /**
+     * Topocentric look-angles from an observer (geodetic lat/lon deg, altitude km) to satellite
+     * [t] at [nowMs]. Returns elevation above the horizon, azimuth from true north (clockwise) and
+     * slant range. Null for deep-space TLEs or propagation errors.
+     */
+    fun lookAngle(
+        t: Tle, obsLatDeg: Double, obsLonDeg: Double, obsAltKm: Double, nowMs: Long,
+    ): LookAngle? = runCatching {
+        if (t.isDeepSpace) return@runCatching null
+        val jd = julianDate(nowMs)
+        val tsince = (jd - epochJd(t)) * 1440.0
+        val r = propagate(t, tsince)
+        val g = gmst(jd)
+        // TEME -> Earth-fixed (ECEF).
+        val sx = r[0] * cos(g) + r[1] * sin(g)
+        val sy = -r[0] * sin(g) + r[1] * cos(g)
+        val sz = r[2]
+        // Observer ECEF (WGS-84 geodetic).
+        val lat = obsLatDeg * DE2RA; val lon = obsLonDeg * DE2RA
+        val e2 = OBS_F * (2 - OBS_F)
+        val sinLat = sin(lat); val cosLat = cos(lat); val sinLon = sin(lon); val cosLon = cos(lon)
+        val n = OBS_A / sqrt(1 - e2 * sinLat * sinLat)
+        val ox = (n + obsAltKm) * cosLat * cosLon
+        val oy = (n + obsAltKm) * cosLat * sinLon
+        val oz = (n * (1 - e2) + obsAltKm) * sinLat
+        // Range vector, observer -> satellite, in ECEF then SEZ (south/east/zenith).
+        val rx = sx - ox; val ry = sy - oy; val rz = sz - oz
+        val south = sinLat * cosLon * rx + sinLat * sinLon * ry - cosLat * rz
+        val east = -sinLon * rx + cosLon * ry
+        val zen = cosLat * cosLon * rx + cosLat * sinLon * ry + sinLat * rz
+        val range = sqrt(rx * rx + ry * ry + rz * rz)
+        if (range <= 0) return@runCatching null
+        val el = asin((zen / range).coerceIn(-1.0, 1.0)) / DE2RA
+        var az = atan2(east, -south) / DE2RA
+        if (az < 0) az += 360.0
+        LookAngle(el, az, range)
+    }.getOrNull()
+
+    /**
+     * The next pass of satellite [t] over an observer, searching forward from [fromMs]. Coarse-steps
+     * one minute at a time to bracket the rise above [horizonDeg], bisects to pin the rise, then
+     * walks the pass to find the culmination and set. Returns null when the satellite does not clear
+     * the horizon within [windowHrs] (e.g. inclination below the observer's latitude), or for
+     * deep-space TLEs. If the satellite is already up at [fromMs] the pass is returned [inProgress].
+     */
+    fun nextPass(
+        t: Tle, obsLatDeg: Double, obsLonDeg: Double, obsAltKm: Double, fromMs: Long,
+        horizonDeg: Double = 0.0, windowHrs: Int = 8,
+    ): PassPrediction? {
+        if (t.isDeepSpace) return null
+        fun el(ms: Long): Double = lookAngle(t, obsLatDeg, obsLonDeg, obsAltKm, ms)?.elDeg ?: -90.0
+        val coarse = 60_000L
+        val fine = 10_000L
+        val end = fromMs + windowHrs * 3_600_000L
+
+        val startEl = el(fromMs)
+        val inProgress = startEl >= horizonDeg
+        val aos: Long
+        if (inProgress) {
+            aos = fromMs
+        } else {
+            var prev = startEl
+            var tms = fromMs + coarse
+            var rise = -1L
+            while (tms <= end) {
+                val cur = el(tms)
+                if (prev < horizonDeg && cur >= horizonDeg) {
+                    var lo = tms - coarse; var hi = tms
+                    repeat(20) { val mid = (lo + hi) / 2; if (el(mid) < horizonDeg) lo = mid else hi = mid }
+                    rise = hi; break
+                }
+                prev = cur; tms += coarse
+            }
+            if (rise < 0) return null
+            aos = rise
+        }
+
+        // Walk from AOS to find culmination and set.
+        var peakMs = aos; var peakEl = el(aos)
+        var los = end
+        var tms = aos + fine
+        val passEnd = aos + 30 * 60_000L   // no LEO pass lasts longer than ~30 min
+        while (tms <= passEnd) {
+            val cur = el(tms)
+            if (cur > peakEl) { peakEl = cur; peakMs = tms }
+            if (cur < horizonDeg) {
+                var lo = tms - fine; var hi = tms
+                repeat(16) { val mid = (lo + hi) / 2; if (el(mid) >= horizonDeg) lo = mid else hi = mid }
+                los = lo; break
+            }
+            tms += fine
+        }
+        val aosAz = lookAngle(t, obsLatDeg, obsLonDeg, obsAltKm, aos)?.azDeg ?: 0.0
+        val losAz = lookAngle(t, obsLatDeg, obsLonDeg, obsAltKm, los)?.azDeg ?: 0.0
+        return PassPrediction(aos, peakMs, los, peakEl, aosAz, losAz, inProgress)
     }
 }
