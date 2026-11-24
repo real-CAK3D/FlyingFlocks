@@ -29,9 +29,14 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.LocationOff
 import androidx.compose.material.icons.filled.Usb
@@ -84,7 +89,16 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit, onOpenDeadZones: () -> Unit = {}, onOpenWigle: () -> Unit = {}) {
+fun SettingsScreen(
+    vm: MainViewModel,
+    onBack: () -> Unit,
+    onOpenDeadZones: () -> Unit = {},
+    onOpenWigle: () -> Unit = {},
+    onOpenProfile: () -> Unit = {},
+    onOpenPlaces: () -> Unit = {},
+    onOpenStats: () -> Unit = {},
+    onOpenFlock: () -> Unit = {},
+) {
     val zones by vm.deadZones.collectAsStateWithLifecycle(initialValue = emptyList())
     val authorized by vm.authorizedUse.collectAsStateWithLifecycle()
     var showAdd by remember { mutableStateOf(false) }
@@ -128,7 +142,7 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit, onOpenDeadZones: () ->
         },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
-            val tabs = listOf("General", "Privacy", "Devices", "Data", "About")
+            val tabs = listOf("Profile", "General", "Privacy", "Devices", "Data", "About")
             var tab by remember { mutableStateOf(0) }
             ScrollableTabRow(
                 selectedTabIndex = tab,
@@ -150,11 +164,20 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit, onOpenDeadZones: () ->
             ) {
                 when (tab) {
                     0 -> {
+                        ProfileSettingsSection(
+                            vm = vm,
+                            onOpenProfile = onOpenProfile,
+                            onOpenPlaces = onOpenPlaces,
+                            onOpenStats = onOpenStats,
+                            onOpenFlock = onOpenFlock,
+                        )
+                    }
+                    1 -> {
                         AppearanceSection(vm)
                         HudSection(vm)
                         AlertsScreenSection(vm)
                     }
-                    1 -> {
+                    2 -> {
                         DeadZonesSection(
                             zones = zones,
                             onAdd = { openAddZone() },
@@ -170,13 +193,13 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit, onOpenDeadZones: () ->
                             onRevoke = { vm.revokeAuthorizedUse() },
                         )
                     }
-                    2 -> {
+                    3 -> {
                         LocationSourceSection(vm)
                         MeshSection(vm)
                         WtfSection(vm)
                         MarauderSection(vm)
                     }
-                    3 -> {
+                    4 -> {
                         ExportSection(vm)
                         ApiKeysSection(vm)
                         WdgSection(vm)
@@ -184,7 +207,7 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit, onOpenDeadZones: () ->
                             onClick = onOpenWigle, modifier = Modifier.fillMaxWidth(),
                         ) { Text("WiGLE account stats") }
                     }
-                    4 -> AboutSection()
+                    5 -> AboutSection()
                 }
             }
         }
@@ -200,6 +223,73 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit, onOpenDeadZones: () ->
                 showAdd = false
             },
         )
+    }
+}
+
+@Composable
+private fun ProfileSettingsSection(
+    vm: MainViewModel,
+    onOpenProfile: () -> Unit,
+    onOpenPlaces: () -> Unit,
+    onOpenStats: () -> Unit,
+    onOpenFlock: () -> Unit,
+) {
+    val handle by vm.flockHandle.collectAsStateWithLifecycle(initialValue = "")
+    val accentName by vm.appAccent.collectAsStateWithLifecycle(initialValue = "GOLD")
+    val accent = runCatching { com.cak3d.biscuitmesh.ui.theme.AppAccent.valueOf(accentName) }
+        .getOrDefault(com.cak3d.biscuitmesh.ui.theme.AppAccent.GOLD)
+
+    // Identity header — avatar + flock handle, tap to open the full profile.
+    Card(
+        shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Row(
+            Modifier.fillMaxWidth().clickable { onOpenProfile() }.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Box(
+                Modifier.size(52.dp).clip(CircleShape).background(accent.color.copy(alpha = 0.18f))
+                    .border(1.5.dp, accent.color.copy(alpha = 0.7f), CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Default.AccountCircle, contentDescription = null, tint = accent.color,
+                    modifier = Modifier.size(34.dp))
+            }
+            Column(Modifier.weight(1f)) {
+                Text(
+                    if (handle.isBlank()) "Your profile" else handle,
+                    style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    if (handle.isBlank()) "Set a flock handle · totals, rank & places"
+                    else "Totals, rank & places",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+                )
+            }
+            Icon(Icons.Default.ChevronRight, contentDescription = "Open profile",
+                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+        }
+    }
+
+    // Quick jumps that used to live in the top bar.
+    OutlinedButton(onClick = onOpenProfile, modifier = Modifier.fillMaxWidth()) {
+        Icon(Icons.Default.AccountCircle, contentDescription = null)
+        Spacer(Modifier.width(10.dp)); Text("Full profile")
+    }
+    OutlinedButton(onClick = onOpenPlaces, modifier = Modifier.fillMaxWidth()) {
+        Icon(Icons.Default.Place, contentDescription = null)
+        Spacer(Modifier.width(10.dp)); Text("Places")
+    }
+    OutlinedButton(onClick = onOpenStats, modifier = Modifier.fillMaxWidth()) {
+        Icon(Icons.Default.BarChart, contentDescription = null)
+        Spacer(Modifier.width(10.dp)); Text("Stats")
+    }
+    OutlinedButton(onClick = onOpenFlock, modifier = Modifier.fillMaxWidth()) {
+        Icon(Icons.Default.Groups, contentDescription = null)
+        Spacer(Modifier.width(10.dp)); Text("Flock")
     }
 }
 

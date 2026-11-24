@@ -263,17 +263,11 @@ private fun MainShell(vm: MainViewModel) {
                         IconButton(onClick = { nav.navigate("dashboard") }) {
                             Icon(Icons.Default.SpaceDashboard, contentDescription = "Dashboard")
                         }
-                        IconButton(onClick = { nav.navigate("places") }) {
-                            Icon(Icons.Default.Place, contentDescription = "Places")
-                        }
                         IconButton(onClick = { nav.navigate("rarebirds") }) {
                             Icon(Icons.Default.Radar, contentDescription = "Field Guide")
                         }
                         IconButton(onClick = { nav.navigate("drives") }) {
                             Icon(Icons.Default.History, contentDescription = "Drives")
-                        }
-                        IconButton(onClick = { nav.navigate("profile") }) {
-                            Icon(Icons.Default.AccountCircle, contentDescription = "Profile")
                         }
                         IconButton(onClick = { nav.navigate("sensors") }) {
                             Icon(Icons.Default.SatelliteAlt, contentDescription = "Sensors & Sky")
@@ -420,7 +414,11 @@ private fun MainShell(vm: MainViewModel) {
                 composable("settings") {
                     SettingsScreen(vm = vm, onBack = { nav.popBackStack() },
                         onOpenDeadZones = { nav.navigate("deadzones") },
-                        onOpenWigle = { nav.navigate("wiglestats") })
+                        onOpenWigle = { nav.navigate("wiglestats") },
+                        onOpenProfile = { nav.navigate("profile") },
+                        onOpenPlaces = { nav.navigate("places") },
+                        onOpenStats = { nav.navigate("stats") },
+                        onOpenFlock = { nav.navigate("crew") })
                 }
                 composable("wiglestats") { WigleStatsScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("deadzones") { DeadZonesScreen(vm = vm, onBack = { nav.popBackStack() }) }
