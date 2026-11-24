@@ -46,6 +46,7 @@ import android.content.Intent
 import android.net.Uri
 import kotlinx.coroutines.delay
 import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Straighten
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -884,12 +885,25 @@ private fun ApiKeyField(svc: com.cak3d.biscuitmesh.data.ApiService, saved: Strin
         modifier = Modifier.fillMaxWidth(),
     )
     Text(
-        svc.hint + if (svc.url.isNotBlank()) "  ${svc.url}" else "",
+        svc.hint,
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
     )
-    OutlinedButton(onClick = { onSave(field) }, enabled = field.trim() != saved) {
-        Text(if (saved.isBlank()) "Save" else "Update")
+    val context = LocalContext.current
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        if (svc.url.isNotBlank()) {
+            TextButton(onClick = {
+                runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(svc.url))) }
+            }) {
+                Icon(Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(if (saved.isBlank()) "Sign up / get key" else "Manage key")
+            }
+        }
+        Spacer(Modifier.weight(1f))
+        OutlinedButton(onClick = { onSave(field) }, enabled = field.trim() != saved) {
+            Text(if (saved.isBlank()) "Save" else "Update")
+        }
     }
 }
 

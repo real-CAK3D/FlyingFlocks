@@ -187,6 +187,12 @@ class MainActivity : ComponentActivity() {
                     if (!tourSeen) {
                         com.cak3d.biscuitmesh.ui.WelcomeDialog(onDismiss = { vm.dismissTour() })
                     }
+                    // In-app update check (GitHub Releases) — one check per process, banner at top.
+                    androidx.compose.runtime.LaunchedEffect(Unit) { vm.checkForUpdate() }
+                    val update by vm.update.collectAsStateWithLifecycle(initialValue = null)
+                    update?.let { rel ->
+                        com.cak3d.biscuitmesh.ui.UpdateBanner(rel, onLater = { vm.dismissUpdate() })
+                    }
                     // Branded launch splash — only on a fresh start, not on rotation / config change.
                     var showSplash by remember { mutableStateOf(savedInstanceState == null) }
                     if (showSplash) {

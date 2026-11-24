@@ -866,6 +866,23 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     // --- First-run tour ----------------------------------------------------
     val tourSeen: Flow<Boolean> = appRef.settingsStore.tourSeen
     fun dismissTour() = viewModelScope.launch { appRef.settingsStore.setTourSeen() }
+
+    // --- In-app update check (GitHub Releases) -----------------------------
+    private val _update = kotlinx.coroutines.flow.MutableStateFlow<com.cak3d.biscuitmesh.geo.AppRelease?>(null)
+    /** The newest release when it's newer than the installed build, else null. */
+    val update: kotlinx.coroutines.flow.StateFlow<com.cak3d.biscuitmesh.geo.AppRelease?> = _update
+    @Volatile private var updateChecked = false
+    fun checkForUpdate() {
+        if (updateChecked) return
+        updateChecked = true
+        viewModelScope.launch {
+            val rel = com.cak3d.biscuitmesh.geo.UpdateClient().latest() ?: return@launch
+            if (com.cak3d.biscuitmesh.geo.isNewerVersion(rel.version, com.cak3d.biscuitmesh.BuildConfig.VERSION_NAME)) {
+                _update.value = rel
+            }
+        }
+    }
+    fun dismissUpdate() { _update.value = null }
     fun setAppFeel(name: String) = viewModelScope.launch { appRef.settingsStore.setAppFeel(name) }
     fun setAppAccent(name: String) = viewModelScope.launch { appRef.settingsStore.setAppAccent(name) }
 
