@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.Leaderboard
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.RocketLaunch
 import androidx.compose.material.icons.filled.RemoveRedEye
@@ -105,6 +106,7 @@ fun SensorsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
             HubEntry("Orbit", "Everything overhead in one window — GPS satellites, ADS-B aircraft & aurora/space weather, switchable", Icons.Default.Public, "orbit", Color(0xFF38BDF8)),
             HubEntry("Orbit Globe", "Native SGP4 globe — the ISS, Tiangong & bright satellites tracked live, color-coded by orbit class. A preview of the native rebuild.", Icons.Default.SatelliteAlt, "orbitglobe", Color(0xFFFFD166)),
             HubEntry("Sky Conditions", "Real-time light pollution — how dark your sky is right now, folding in live twilight & the Moon, with what you can see and when it next gets dark", Icons.Default.Nightlight, "skyconditions", Color(0xFF6366F1)),
+            HubEntry("Light Pollution Map", "Earth at night around you — NASA VIIRS city-glow tiles show how bright your skies are; pan to find a dark spot", Icons.Default.Map, "lightmap", Color(0xFFFFD166)),
             HubEntry("Vision", "God's Eye View forks, live in-app — CAK3Dvision over Tailscale, plus any fork of your own you add", Icons.Default.RemoveRedEye, "vision", Color(0xFF8B5CF6)),
         )),
         HubSection("Alerts & feeds", Color(0xFFFF9500), Icons.Default.Warning, listOf(
