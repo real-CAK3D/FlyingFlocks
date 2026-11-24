@@ -105,7 +105,7 @@ fun FeedsScreen(vm: MainViewModel, onBack: () -> Unit) {
             }
             when (tab) {
                 0 -> CamerasTab(fix)
-                1 -> ScannerTab()
+                1 -> ScannerTab(fix)
                 else -> WebcamsTab(vm, fix)
             }
         }
@@ -153,7 +153,8 @@ private fun kindLabel(k: HazardKind): String = when (k) {
 // ---------------- Scanner (OpenMHz) ----------------
 
 @Composable
-private fun ScannerTab() {
+private fun ScannerTab(fix: Pair<Double, Double>?) {
+    val ctx = LocalContext.current
     val client = remember { OpenMhzClient() }
     var systems by remember { mutableStateOf<List<OpenMhzClient.System>>(emptyList()) }
     var query by remember { mutableStateOf("") }
@@ -162,6 +163,7 @@ private fun ScannerTab() {
     var loadingSys by remember { mutableStateOf(true) }
     var loadingCalls by remember { mutableStateOf(false) }
     var reload by remember { mutableStateOf(0) }
+    var region by remember { mutableStateOf<ScanRegion?>(null) }
 
     // One MediaPlayer for the whole tab.
     val player = remember { MediaPlayer() }
@@ -169,6 +171,10 @@ private fun ScannerTab() {
     DisposableEffect(Unit) { onDispose { runCatching { player.release() } } }
 
     LaunchedEffect(Unit) { systems = client.systems(); loadingSys = false }
+    LaunchedEffect(fix) {
+        val f = fix ?: return@LaunchedEffect
+        region = withContext(Dispatchers.IO) { reverseRegion(ctx, f.first, f.second) }
+    }
     LaunchedEffect(selected, reload) {
         val s = selected ?: return@LaunchedEffect
         loadingCalls = true; calls = client.calls(s.shortName); loadingCalls = false
@@ -195,11 +201,36 @@ private fun ScannerTab() {
                 modifier = Modifier.fillMaxWidth().padding(12.dp),
             )
             if (loadingSys) { Centered("Loading scanner systems…", spin = true); return }
-            val filtered = systems.filter {
-                query.isBlank() || "${it.name} ${it.city} ${it.state}".contains(query, ignoreCase = true)
-            }.take(120)
+            val q = query.trim()
+            val reg = region
+            // When the box is empty, surface systems in the operator's state/city first.
+            val near = if (q.isBlank() && reg != null) systems.filter { matchesRegion(it, reg) } else emptyList()
+            val nearKeys = near.mapTo(HashSet()) { it.shortName }
+            val rest = (if (q.isBlank()) systems else systems.filter {
+                "${it.name} ${it.city} ${it.state}".contains(q, ignoreCase = true)
+            }).filter { it.shortName !in nearKeys }.take(140)
             LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValuesAll(12), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(filtered, key = { it.shortName }) { s ->
+                if (near.isNotEmpty()) {
+                    item { ScanLabel("NEAR YOU · ${reg!!.label}") }
+                    items(near, key = { it.shortName }) { s ->
+                        FeedRow(Icons.Default.Nightlight, s.name,
+                            listOf(s.city, s.state).filter { it.isNotBlank() }.joinToString(", "),
+                            onClick = { selected = s })
+                    }
+                    item { ScanLabel("ALL SYSTEMS") }
+                } else if (q.isBlank() && reg != null) {
+                    item {
+                        Text(
+                            "No OpenMHz system is tagged ${reg!!.label}. Live ${reg!!.label} police/fire/EMS " +
+                                "usually lives on Broadcastify, not OpenMHz. Browse every recorded system below, " +
+                                "or search a nearby city.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                            modifier = Modifier.padding(bottom = 4.dp),
+                        )
+                    }
+                }
+                items(rest, key = { it.shortName }) { s ->
                     FeedRow(
                         icon = Icons.Default.Nightlight,
                         title = s.name,
@@ -233,6 +264,53 @@ private fun ScannerTab() {
         }
     }
 }
+
+// ---------------- Scanner location helpers ----------------
+
+/** The operator's coarse location, for surfacing nearby scanner systems. */
+private data class ScanRegion(val city: String, val stateName: String, val stateAbbr: String) {
+    val label: String get() = listOf(city, stateAbbr.ifBlank { stateName })
+        .filter { it.isNotBlank() }.joinToString(", ").ifBlank { "your area" }
+}
+
+/** Reverse-geocode a fix to city + state (blocking; call off the main thread). Null if unavailable. */
+private fun reverseRegion(ctx: android.content.Context, lat: Double, lon: Double): ScanRegion? = runCatching {
+    @Suppress("DEPRECATION")
+    val addr = android.location.Geocoder(ctx, java.util.Locale.US).getFromLocation(lat, lon, 1)?.firstOrNull()
+        ?: return null
+    val state = addr.adminArea ?: ""
+    ScanRegion(addr.locality ?: addr.subAdminArea ?: "", state, US_STATE_ABBR[state] ?: "")
+}.getOrNull()
+
+/** True if an OpenMHz system sits in the operator's city or state (matching full name or abbrev). */
+private fun matchesRegion(s: OpenMhzClient.System, r: ScanRegion): Boolean {
+    val st = s.state.trim()
+    val stateHit = st.isNotBlank() &&
+        (st.equals(r.stateName, true) || (r.stateAbbr.isNotBlank() && st.equals(r.stateAbbr, true)))
+    val cityHit = r.city.isNotBlank() && s.city.contains(r.city, ignoreCase = true)
+    return stateHit || cityHit
+}
+
+@Composable
+private fun ScanLabel(text: String) {
+    Text(text, style = MaterialTheme.typography.labelMedium, fontFamily = FontFamily.Monospace,
+        fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(top = 6.dp, bottom = 2.dp))
+}
+
+private val US_STATE_ABBR = mapOf(
+    "Alabama" to "AL", "Alaska" to "AK", "Arizona" to "AZ", "Arkansas" to "AR", "California" to "CA",
+    "Colorado" to "CO", "Connecticut" to "CT", "Delaware" to "DE", "Florida" to "FL", "Georgia" to "GA",
+    "Hawaii" to "HI", "Idaho" to "ID", "Illinois" to "IL", "Indiana" to "IN", "Iowa" to "IA",
+    "Kansas" to "KS", "Kentucky" to "KY", "Louisiana" to "LA", "Maine" to "ME", "Maryland" to "MD",
+    "Massachusetts" to "MA", "Michigan" to "MI", "Minnesota" to "MN", "Mississippi" to "MS", "Missouri" to "MO",
+    "Montana" to "MT", "Nebraska" to "NE", "Nevada" to "NV", "New Hampshire" to "NH", "New Jersey" to "NJ",
+    "New Mexico" to "NM", "New York" to "NY", "North Carolina" to "NC", "North Dakota" to "ND", "Ohio" to "OH",
+    "Oklahoma" to "OK", "Oregon" to "OR", "Pennsylvania" to "PA", "Rhode Island" to "RI", "South Carolina" to "SC",
+    "South Dakota" to "SD", "Tennessee" to "TN", "Texas" to "TX", "Utah" to "UT", "Vermont" to "VT",
+    "Virginia" to "VA", "Washington" to "WA", "West Virginia" to "WV", "Wisconsin" to "WI", "Wyoming" to "WY",
+    "District of Columbia" to "DC",
+)
 
 // ---------------- Webcams (Windy, keyed) ----------------
 
