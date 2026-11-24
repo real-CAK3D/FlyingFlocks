@@ -97,6 +97,7 @@ import com.cak3d.biscuitmesh.ui.CockpitScreen
 import com.cak3d.biscuitmesh.ui.LandMode
 import com.cak3d.biscuitmesh.ui.LandscapeScreen
 import com.cak3d.biscuitmesh.ui.ScopeScreen
+import com.cak3d.biscuitmesh.ui.TerminalScreen
 import com.cak3d.biscuitmesh.ui.SignalsScreen
 import com.cak3d.biscuitmesh.ui.SignalsView
 import com.cak3d.biscuitmesh.ui.DashboardScreen
@@ -277,8 +278,8 @@ private fun MainShell(vm: MainViewModel) {
                         IconButton(onClick = { nav.navigate("sensors") }) {
                             Icon(Icons.Default.SatelliteAlt, contentDescription = "Sensors & Sky")
                         }
-                        IconButton(onClick = { nav.navigate("scope") }) {
-                            Icon(Icons.Default.Terminal, contentDescription = "Live Scope")
+                        IconButton(onClick = { nav.navigate("terminal") }) {
+                            Icon(Icons.Default.Terminal, contentDescription = "Terminal")
                         }
                         IconButton(onClick = { nav.navigate("settings") }) {
                             Icon(Icons.Default.Settings, contentDescription = "Settings")
@@ -447,6 +448,7 @@ private fun MainShell(vm: MainViewModel) {
                 }
                 composable("globalstats") { GlobalStatsScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("scope") { ScopeScreen(vm = vm, onBack = { nav.popBackStack() }) }
+                composable("terminal") { TerminalScreen(vm = vm, onNavigate = { nav.navigate(it) }, onBack = { nav.popBackStack() }) }
                 composable("dashboard") { DashboardScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("collect") { BackgroundCollectScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("games") { GamesScreen(onBack = { nav.popBackStack() }, onOpen = { nav.navigate(it) }) }
