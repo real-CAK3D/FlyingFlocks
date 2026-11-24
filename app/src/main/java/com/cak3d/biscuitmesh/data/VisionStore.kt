@@ -84,6 +84,7 @@ class VisionStore(private val context: Context) {
             VisionPortal("LeoLabs", "https://platform.leolabs.space/visualization", builtIn = true),
             VisionPortal("Satellite Tracker 3D", "https://satellitetracker3d.com/?norad-id=81605", builtIn = true),
             VisionPortal("Orbital Radar", "https://orbitalradar.com/", builtIn = true),
+            VisionPortal("Satellite Map", "https://satellitemap.space/", builtIn = true),
         )
 
         /** Make a user-typed address into a loadable URL: default to https:// when no scheme. */

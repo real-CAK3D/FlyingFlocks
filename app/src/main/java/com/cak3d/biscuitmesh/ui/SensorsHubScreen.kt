@@ -48,6 +48,7 @@ import androidx.compose.material.icons.filled.SettingsRemote
 import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material.icons.filled.Terrain
 import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.material.icons.filled.ViewInAr
 import androidx.compose.material.icons.filled.Science
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Streetview
@@ -100,6 +101,7 @@ fun SensorsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
         )),
         HubSection("Live Visuals", Color(0xFFEC4899), Icons.Default.Equalizer, listOf(
             HubEntry("Signals", "Every live RF visualizer in one window — the 3D scope, live console, device graph, per-device telemetry, dashboard & traffic charts, switchable at the bottom", Icons.Default.Equalizer, "signals", Color(0xFF22D3EE)),
+            HubEntry("Data Cube", "The whole live picture in one rotatable 3D diagram — Wi-Fi, Bluetooth & satellites as stacked layers; drag to spin, tap a node for its details", Icons.Default.ViewInAr, "datacube", Color(0xFFFFD166)),
         )),
         HubSection("Sky", Color(0xFF8B5CF6), Icons.Default.SatelliteAlt, listOf(
             HubEntry("Sky AR", "Point your phone at the sky — satellites, planets, the Moon, constellations & aircraft live on the camera", Icons.Default.CameraAlt, "skyar", Color(0xFFA78BFA)),
