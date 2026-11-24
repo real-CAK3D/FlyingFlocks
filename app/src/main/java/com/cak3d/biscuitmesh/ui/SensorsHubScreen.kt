@@ -48,6 +48,7 @@ import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material.icons.filled.Terrain
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.Science
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Streetview
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -92,6 +93,7 @@ fun SensorsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
             HubEntry("Background Collect", "Phone-only — keep catching Wi-Fi & BT with the screen off", Icons.Default.Sensors, "collect", Color(0xFF5FD36A)),
             HubEntry("Tracker Check", "Is a BLE tracker following you? Best-effort anti-stalking", Icons.Default.PersonSearch, "trackers", Color(0xFFFF5470)),
             HubEntry("Watchlist", "Flag MACs or names and spot them in range", Icons.Default.Visibility, "watchlist", Color(0xFF34D399)),
+            HubEntry("Rogue AP", "Evil-twin sweep — flags a Wi-Fi name coming from more than one radio, worst when a secured network also shows up open", Icons.Default.Security, "rogueap", Color(0xFFFF5470)),
             HubEntry("Targets", "Networks, devices & locations to locate — scan toggles, local only", Icons.Default.GpsFixed, "targets", Color(0xFFF59E0B)),
             HubEntry("3D Terrain & AR", "Your drive on the real landscape in 3D, or through the camera at street level — toggle between the two in one window", Icons.Default.Terrain, "terrain3d", Color(0xFF8FD694)),
         )),

@@ -97,6 +97,7 @@ import com.cak3d.biscuitmesh.ui.CockpitScreen
 import com.cak3d.biscuitmesh.ui.LandMode
 import com.cak3d.biscuitmesh.ui.LandscapeScreen
 import com.cak3d.biscuitmesh.ui.AirQualityScreen
+import com.cak3d.biscuitmesh.ui.RogueApScreen
 import com.cak3d.biscuitmesh.ui.ScopeScreen
 import com.cak3d.biscuitmesh.ui.TerminalScreen
 import com.cak3d.biscuitmesh.ui.SignalsScreen
@@ -434,6 +435,7 @@ private fun MainShell(vm: MainViewModel) {
                 composable("vision") { VisionScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("weather") { WeatherScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("airquality") { AirQualityScreen(vm = vm, onBack = { nav.popBackStack() }) }
+                composable("rogueap") { RogueApScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("alerts") { AlertsScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("traffic") { TrafficDashboardScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("terrain3d") { LandscapeScreen(vm = vm, onBack = { nav.popBackStack() }, startMode = LandMode.TERRAIN) }
