@@ -2,6 +2,7 @@ package com.cak3d.biscuitmesh.ui
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -23,6 +24,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -62,6 +64,9 @@ private val LAYERS = listOf(
     Triple("Satellites", Color(0xFFFFD166), -0.95f),
 )
 
+/** Which related nodes to wire up when one is selected. */
+private enum class NeighborMode(val label: String) { VENDOR("Vendor"), LAYER("Layer"), OFF("Off") }
+
 /** One plotted contact: layer index, position on its plane, signal 0..1, and its detail. */
 private data class CubeNode(
     val id: String,
@@ -71,6 +76,8 @@ private data class CubeNode(
     val x: Float,
     val z: Float,
     val sub: String,
+    /** Grouping key for cross-layer neighbours: OUI vendor (Wi-Fi/BT) or constellation (sats). */
+    val group: String,
     val detail: List<Pair<String, String>>,
 )
 
@@ -126,6 +133,18 @@ fun DataCubeScreen(vm: MainViewModel, onBack: () -> Unit) {
     var rotX by remember { mutableFloatStateOf(0.5f) }
     var autoSpin by remember { mutableStateOf(true) }
     var selected by remember { mutableStateOf<CubeNode?>(null) }
+    var neighborMode by remember { mutableStateOf(NeighborMode.VENDOR) }
+
+    // Which nodes to wire to the selected one (shared vendor, same layer, or none).
+    val neighborIds = remember(selected, neighborMode, nodes) {
+        val s = selected
+        when {
+            s == null || neighborMode == NeighborMode.OFF -> emptySet()
+            neighborMode == NeighborMode.VENDOR -> if (s.group.isBlank()) emptySet()
+                else nodes.asSequence().filter { it.id != s.id && it.group == s.group }.map { it.id }.toSet()
+            else -> nodes.asSequence().filter { it.id != s.id && it.layer == s.layer }.map { it.id }.toSet()
+        }
+    }
 
     LaunchedEffect(autoSpin) { while (autoSpin) { rotY += 0.004f; delay(33) } }
 
@@ -145,7 +164,9 @@ fun DataCubeScreen(vm: MainViewModel, onBack: () -> Unit) {
                             "of live contacts sized by signal and linked to their nearest neighbour. The cube " +
                             "is drawn as a wireframe so the front and back never hide the sides. Drag to spin; " +
                             "tap a node to read its name, vendor, signal, channel, when it was last seen, when " +
-                            "you first saw it and how many times this session.",
+                            "you first saw it and how many times this session. The LINK control wires a tapped " +
+                            "node to its neighbours — everything from the same vendor across all layers, or " +
+                            "everything on its own layer.",
                     )
                 },
             )
@@ -233,14 +254,33 @@ fun DataCubeScreen(vm: MainViewModel, onBack: () -> Unit) {
                     val p = project(n.x, LAYERS[n.layer].third, n.z); n to p
                 }.sortedBy { it.second.third }
                 val sel = selected
+                val linkCol = sel?.let { LAYERS[it.layer].second }
+
+                // Cross-layer neighbour links fan out from the selected node in its layer colour.
+                if (sel != null && linkCol != null && neighborIds.isNotEmpty()) {
+                    val sp = projected.firstOrNull { it.first.id == sel.id }?.second
+                    if (sp != null) {
+                        projected.forEach { (n, p) ->
+                            if (n.id in neighborIds) {
+                                drawLine(linkCol.copy(alpha = 0.55f), Offset(sp.first, sp.second),
+                                    Offset(p.first, p.second), strokeWidth = 1.5f)
+                            }
+                        }
+                    }
+                }
+
                 projected.forEach { (n, p) ->
                     val tint = LAYERS[n.layer].second
                     val isSel = sel?.id == n.id
-                    val r = (2.5f + n.sig * 6f) * (if (isSel) 1.7f else 1f)
+                    val isNbr = n.id in neighborIds
+                    val r = (2.5f + n.sig * 6f) * (if (isSel) 1.7f else if (isNbr) 1.3f else 1f)
                     drawCircle(tint, radius = r, center = Offset(p.first, p.second))
                     if (isSel) drawCircle(tint.copy(alpha = 0.4f), radius = r + 7f,
                         center = Offset(p.first, p.second),
                         style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2f))
+                    else if (isNbr && linkCol != null) drawCircle(linkCol.copy(alpha = 0.6f), radius = r + 4f,
+                        center = Offset(p.first, p.second),
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.5f))
                     hits.add(Triple(p.first, p.second, n))
                 }
             }
@@ -261,13 +301,38 @@ fun DataCubeScreen(vm: MainViewModel, onBack: () -> Unit) {
                 color = Color(0xFF8A9896), fontFamily = MONO, fontSize = 10.sp,
                 modifier = Modifier.align(Alignment.TopEnd).padding(12.dp))
 
-            selected?.let { n -> NodeCard(n, Modifier.align(Alignment.BottomCenter)) }
+            // Neighbour-link mode — what a tapped node wires to (like the reference's Select Neighbors).
+            Row(
+                Modifier.align(Alignment.TopCenter).padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("LINK", color = Color(0xFF8A9896), fontFamily = MONO, fontSize = 9.sp)
+                NeighborMode.entries.forEach { m ->
+                    val on = neighborMode == m
+                    Surface(
+                        color = if (on) Color(0x33FFD166) else Color(0x1AFFFFFF),
+                        shape = RoundedCornerShape(5.dp),
+                        modifier = Modifier.clickable { neighborMode = m },
+                    ) {
+                        Text(m.label, Modifier.padding(horizontal = 9.dp, vertical = 3.dp),
+                            color = if (on) Color(0xFFFFD166) else Color(0xFFBFC9C7),
+                            fontFamily = MONO, fontSize = 10.sp,
+                            fontWeight = if (on) FontWeight.Bold else FontWeight.Normal)
+                    }
+                }
+            }
+
+            selected?.let { n ->
+                NodeCard(n, if (neighborIds.isNotEmpty()) neighborIds.size else null,
+                    neighborMode, Modifier.align(Alignment.BottomCenter))
+            }
         }
     }
 }
 
 @Composable
-private fun NodeCard(n: CubeNode, modifier: Modifier) {
+private fun NodeCard(n: CubeNode, neighborCount: Int?, mode: NeighborMode, modifier: Modifier) {
     val tint = LAYERS[n.layer].second
     Card(
         modifier = modifier.fillMaxWidth().padding(12.dp)
@@ -284,6 +349,10 @@ private fun NodeCard(n: CubeNode, modifier: Modifier) {
             }
             if (n.sub.isNotBlank()) Text(n.sub, fontFamily = MONO, fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f))
+            if (mode != NeighborMode.OFF && neighborCount != null && neighborCount > 0) {
+                Text("↔ $neighborCount linked by ${mode.label.lowercase()}", fontFamily = MONO, fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold, color = tint)
+            }
             n.detail.forEach { (k, v) ->
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(k, fontFamily = MONO, fontSize = 11.sp,
@@ -338,6 +407,7 @@ private fun buildNodes(
         out.add(CubeNode(
             id = r.id, label = r.label.ifBlank { r.id }, layer = layer, sig = rssiSig(r.rssi), x = x, z = z,
             sub = "${r.rssi} dBm · ch ${r.channel}",
+            group = OuiDb.vendor(r.id) ?: "",
             detail = listOf(
                 "BSSID" to r.id, "vendor" to vendor,
                 "security" to r.security.ifBlank { "—" },
@@ -356,7 +426,7 @@ private fun buildNodes(
             val vendor = OuiDb.vendor(r.id) ?: if (OuiDb.isRandom(r.id)) "randomized" else "unknown"
             out.add(CubeNode(
                 id = r.id, label = r.label.ifBlank { r.id }, layer = 2, sig = rssiSig(r.rssi), x = x, z = z,
-                sub = "${r.rssi} dBm",
+                sub = "${r.rssi} dBm", group = OuiDb.vendor(r.id) ?: "",
                 detail = listOf("MAC" to r.id, "vendor" to vendor, "last seen" to ago(r.lastSeenMs)) +
                     histDetail(history[r.id]),
             ))
@@ -368,6 +438,7 @@ private fun buildNodes(
             id = id, label = "${s.constellation} ${s.svid}", layer = 3,
             sig = (s.cn0 / 48f).coerceIn(0.05f, 1f), x = x, z = z,
             sub = "${s.cn0.toInt()} dB-Hz${if (s.usedInFix) " · in fix" else ""}",
+            group = "sat:${s.constellation}",
             detail = listOf(
                 "constellation" to s.constellation, "svid" to s.svid.toString(),
                 "C/N0" to "${s.cn0.toInt()} dB-Hz", "elevation" to "${s.elevationDeg.toInt()}°",
