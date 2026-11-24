@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Air
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Equalizer
 import androidx.compose.material.icons.filled.Flight
@@ -108,6 +109,7 @@ fun SensorsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
             HubEntry("Alerts & Threats", "Live security feed — NWS warnings for your area, earthquakes & global disasters, tap for detail", Icons.Default.Warning, "alerts", Color(0xFFFF9500)),
             HubEntry("Space Events", "Upcoming rocket launches worldwide with live countdowns, plus the current Kp geomagnetic storm index — native, keyless", Icons.Default.RocketLaunch, "spaceevents", Color(0xFFFFD166)),
             HubEntry("Weather", "Current conditions, animated precipitation radar & the forecast into tomorrow", Icons.Default.Cloud, "weather", Color(0xFF5CB4E8)),
+            HubEntry("Air Quality", "US AQI, the main pollutants near you & the UV index — keyless, your location, with a plain-language health note", Icons.Default.Air, "airquality", Color(0xFF6EE7B7)),
             HubEntry("Live Feeds", "Surveillance cams, scanner audio & traffic webcams near you — all public, consume-only", Icons.Default.Videocam, "feeds", Color(0xFFFF5470)),
         )),
         HubSection("Comms", Color(0xFF00E5A0), Icons.Default.Forum, listOf(
