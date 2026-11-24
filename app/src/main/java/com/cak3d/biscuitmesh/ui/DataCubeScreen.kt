@@ -113,7 +113,12 @@ fun DataCubeScreen(vm: MainViewModel, onBack: () -> Unit) {
     val rows by vm.phoneScanResults.collectAsState()
     val gnss by vm.gnssState.collectAsState()
 
-    val nodes = remember(rows, gnss) { buildNodes(rows, gnss) }
+    // Session sightings history: first/last seen + how many scan cycles each contact appeared in.
+    val history = remember { HashMap<String, Sighting>() }
+    val nodes = remember(rows, gnss) {
+        updateHistory(history, rows, gnss)
+        buildNodes(rows, gnss, history)
+    }
     // Nearest-neighbour edges within each layer (index pairs into [nodes]).
     val edges = remember(nodes) { buildEdges(nodes) }
 
@@ -135,10 +140,12 @@ fun DataCubeScreen(vm: MainViewModel, onBack: () -> Unit) {
                 actions = {
                     HelpButton(
                         "Data Cube",
-                        "Everything the app is hearing, in one rotatable 3D diagram. Four stacked layers — " +
-                            "Wi-Fi 2.4, Wi-Fi 5/6, Bluetooth and satellites — each a plane of live contacts " +
-                            "sized by signal and linked to their nearest neighbour. Drag to spin; tap a node " +
-                            "to read its name, vendor, signal, channel and when it was last seen.",
+                        "Everything the app is hearing, inside one rotatable, see-through 3D cube. Four " +
+                            "stacked layers — Wi-Fi 2.4, Wi-Fi 5/6, Bluetooth and satellites — each a plane " +
+                            "of live contacts sized by signal and linked to their nearest neighbour. The cube " +
+                            "is drawn as a wireframe so the front and back never hide the sides. Drag to spin; " +
+                            "tap a node to read its name, vendor, signal, channel, when it was last seen, when " +
+                            "you first saw it and how many times this session.",
                     )
                 },
             )
@@ -179,6 +186,24 @@ fun DataCubeScreen(vm: MainViewModel, onBack: () -> Unit) {
                     val y1 = y * cx - z1 * sx; val z2 = y * sx + z1 * cx
                     val persp = 1f / (1f + z2 * 0.22f)
                     return Triple(center.x + x1 * scale * persp, center.y - y1 * scale * persp, z2)
+                }
+
+                // The containing cube: 12 edges only (no face fills), so the front and rear are
+                // see-through and you read the layers inside accurately. Near edges draw brighter.
+                val corners = listOf(
+                    Triple(-1f, -1.1f, -1f), Triple(1f, -1.1f, -1f), Triple(1f, -1.1f, 1f), Triple(-1f, -1.1f, 1f),
+                    Triple(-1f, 1.1f, -1f), Triple(1f, 1.1f, -1f), Triple(1f, 1.1f, 1f), Triple(-1f, 1.1f, 1f),
+                ).map { (x, y, z) -> project(x, y, z) }
+                val cubeEdges = listOf(
+                    0 to 1, 1 to 2, 2 to 3, 3 to 0, 4 to 5, 5 to 6, 6 to 7, 7 to 4,
+                    0 to 4, 1 to 5, 2 to 6, 3 to 7,
+                )
+                cubeEdges.forEach { (i, j) ->
+                    val a = corners[i]; val b = corners[j]
+                    val depth = (a.third + b.third) / 2f
+                    val alpha = (0.5f - depth * 0.24f).coerceIn(0.1f, 0.6f)
+                    drawLine(Color(0xFF9FB4C9).copy(alpha = alpha),
+                        Offset(a.first, a.second), Offset(b.first, b.second), strokeWidth = 1.5f)
                 }
 
                 // Planes, back to front.
@@ -274,7 +299,38 @@ private fun NodeCard(n: CubeNode, modifier: Modifier) {
     }
 }
 
-private fun buildNodes(rows: List<PhoneScanRow>, gnss: com.cak3d.biscuitmesh.sensors.GnssSnapshot): List<CubeNode> {
+/** One contact's session history: when first/last seen and how many scan cycles it appeared in. */
+private class Sighting(val firstMs: Long, var lastMs: Long, var count: Int)
+
+/** Fold the current scan into the running session history (one tick per new scan emission). */
+private fun updateHistory(
+    store: MutableMap<String, Sighting>, rows: List<PhoneScanRow>,
+    gnss: com.cak3d.biscuitmesh.sensors.GnssSnapshot,
+) {
+    val now = System.currentTimeMillis()
+    val ids = ArrayList<String>()
+    rows.forEach { if (it.kind == SampleKind.AP || it.kind == SampleKind.BT) ids.add(it.id) }
+    gnss.sats.forEach { if (it.cn0 > 0f) ids.add("${it.constellation}-${it.svid}") }
+    ids.forEach { id ->
+        val s = store[id]
+        if (s == null) store[id] = Sighting(now, now, 1) else { s.lastMs = now; s.count++ }
+    }
+}
+
+private val DATE_FMT = java.text.SimpleDateFormat("MMM d · h:mm a", java.util.Locale.US)
+private fun fmtDate(ms: Long): String = DATE_FMT.format(java.util.Date(ms))
+
+/** Session history rows for a contact's detail card. */
+private fun histDetail(h: Sighting?): List<Pair<String, String>> =
+    if (h == null) emptyList() else listOf(
+        "first seen" to fmtDate(h.firstMs),
+        "times seen" to "${h.count} (session)",
+    )
+
+private fun buildNodes(
+    rows: List<PhoneScanRow>, gnss: com.cak3d.biscuitmesh.sensors.GnssSnapshot,
+    history: Map<String, Sighting>,
+): List<CubeNode> {
     val out = ArrayList<CubeNode>()
     fun wifiNode(r: PhoneScanRow, layer: Int) {
         val (x, z) = hashPos(r.id)
@@ -286,8 +342,8 @@ private fun buildNodes(rows: List<PhoneScanRow>, gnss: com.cak3d.biscuitmesh.sen
                 "BSSID" to r.id, "vendor" to vendor,
                 "security" to r.security.ifBlank { "—" },
                 "band" to if (r.is5GHz) "5/6 GHz" else "2.4 GHz",
-                "seen" to ago(r.lastSeenMs),
-            ),
+                "last seen" to ago(r.lastSeenMs),
+            ) + histDetail(history[r.id]),
         ))
     }
     rows.asSequence().filter { it.kind == SampleKind.AP && it.channel in 1..14 }
@@ -301,7 +357,8 @@ private fun buildNodes(rows: List<PhoneScanRow>, gnss: com.cak3d.biscuitmesh.sen
             out.add(CubeNode(
                 id = r.id, label = r.label.ifBlank { r.id }, layer = 2, sig = rssiSig(r.rssi), x = x, z = z,
                 sub = "${r.rssi} dBm",
-                detail = listOf("MAC" to r.id, "vendor" to vendor, "seen" to ago(r.lastSeenMs)),
+                detail = listOf("MAC" to r.id, "vendor" to vendor, "last seen" to ago(r.lastSeenMs)) +
+                    histDetail(history[r.id]),
             ))
         }
     gnss.sats.asSequence().filter { it.cn0 > 0f }.sortedByDescending { it.cn0 }.take(45).forEach { s ->
@@ -315,7 +372,7 @@ private fun buildNodes(rows: List<PhoneScanRow>, gnss: com.cak3d.biscuitmesh.sen
                 "constellation" to s.constellation, "svid" to s.svid.toString(),
                 "C/N0" to "${s.cn0.toInt()} dB-Hz", "elevation" to "${s.elevationDeg.toInt()}°",
                 "azimuth" to "${s.azimuthDeg.toInt()}°", "in fix" to if (s.usedInFix) "yes" else "no",
-            ),
+            ) + histDetail(history[id]),
         ))
     }
     return out
