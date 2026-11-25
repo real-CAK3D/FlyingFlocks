@@ -56,13 +56,38 @@ import kotlin.math.sin
 
 private val MONO = FontFamily.Monospace
 
-/** The four stacked planes: name, colour, and height (top → bottom). */
-private val LAYERS = listOf(
-    Triple("Wi-Fi 2.4", Color(0xFF5FD36A), 0.95f),
-    Triple("Wi-Fi 5/6", Color(0xFF22D3EE), 0.32f),
-    Triple("Bluetooth", Color(0xFFFF6FA5), -0.32f),
-    Triple("Satellites", Color(0xFFFFD166), -0.95f),
+/**
+ * A layer drawn on one FACE of the cube (top, a side wall, or the bottom) rather than a flat
+ * horizontal slice — so the four layers wrap the cube like the reference multilayer diagram. Each
+ * plane has a centre and two in-plane unit basis vectors (u, v); a node's (x, z) maps onto them.
+ */
+private class LayerPlane(
+    val name: String, val tint: Color,
+    val cx: Float, val cy: Float, val cz: Float,   // plane centre
+    val ux: Float, val uy: Float, val uz: Float,   // in-plane basis u
+    val vx: Float, val vy: Float, val vz: Float,   // in-plane basis v
 )
+
+private val LAYERS = listOf(
+    // Wi-Fi 2.4 — TOP face (y = +1)
+    LayerPlane("Wi-Fi 2.4", Color(0xFF5FD36A), 0f, 1f, 0f, 1f, 0f, 0f, 0f, 0f, 1f),
+    // Wi-Fi 5/6 — LEFT wall (x = -1)
+    LayerPlane("Wi-Fi 5/6", Color(0xFF22D3EE), -1f, 0f, 0f, 0f, 1f, 0f, 0f, 0f, 1f),
+    // Bluetooth — RIGHT wall (x = +1)
+    LayerPlane("Bluetooth", Color(0xFFFF6FA5), 1f, 0f, 0f, 0f, 1f, 0f, 0f, 0f, 1f),
+    // Satellites — BOTTOM face (y = -1)
+    LayerPlane("Satellites", Color(0xFFFFD166), 0f, -1f, 0f, 1f, 0f, 0f, 0f, 0f, 1f),
+)
+
+/** 3D point of a node at plane-local (nx, nz) on its layer's face. */
+private fun nodePoint(layer: Int, nx: Float, nz: Float): FloatArray {
+    val L = LAYERS[layer]
+    return floatArrayOf(
+        L.cx + L.ux * nx + L.vx * nz,
+        L.cy + L.uy * nx + L.vy * nz,
+        L.cz + L.uz * nx + L.vz * nz,
+    )
+}
 
 /** Which related nodes to wire up when one is selected. */
 private enum class NeighborMode(val label: String) { VENDOR("Vendor"), LAYER("Layer"), OFF("Off") }
@@ -160,8 +185,9 @@ fun DataCubeScreen(vm: MainViewModel, onBack: () -> Unit) {
                     HelpButton(
                         "Data Cube",
                         "Everything the app is hearing, inside one rotatable, see-through 3D cube. Four " +
-                            "stacked layers — Wi-Fi 2.4, Wi-Fi 5/6, Bluetooth and satellites — each a plane " +
-                            "of live contacts sized by signal and linked to their nearest neighbour. The cube " +
+                            "layers wrap the cube's faces — Wi-Fi 2.4 on top, Wi-Fi 5/6 and Bluetooth on the " +
+                            "side walls, satellites on the floor — each a plane of live contacts sized by " +
+                            "signal and linked to their nearest neighbour. The cube " +
                             "is drawn as a wireframe so the front and back never hide the sides. Drag to spin; " +
                             "tap a node to read its name, vendor, signal, channel, when it was last seen, when " +
                             "you first saw it and how many times this session. The LINK control wires a tapped " +
@@ -227,15 +253,18 @@ fun DataCubeScreen(vm: MainViewModel, onBack: () -> Unit) {
                         Offset(a.first, a.second), Offset(b.first, b.second), strokeWidth = 1.5f)
                 }
 
-                // Planes, back to front.
-                LAYERS.forEachIndexed { li, (name, tint, y) ->
-                    val c0 = project(-1f, y, -1f); val c1 = project(1f, y, -1f)
-                    val c2 = project(1f, y, 1f); val c3 = project(-1f, y, 1f)
+                fun proj(p: FloatArray) = project(p[0], p[1], p[2])
+
+                // Layer planes — each laid on a cube face (top / left wall / right wall / bottom).
+                for (li in LAYERS.indices) {
+                    val tint = LAYERS[li].tint
+                    val p0 = proj(nodePoint(li, -0.95f, -0.95f)); val p1 = proj(nodePoint(li, 0.95f, -0.95f))
+                    val p2 = proj(nodePoint(li, 0.95f, 0.95f)); val p3 = proj(nodePoint(li, -0.95f, 0.95f))
                     val path = androidx.compose.ui.graphics.Path().apply {
-                        moveTo(c0.first, c0.second); lineTo(c1.first, c1.second)
-                        lineTo(c2.first, c2.second); lineTo(c3.first, c3.second); close()
+                        moveTo(p0.first, p0.second); lineTo(p1.first, p1.second)
+                        lineTo(p2.first, p2.second); lineTo(p3.first, p3.second); close()
                     }
-                    drawPath(path, tint.copy(alpha = 0.05f))
+                    drawPath(path, tint.copy(alpha = 0.06f))
                     drawPath(path, tint.copy(alpha = 0.35f),
                         style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.5f))
                 }
@@ -243,18 +272,17 @@ fun DataCubeScreen(vm: MainViewModel, onBack: () -> Unit) {
                 // Intra-layer edges.
                 edges.forEach { (i, j) ->
                     val a = nodes[i]; val b = nodes[j]
-                    val pa = project(a.x, LAYERS[a.layer].third, a.z)
-                    val pb = project(b.x, LAYERS[b.layer].third, b.z)
-                    drawLine(LAYERS[a.layer].second.copy(alpha = 0.22f),
+                    val pa = proj(nodePoint(a.layer, a.x, a.z))
+                    val pb = proj(nodePoint(b.layer, b.x, b.z))
+                    drawLine(LAYERS[a.layer].tint.copy(alpha = 0.22f),
                         Offset(pa.first, pa.second), Offset(pb.first, pb.second), strokeWidth = 1f)
                 }
 
                 // Nodes, painter-sorted back to front.
-                val projected = nodes.map { n ->
-                    val p = project(n.x, LAYERS[n.layer].third, n.z); n to p
-                }.sortedBy { it.second.third }
+                val projected = nodes.map { n -> n to proj(nodePoint(n.layer, n.x, n.z)) }
+                    .sortedBy { it.second.third }
                 val sel = selected
-                val linkCol = sel?.let { LAYERS[it.layer].second }
+                val linkCol = sel?.let { LAYERS[it.layer].tint }
 
                 // Cross-layer neighbour links fan out from the selected node in its layer colour.
                 if (sel != null && linkCol != null && neighborIds.isNotEmpty()) {
@@ -270,7 +298,7 @@ fun DataCubeScreen(vm: MainViewModel, onBack: () -> Unit) {
                 }
 
                 projected.forEach { (n, p) ->
-                    val tint = LAYERS[n.layer].second
+                    val tint = LAYERS[n.layer].tint
                     val isSel = sel?.id == n.id
                     val isNbr = n.id in neighborIds
                     val r = (2.5f + n.sig * 6f) * (if (isSel) 1.7f else if (isNbr) 1.3f else 1f)
@@ -288,7 +316,8 @@ fun DataCubeScreen(vm: MainViewModel, onBack: () -> Unit) {
             // Layer legend / counts.
             Column(Modifier.align(Alignment.TopStart).padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                LAYERS.forEachIndexed { li, (name, tint, _) ->
+                LAYERS.indices.forEach { li ->
+                    val name = LAYERS[li].name; val tint = LAYERS[li].tint
                     val n = nodes.count { it.layer == li }
                     Row(verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -333,7 +362,7 @@ fun DataCubeScreen(vm: MainViewModel, onBack: () -> Unit) {
 
 @Composable
 private fun NodeCard(n: CubeNode, neighborCount: Int?, mode: NeighborMode, modifier: Modifier) {
-    val tint = LAYERS[n.layer].second
+    val tint = LAYERS[n.layer].tint
     Card(
         modifier = modifier.fillMaxWidth().padding(12.dp)
             .border(1.5.dp, tint.copy(alpha = 0.7f), RoundedCornerShape(16.dp)),
@@ -344,7 +373,7 @@ private fun NodeCard(n: CubeNode, neighborCount: Int?, mode: NeighborMode, modif
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically) {
                 Text(n.label, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = tint)
-                Text(LAYERS[n.layer].first, fontFamily = MONO, fontSize = 11.sp,
+                Text(LAYERS[n.layer].name, fontFamily = MONO, fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
             }
             if (n.sub.isNotBlank()) Text(n.sub, fontFamily = MONO, fontSize = 12.sp,
