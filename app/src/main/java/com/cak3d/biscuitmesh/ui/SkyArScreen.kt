@@ -63,6 +63,7 @@ import com.cak3d.biscuitmesh.geo.CelestialBody
 import com.cak3d.biscuitmesh.geo.SkyStar
 import com.cak3d.biscuitmesh.geo.celestialBodies
 import com.cak3d.biscuitmesh.geo.constellationLines
+import com.cak3d.biscuitmesh.geo.constellationLabels
 import com.cak3d.biscuitmesh.geo.starField
 import kotlinx.coroutines.delay
 import kotlin.math.abs
@@ -284,6 +285,16 @@ fun SkyArScreen(vm: MainViewModel, onBack: () -> Unit) {
                             paint.color = android.graphics.Color.argb(170, 180, 210, 255)
                             drawContext.canvas.nativeCanvas.drawText(s.name, p.x + r + 4f, p.y + 6f, paint)
                         }
+                    }
+                    // Constellation name labels, anchored on each figure's bright central star.
+                    val cName = android.graphics.Paint(paint).apply {
+                        textSize = 21f; color = android.graphics.Color.argb(150, 110, 165, 255)
+                    }
+                    constellationLabels.forEach { (name, idx) ->
+                        val s = stars.getOrNull(idx) ?: return@forEach
+                        if (s.el < 0f) return@forEach
+                        val p = project(s.az, s.el) ?: return@forEach
+                        drawContext.canvas.nativeCanvas.drawText(name, p.x + 10f, p.y - 12f, cName)
                     }
                 }
 

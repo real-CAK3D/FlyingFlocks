@@ -291,6 +291,48 @@ private val BRIGHT_STARS = listOf(
     CatalogStar(191.930, -59.689, 1.25f, "Mimosa"),     // 49
     CatalogStar(183.786, -57.113, 1.59f, "Gacrux"),     // 50
     CatalogStar(187.791, -58.749, 2.79f, "Delta Cru"),  // 51
+    // 52-56 Boötes (the kite), anchored on Arcturus (37)
+    CatalogStar(221.247, 27.074, 2.37f, "Izar"),        // 52
+    CatalogStar(208.671, 18.398, 2.68f, "Muphrid"),     // 53
+    CatalogStar(218.020, 38.308, 3.03f, "Seginus"),     // 54
+    CatalogStar(225.486, 40.390, 3.49f, "Nekkar"),      // 55
+    CatalogStar(228.876, 33.315, 3.46f, "Delta Boo"),   // 56
+    // 57-60 Lyra parallelogram (Vega is 19)
+    CatalogStar(282.520, 33.363, 3.52f, "Sheliak"),     // 57
+    CatalogStar(284.736, 32.690, 3.25f, "Sulafat"),     // 58
+    CatalogStar(283.626, 36.899, 4.30f, "Delta Lyr"),   // 59
+    CatalogStar(282.200, 37.605, 4.36f, "Zeta Lyr"),    // 60
+    // 61-64 Aquila (Altair is 21)
+    CatalogStar(296.565, 10.613, 2.72f, "Tarazed"),     // 61
+    CatalogStar(298.828, 6.407, 3.71f, "Alshain"),      // 62
+    CatalogStar(286.352, 13.863, 2.99f, "Zeta Aql"),    // 63
+    CatalogStar(302.826, -0.821, 3.23f, "Theta Aql"),   // 64
+    // 65-68 Canis Major (Sirius is 35)
+    CatalogStar(95.675, -17.956, 1.98f, "Mirzam"),      // 65
+    CatalogStar(107.098, -26.393, 1.83f, "Wezen"),      // 66
+    CatalogStar(104.656, -28.972, 1.50f, "Adhara"),     // 67
+    CatalogStar(111.024, -29.303, 2.45f, "Aludra"),     // 68
+    // 69-74 Pegasus (Great Square) + Andromeda
+    CatalogStar(346.190, 15.205, 2.48f, "Markab"),      // 69
+    CatalogStar(345.944, 28.083, 2.42f, "Scheat"),      // 70
+    CatalogStar(3.309, 15.184, 2.83f, "Algenib"),       // 71
+    CatalogStar(2.097, 29.090, 2.06f, "Alpheratz"),     // 72
+    CatalogStar(17.433, 35.620, 2.05f, "Mirach"),       // 73
+    CatalogStar(30.975, 42.330, 2.10f, "Almach"),       // 74
+    // 75-76 Perseus
+    CatalogStar(51.081, 49.861, 1.79f, "Mirfak"),       // 75
+    CatalogStar(47.042, 40.956, 2.12f, "Algol"),        // 76
+    // 77-79 Auriga pentagon (Capella 39, Elnath 44)
+    CatalogStar(89.882, 44.947, 1.90f, "Menkalinan"),   // 77
+    CatalogStar(89.930, 37.213, 2.62f, "Mahasim"),      // 78
+    CatalogStar(74.248, 33.166, 2.69f, "Hassaleh"),     // 79
+    // 80-85 Sagittarius (the Teapot)
+    CatalogStar(276.043, -34.385, 1.85f, "Kaus Austr."),// 80
+    CatalogStar(283.816, -26.297, 2.05f, "Nunki"),      // 81
+    CatalogStar(275.248, -29.828, 2.70f, "Kaus Media"), // 82
+    CatalogStar(276.993, -25.421, 2.81f, "Kaus Bor."),  // 83
+    CatalogStar(285.653, -29.880, 2.60f, "Ascella"),    // 84
+    CatalogStar(281.414, -26.990, 3.17f, "Phi Sgr"),    // 85
 )
 
 /** Index pairs into [BRIGHT_STARS] that draw the stick-figure of each constellation. */
@@ -311,4 +353,30 @@ val constellationLines: List<Pair<Int, Int>> = listOf(
     41 to 42,
     // Crux
     48 to 50, 49 to 51,
+    // Boötes (kite): Arcturus at the base
+    37 to 53, 37 to 52, 52 to 56, 56 to 55, 55 to 54, 54 to 37,
+    // Lyra: Vega + parallelogram
+    19 to 60, 19 to 59, 60 to 57, 59 to 58, 57 to 58,
+    // Aquila: the eagle's line + wings
+    61 to 21, 21 to 62, 21 to 63, 21 to 64,
+    // Canis Major: head to tail
+    35 to 67, 67 to 66, 66 to 68, 35 to 65,
+    // Pegasus Great Square + Andromeda chain
+    69 to 70, 70 to 72, 72 to 71, 71 to 69, 72 to 73, 73 to 74,
+    // Perseus
+    74 to 75, 75 to 76,
+    // Auriga pentagon
+    39 to 77, 77 to 78, 78 to 44, 44 to 79, 79 to 39,
+    // Sagittarius Teapot
+    80 to 82, 82 to 83, 83 to 85, 85 to 81, 81 to 84, 84 to 80,
+    // Taurus horn (Aldebaran → Elnath)
+    43 to 44,
+)
+
+/** Constellation name + the catalog-star index to anchor its label on (a bright central star). */
+val constellationLabels: List<Pair<String, Int>> = listOf(
+    "ORION" to 4, "BIG DIPPER" to 10, "CASSIOPEIA" to 16, "CYGNUS" to 22, "LEO" to 28,
+    "SCORPIUS" to 31, "GEMINI" to 42, "CRUX" to 50, "BOÖTES" to 52, "LYRA" to 19,
+    "AQUILA" to 21, "CANIS MAJOR" to 66, "PEGASUS" to 69, "ANDROMEDA" to 73, "PERSEUS" to 75,
+    "AURIGA" to 77, "SAGITTARIUS" to 82, "TAURUS" to 43,
 )
