@@ -102,6 +102,7 @@ import com.cak3d.biscuitmesh.ui.LightMapScreen
 import com.cak3d.biscuitmesh.ui.RogueApScreen
 import com.cak3d.biscuitmesh.ui.ScopeScreen
 import com.cak3d.biscuitmesh.ui.SiteSurveyScreen
+import com.cak3d.biscuitmesh.ui.VisiblePassesScreen
 import com.cak3d.biscuitmesh.ui.TerminalScreen
 import com.cak3d.biscuitmesh.ui.SignalsScreen
 import com.cak3d.biscuitmesh.ui.SignalsView
@@ -457,6 +458,7 @@ private fun MainShell(vm: MainViewModel) {
                 composable("lightmap") { LightMapScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("sitesurvey") { SiteSurveyScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("spaceevents") { SpaceEventsScreen(vm = vm, onBack = { nav.popBackStack() }) }
+                composable("visiblepasses") { VisiblePassesScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("cockpit/{hex}") { entry ->
                     CockpitScreen(vm = vm, hex = entry.arguments?.getString("hex") ?: "", onBack = { nav.popBackStack() })
                 }
