@@ -20,16 +20,23 @@ class TleClient {
         private const val BASE = "https://celestrak.org/NORAD/elements/gp.php?FORMAT=tle&GROUP="
     }
 
-    /** Fetch (or return cached) TLEs for a Celestrak group. Empty list on failure. */
+    /** Fetch (or return cached) TLEs for a Celestrak group. Retries a couple of times before giving
+     *  up, since Celestrak occasionally rate-limits or returns a transient error page. */
     suspend fun group(name: String): List<Tle> = withContext(Dispatchers.IO) {
         cache[name]?.let { return@withContext it }
-        val parsed = runCatching {
-            val conn = (URL(BASE + name).openConnection() as HttpURLConnection).apply {
-                connectTimeout = 15000; readTimeout = 20000
-                setRequestProperty("User-Agent", "FlockedUp-OrbitGlobe")
-            }
-            conn.inputStream.bufferedReader().use { it.readText() }
-        }.getOrNull()?.let(::parse).orEmpty()
+        var parsed: List<Tle> = emptyList()
+        for (attempt in 0 until 3) {
+            val txt = runCatching {
+                val conn = URL(BASE + name).openConnection() as HttpURLConnection
+                conn.connectTimeout = 15000; conn.readTimeout = 20000; conn.instanceFollowRedirects = true
+                conn.setRequestProperty("User-Agent", "FlockedUp-OrbitGlobe")
+                conn.setRequestProperty("Accept", "text/plain")
+                if (conn.responseCode in 200..299) conn.inputStream.bufferedReader().use { it.readText() } else null
+            }.getOrNull()
+            parsed = txt?.let(::parse).orEmpty()
+            if (parsed.isNotEmpty()) break
+            kotlinx.coroutines.delay(1200)
+        }
         if (parsed.isNotEmpty()) cache[name] = parsed
         parsed
     }

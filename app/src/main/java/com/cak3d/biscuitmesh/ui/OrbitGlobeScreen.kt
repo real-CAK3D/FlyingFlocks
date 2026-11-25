@@ -138,6 +138,18 @@ fun OrbitGlobeScreen(vm: MainViewModel, onBack: () -> Unit) {
             passComputing = false
         }
     }
+    // Forward ground-track of the selected satellite — ~100 min of its orbit as a line on the globe.
+    var track by remember { mutableStateOf<List<DoubleArray>>(emptyList()) }
+    LaunchedEffect(selected?.tle?.noradId) {
+        val s = selected
+        track = if (s == null) emptyList()
+        else withContext(Dispatchers.Default) {
+            val base = System.currentTimeMillis()
+            (0..100 step 2).mapNotNull { m ->
+                Sgp4.geoNow(s.tle, base + m * 60_000L)?.let { doubleArrayOf(it.latDeg, it.lonDeg) }
+            }
+        }
+    }
     // Idle auto-spin (30 fps — lighter now the globe draws coastlines each frame).
     androidx.compose.runtime.LaunchedEffect(autoSpin) {
         while (autoSpin) { rotY += 0.005f; delay(33) }
@@ -260,6 +272,20 @@ fun OrbitGlobeScreen(vm: MainViewModel, onBack: () -> Unit) {
                     if (p.third > 0) {
                         drawCircle(Color(0xFFFFD166), radius = 5f, center = Offset(p.first, p.second))
                         drawCircle(Color(0xFFFFD166).copy(alpha = 0.3f), radius = 11f, center = Offset(p.first, p.second), style = Stroke(width = 2f))
+                    }
+                }
+
+                // Ground track of the selected satellite — its orbit path across the surface.
+                if (track.isNotEmpty()) {
+                    val tcol = selected?.let { classColor(it.orbitClass) } ?: Color(0xFFFFD166)
+                    var prev: Triple<Float, Float, Float>? = null
+                    track.forEach { pt ->
+                        val p = project(pt[0], pt[1], r * 1.004f)
+                        val pv = prev
+                        if (pv != null && p.third > 0f && pv.third > 0f) {
+                            drawLine(tcol.copy(alpha = 0.7f), Offset(pv.first, pv.second), Offset(p.first, p.second), strokeWidth = 1.6f)
+                        }
+                        prev = p
                     }
                 }
 
