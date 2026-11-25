@@ -294,8 +294,12 @@ private fun RadarContent(heading: Float, sweep: Float, results: List<PhoneScanRo
                 val frac = (1f - strength) * 0.92f + 0.06f
                 val ang = ((r.id.hashCode() % 360) + 360) % 360
                 val p = pos(ang.toFloat(), frac)
-                var diff = abs(((ang - sweep + 540) % 360) - 180)
-                val glow = (1f - (diff / 60f)).coerceIn(0f, 1f)
+                // Signed lead angle: positive while the beam is still approaching the blip,
+                // negative once it has swept past. Light the blip BEFORE the line reaches it
+                // (long approach ramp) and let it fade fast behind the beam (short tail).
+                val lead = ((ang - sweep + 540) % 360) - 180
+                val glow = if (lead >= 0f) (1f - lead / 72f).coerceIn(0f, 1f)
+                           else (1f + lead / 16f).coerceIn(0f, 1f)
                 val c = blipColor(r.kind)
                 drawCircle(c.copy(alpha = 0.3f + glow * 0.6f), 5f + glow * 5f, p)
             }
