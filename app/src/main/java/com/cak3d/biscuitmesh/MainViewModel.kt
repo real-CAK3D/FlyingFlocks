@@ -223,6 +223,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private var lastGeoLon = 0.0
     private val visitedTowns = HashSet<String>()
 
+    init {
+        viewModelScope.launch { runCatching { visitedTowns.addAll(appRef.settingsStore.visitedTowns.first()) } }
+    }
+
+    /** How many distinct towns you've ever been in. */
+    val townsVisited: StateFlow<Int> =
+        appRef.settingsStore.visitedTowns.map { it.size }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
     /**
      * Emits a [BoundaryCrossing] whenever the operator drives into a new town, county or state.
      * Reverse-geocodes the live fix (throttled to ~150 m / 20 s) and only fires on a real change,
@@ -239,15 +247,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val place = reverseGeocode(lat, lon) ?: return@mapNotNull null
             val prev = lastPlace
             lastPlace = place
-            if (prev == null) { if (place.town.isNotBlank()) visitedTowns.add(place.town); return@mapNotNull null }
+            if (prev == null) {
+                if (place.town.isNotBlank() && visitedTowns.add(place.town)) appRef.settingsStore.addVisitedTown(place.town)
+                return@mapNotNull null
+            }
             val firstVisit = place.town.isNotBlank() && visitedTowns.add(place.town)
+            if (firstVisit) appRef.settingsStore.addVisitedTown(place.town)
+            val count = visitedTowns.size
             when {
                 place.state.isNotBlank() && place.state != prev.state ->
-                    BoundaryCrossing("state", place.state, place, firstVisit)
+                    BoundaryCrossing("state", place.state, place, firstVisit, count)
                 place.county.isNotBlank() && place.county != prev.county ->
-                    BoundaryCrossing("county", place.county, place, firstVisit)
+                    BoundaryCrossing("county", place.county, place, firstVisit, count)
                 place.town.isNotBlank() && place.town != prev.town ->
-                    BoundaryCrossing("town", place.town, place, firstVisit)
+                    BoundaryCrossing("town", place.town, place, firstVisit, count)
                 else -> null
             }
         }.flowOn(Dispatchers.IO)
@@ -1122,4 +1135,5 @@ data class BoundaryCrossing(
     val label: String,
     val place: PlaceContext,
     val firstVisit: Boolean,
+    val townCount: Int = 0,
 )

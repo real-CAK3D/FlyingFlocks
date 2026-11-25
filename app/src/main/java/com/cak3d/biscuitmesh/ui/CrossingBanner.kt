@@ -71,7 +71,8 @@ fun CrossingBanner(crossing: BoundaryCrossing, onDismiss: () -> Unit) {
                 if (crossing.firstVisit) {
                     Surface(color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.16f),
                         shape = RoundedCornerShape(6.dp)) {
-                        Text("★ NEW", Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        Text(if (crossing.townCount > 0) "★ TOWN #${crossing.townCount}" else "★ NEW",
+                            Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                             fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace,
                             color = MaterialTheme.colorScheme.onPrimaryContainer)
                     }

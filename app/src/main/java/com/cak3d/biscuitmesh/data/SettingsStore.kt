@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -31,6 +32,7 @@ class SettingsStore(private val context: Context) {
     private val keepAwakeKey = booleanPreferencesKey("keep_awake")
     private val vibrateAlertsKey = booleanPreferencesKey("vibrate_alerts")
     private val crossingAlertsKey = booleanPreferencesKey("crossing_alerts")
+    private val visitedTownsKey = stringSetPreferencesKey("visited_towns")
     private val wigleAuthKey = stringPreferencesKey("wigle_auth")
     private val sbSessionKey = stringPreferencesKey("sb_session_json")
     private val crewShareKey = booleanPreferencesKey("crew_share_location")
@@ -217,6 +219,15 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setTourSeen() {
         context.settingsDataStore.edit { it[tourSeenKey] = true }
+    }
+
+    /** Every town the operator has ever been seen in, for the "first time here" badge + tally. */
+    val visitedTowns: Flow<Set<String>> =
+        context.settingsDataStore.data.map { it[visitedTownsKey] ?: emptySet() }
+
+    suspend fun addVisitedTown(town: String) {
+        if (town.isBlank()) return
+        context.settingsDataStore.edit { it[visitedTownsKey] = (it[visitedTownsKey] ?: emptySet()) + town }
     }
 
     /** Announce when you drive into a new town, county or state. On by default. */
