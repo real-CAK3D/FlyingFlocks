@@ -337,9 +337,11 @@ fun DataCubeScreen(vm: MainViewModel, onBack: () -> Unit) {
                     }
                 }
             }
-            Text("${nodes.size} contacts · drag to spin · tap a node",
-                color = Color(0xFF8A9896), fontFamily = MONO, fontSize = 10.sp,
-                modifier = Modifier.align(Alignment.TopEnd).padding(12.dp))
+            if (selected == null) {
+                Text("${nodes.size} contacts · drag to spin · tap a node",
+                    color = Color(0xFF8A9896), fontFamily = MONO, fontSize = 10.sp,
+                    modifier = Modifier.align(Alignment.BottomStart).padding(12.dp))
+            }
 
             // Neighbour-link mode — what a tapped node wires to (like the reference's Select Neighbors).
             Row(
