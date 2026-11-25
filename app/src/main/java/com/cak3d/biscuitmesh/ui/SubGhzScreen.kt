@@ -225,6 +225,11 @@ fun SubGhzScreen(vm: MainViewModel, onOpenMap: () -> Unit, onOpenSaved: () -> Un
 }
         }
 
+        // Always-on band spectrum — the 300–960 MHz ISM span with live CC1101 peaks.
+        Text("BAND SPECTRUM", style = MaterialTheme.typography.labelMedium, color = RF_AMBER,
+            fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+        SubGhzBandSpectrum(hits, now)
+
         // Fine-sweep spectrum + waterfall from the T-Embed's Waterfall / Full-Band action.
         if (sweeps.isNotEmpty()) {
             Text("SPECTRUM", style = MaterialTheme.typography.labelMedium, color = RF_AMBER,
@@ -378,6 +383,69 @@ fun SubGhzScreen(vm: MainViewModel, onOpenMap: () -> Unit, onOpenSaved: () -> Un
             },
             dismissButton = { androidx.compose.material3.TextButton(onClick = { txConfirm = null }) { Text("Cancel") } },
         )
+    }
+}
+
+/**
+ * Sub-GHz's own, always-on spectrum: a frequency-domain trace across the 300–960 MHz ISM span. The
+ * four common bands (315/433/868/915) are shaded with dashed markers, and every recent CC1101 hit
+ * raises a peak at its frequency, height by signal, fading with age — a spectrum-analyser look,
+ * distinct from the Wi-Fi channel arches and the fine-sweep waterfall above.
+ */
+@Composable
+private fun SubGhzBandSpectrum(hits: List<RfHit>, now: Long) {
+    Card(
+        Modifier.fillMaxWidth(),
+        shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF0A0604)),
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            val recent = hits.filter { now - it.timeMs < 60_000L }
+            Text(
+                if (recent.isEmpty()) "300–960 MHz · waiting for the CC1101" else "300–960 MHz · ${recent.size} live peaks",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+            )
+            androidx.compose.foundation.Canvas(Modifier.fillMaxWidth().height(130.dp)) {
+                val w = size.width; val h = size.height; val base = h - 12f
+                val fMin = 300f; val span = 660f
+                fun x(mhz: Float) = (mhz - fMin) / span * w
+                RF_BANDS.forEach { b ->
+                    val bx = x(b.centerMhz.toFloat())
+                    drawRect(RF_AMBER.copy(alpha = 0.06f),
+                        topLeft = androidx.compose.ui.geometry.Offset(bx - 11f, 0f),
+                        size = androidx.compose.ui.geometry.Size(22f, base))
+                    var yy = 0f
+                    while (yy < base) {
+                        drawLine(RF_AMBER.copy(alpha = 0.28f),
+                            androidx.compose.ui.geometry.Offset(bx, yy),
+                            androidx.compose.ui.geometry.Offset(bx, yy + 5f), 1f)
+                        yy += 10f
+                    }
+                }
+                drawLine(RF_AMBER.copy(alpha = 0.4f),
+                    androidx.compose.ui.geometry.Offset(0f, base),
+                    androidx.compose.ui.geometry.Offset(w, base), 1.5f)
+                recent.forEach { hit ->
+                    val px = x(hit.freq.toFloat()).coerceIn(0f, w)
+                    val age = (now - hit.timeMs) / 60_000f
+                    val strength = ((hit.rssi + 110f) / 80f).coerceIn(0.1f, 1f)
+                    val ph = (base - 6f) * strength
+                    val a = (1f - age) * 0.85f
+                    drawLine(RF_AMBER.copy(alpha = a),
+                        androidx.compose.ui.geometry.Offset(px, base),
+                        androidx.compose.ui.geometry.Offset(px, base - ph), 2.5f)
+                    drawCircle(RF_AMBER.copy(alpha = (a + 0.15f).coerceAtMost(1f)), 2.8f,
+                        androidx.compose.ui.geometry.Offset(px, base - ph))
+                }
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                RF_BANDS.forEach { b ->
+                    Text(b.mhz, style = MaterialTheme.typography.labelSmall,
+                        color = RF_AMBER.copy(alpha = 0.8f), fontFamily = FontFamily.Monospace)
+                }
+            }
+        }
     }
 }
 

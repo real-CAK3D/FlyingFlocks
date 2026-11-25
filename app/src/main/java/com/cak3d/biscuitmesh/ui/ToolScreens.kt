@@ -206,6 +206,7 @@ fun BluetoothScreen(vm: MainViewModel, onOpenTool: (String) -> Unit, onLocate: (
             )
         }
         if (devs.isNotEmpty()) item("search") { SearchField(query, { query = it }, BT_BLUE) }
+        if (devs.isNotEmpty()) item("btspec") { BtSpectrumCard(devs, BT_BLUE) }
         if (devs.isNotEmpty()) item("priv") { PrivacyCard(devs, BT_BLUE) }
         if (devs.isNotEmpty()) {
             item("ld") { SectionLabel("DEVICES · ${shown.size}", BT_BLUE) }
@@ -566,6 +567,64 @@ private fun ArchChart(nets: List<PhoneScanRow>, chMin: Float, chMax: Float, half
             }
             drawPath(p, col.copy(alpha = 0.28f))
             drawPath(p, col, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2f))
+        }
+    }
+}
+
+/**
+ * Bluetooth's own spectrum: a signal-strength DENSITY RIDGE. BLE devices carry no channel, so
+ * instead of per-channel arches this plots how many devices sit at each RSSI — a smooth mountain
+ * from far/weak (left) to near/strong (right), with every device a glowing dot on the floor.
+ */
+@Composable
+private fun BtSpectrumCard(devs: List<PhoneScanRow>, accent: Color) {
+    val buckets = 28
+    val lo = -100f; val hi = -30f
+    val counts = IntArray(buckets)
+    devs.forEach {
+        val f = ((it.rssi - lo) / (hi - lo)).coerceIn(0f, 0.999f)
+        counts[(f * buckets).toInt()]++
+    }
+    val maxC = (counts.maxOrNull() ?: 1).coerceAtLeast(1)
+    Card(
+        Modifier.fillMaxWidth(),
+        shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF05080A)),
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("SIGNAL SPECTRUM · ${devs.size} devices", style = MaterialTheme.typography.labelMedium,
+                color = accent, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+            Text("density by signal · left = far / weak · right = near / strong",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+            Canvas(Modifier.fillMaxWidth().height(120.dp)) {
+                val w = size.width; val h = size.height; val base = h - 12f
+                val norm = FloatArray(buckets) { counts[it].toFloat() / maxC }
+                val sm = FloatArray(buckets) { i ->
+                    val a = norm[(i - 1).coerceAtLeast(0)]; val b = norm[i]; val c = norm[(i + 1).coerceAtMost(buckets - 1)]
+                    a * 0.25f + b * 0.5f + c * 0.25f
+                }
+                for (g in 0..3) {
+                    val gy = base - (base - 6f) * g / 3f
+                    drawLine(Color.White.copy(alpha = 0.06f), Offset(0f, gy), Offset(w, gy), 1f)
+                }
+                val line = Path(); val fill = Path()
+                for (i in 0 until buckets) {
+                    val px = i / (buckets - 1f) * w
+                    val py = base - sm[i] * (base - 8f)
+                    if (i == 0) { line.moveTo(px, py); fill.moveTo(px, base); fill.lineTo(px, py) }
+                    else { line.lineTo(px, py); fill.lineTo(px, py) }
+                }
+                fill.lineTo(w, base); fill.close()
+                drawPath(fill, accent.copy(alpha = 0.18f))
+                drawPath(line, accent, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2f))
+                drawLine(accent.copy(alpha = 0.3f), Offset(0f, base), Offset(w, base), 1.5f)
+                devs.forEach { d ->
+                    val f = ((d.rssi - lo) / (hi - lo)).coerceIn(0f, 1f)
+                    val s = ((d.rssi + 95f) / 65f).coerceIn(0.1f, 1f)
+                    drawCircle(accent.copy(alpha = 0.25f + 0.55f * s), radius = 2f + 2f * s,
+                        center = Offset(f * w, base - 2f))
+                }
+            }
         }
     }
 }
