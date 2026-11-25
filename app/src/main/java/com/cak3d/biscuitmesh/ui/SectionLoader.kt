@@ -46,8 +46,11 @@ import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.sqrt
 
-/** The distinct loader animation a hub section shows while a selection opens. */
-enum class LoaderTheme { NETWORK, RADAR, EQUALIZER, ORBIT, SONAR, BROADCAST, BARS, GEARS }
+/** The distinct loader animation a selection shows while it opens. */
+enum class LoaderTheme {
+    NETWORK, RADAR, EQUALIZER, ORBIT, SONAR, BROADCAST, BARS, GEARS,
+    WAVEFORM, HELIX, PULSAR, RIPPLE, RINGS, COMET, SPIRAL,
+}
 
 private const val TAU = (2 * PI).toFloat()
 
@@ -127,6 +130,13 @@ fun SectionLoader(
                         LoaderTheme.BROADCAST -> drawBroadcast(accent, pulse, c, r)
                         LoaderTheme.BARS -> drawBars(accent, phase, c, r)
                         LoaderTheme.GEARS -> drawGears(accent, spin, c, r)
+                        LoaderTheme.WAVEFORM -> drawWaveform(accent, phase, c, r)
+                        LoaderTheme.HELIX -> drawHelix(accent, spin, c, r)
+                        LoaderTheme.PULSAR -> drawPulsar(accent, spin, pulse, c, r)
+                        LoaderTheme.RIPPLE -> drawRipple(accent, pulse, c, r)
+                        LoaderTheme.RINGS -> drawRings(accent, spin, c, r)
+                        LoaderTheme.COMET -> drawComet(accent, spin, c, r)
+                        LoaderTheme.SPIRAL -> drawSpiral(accent, spin, c, r)
                     }
                 }
                 Icon(icon, contentDescription = null, tint = accent.copy(alpha = breathe), modifier = Modifier.size(28.dp))
@@ -307,6 +317,121 @@ private fun DrawScope.gear(accent: Color, center: Offset, radius: Float, teeth: 
                 size = Size(tooth, tooth), cornerRadius = CornerRadius(1.5f))
         }
     }
+}
+
+/** A scrolling audio waveform. */
+private fun DrawScope.drawWaveform(accent: Color, phase: Float, c: Offset, r: Float) {
+    val w = r * 1.9f; val left = c.x - w / 2f
+    val line = Path(); val fill = Path()
+    val n = 60
+    for (i in 0..n) {
+        val t = i / n.toFloat()
+        val env = sin(t * PI.toFloat())                       // taper at the ends
+        val y = c.y - sin(t * TAU * 3f - phase * TAU) * r * 0.55f * env
+        val x = left + t * w
+        if (i == 0) { line.moveTo(x, y); fill.moveTo(x, c.y); fill.lineTo(x, y) }
+        else { line.lineTo(x, y); fill.lineTo(x, y) }
+    }
+    fill.lineTo(left + w, c.y); fill.close()
+    drawPath(fill, accent.copy(alpha = 0.12f))
+    drawPath(line, accent, style = Stroke(width = 2.2f))
+    drawLine(accent.copy(alpha = 0.25f), Offset(left, c.y), Offset(left + w, c.y))
+}
+
+/** A rotating DNA-style double helix. */
+private fun DrawScope.drawHelix(accent: Color, spin: Float, c: Offset, r: Float) {
+    val n = 22; val h = r * 1.7f
+    var prevA: Offset? = null; var prevB: Offset? = null
+    for (i in 0..n) {
+        val t = i / n.toFloat()
+        val y = c.y - h / 2f + t * h
+        val ph = t * TAU * 2f + spin
+        val xa = c.x + cos(ph) * r * 0.5f
+        val xb = c.x + cos(ph + PI.toFloat()) * r * 0.5f
+        val za = sin(ph)
+        val a = Offset(xa, y); val b = Offset(xb, y)
+        if (i % 2 == 0) drawLine(accent.copy(alpha = 0.3f), a, b, strokeWidth = 1f)
+        drawCircle(accent.copy(alpha = 0.45f + 0.5f * ((za + 1f) / 2f)), 3.2f, a)
+        drawCircle(accent.copy(alpha = 0.45f + 0.5f * ((-za + 1f) / 2f)), 3.2f, b)
+        prevA?.let { drawLine(accent.copy(alpha = 0.5f), it, a, 1.5f) }
+        prevB?.let { drawLine(accent.copy(alpha = 0.5f), it, b, 1.5f) }
+        prevA = a; prevB = b
+    }
+}
+
+/** A spinning pulsar — rays sweeping out of a bright core plus an expanding ring. */
+private fun DrawScope.drawPulsar(accent: Color, spin: Float, pulse: Float, c: Offset, r: Float) {
+    for (k in 0 until 8) {
+        val a = spin + k * TAU / 8f
+        drawLine(accent.copy(alpha = 0.12f + 0.3f * ((k % 3) / 3f)), c,
+            Offset(c.x + cos(a) * r, c.y + sin(a) * r), strokeWidth = 2f)
+    }
+    val p = pulse % 1f
+    drawCircle(accent.copy(alpha = (1f - p) * 0.5f), radius = p * r, center = c, style = Stroke(2f))
+    drawCircle(accent.copy(alpha = 0.3f), radius = r * 0.16f, center = c)
+    drawCircle(accent, radius = r * 0.09f, center = c)
+}
+
+/** A grid of dots doing a radial ripple from the centre. */
+private fun DrawScope.drawRipple(accent: Color, pulse: Float, c: Offset, r: Float) {
+    val step = r * 0.3f
+    var y = c.y - r
+    while (y <= c.y + r) {
+        var x = c.x - r
+        while (x <= c.x + r) {
+            val dx = x - c.x; val dy = y - c.y
+            val dist = sqrt(dx * dx + dy * dy)
+            if (dist <= r) {
+                val wave = sin(dist / r * 6f - pulse * TAU)
+                val lum = (wave + 1f) / 2f
+                drawCircle(accent.copy(alpha = 0.2f + 0.7f * lum), radius = 1.4f + 2.2f * lum, center = Offset(x, y))
+            }
+            x += step
+        }
+        y += step
+    }
+}
+
+/** Three concentric arc spinners at different speeds. */
+private fun DrawScope.drawRings(accent: Color, spin: Float, c: Offset, r: Float) {
+    val radii = floatArrayOf(0.95f, 0.68f, 0.42f)
+    radii.forEachIndexed { i, rf ->
+        val rad = r * rf
+        val start = Math.toDegrees((spin * (1f + i * 0.6f) * (if (i % 2 == 0) 1f else -1f)).toDouble()).toFloat()
+        drawCircle(accent.copy(alpha = 0.1f), radius = rad, center = c, style = Stroke(2f))
+        drawArc(accent.copy(alpha = 0.9f - i * 0.2f), startAngle = start, sweepAngle = 90f, useCenter = false,
+            topLeft = Offset(c.x - rad, c.y - rad), size = Size(rad * 2, rad * 2), style = Stroke(3f))
+    }
+    drawCircle(accent, radius = r * 0.08f, center = c)
+}
+
+/** Dots orbiting the centre with fading trails. */
+private fun DrawScope.drawComet(accent: Color, spin: Float, c: Offset, r: Float) {
+    val orbits = floatArrayOf(0.9f, 0.62f, 0.38f)
+    orbits.forEachIndexed { i, rf ->
+        val rad = r * rf
+        drawCircle(accent.copy(alpha = 0.08f), radius = rad, center = c, style = Stroke(1f))
+        val base = spin * (1f + i * 0.4f) * (if (i % 2 == 0) 1f else -1f)
+        for (t in 0 until 10) {
+            val a = base - t * 0.09f
+            val o = Offset(c.x + cos(a) * rad, c.y + sin(a) * rad)
+            drawCircle(accent.copy(alpha = (1f - t / 10f) * 0.8f), radius = (3.5f - t * 0.25f).coerceAtLeast(0.5f), center = o)
+        }
+    }
+    drawCircle(accent, radius = r * 0.09f, center = c)
+}
+
+/** A rotating galaxy spiral of dots. */
+private fun DrawScope.drawSpiral(accent: Color, spin: Float, c: Offset, r: Float) {
+    val n = 60
+    for (i in 0 until n) {
+        val t = i / n.toFloat()
+        val ang = t * TAU * 2.4f + spin
+        val rad = t * r
+        val o = Offset(c.x + cos(ang) * rad, c.y + sin(ang) * rad)
+        drawCircle(accent.copy(alpha = 0.25f + 0.65f * t), radius = 1.2f + 2.4f * t, center = o)
+    }
+    drawCircle(accent, radius = r * 0.07f, center = c)
 }
 
 /**

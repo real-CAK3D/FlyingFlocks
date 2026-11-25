@@ -85,6 +85,29 @@ private data class HubSection(val title: String, val accent: Color, val loaderIc
 /** A card tap that is showing its own loading screen before the route opens. */
 private data class PendingOpen(val route: String, val label: String, val accent: Color, val icon: ImageVector, val seed: Int, val theme: LoaderTheme)
 
+// Each SELECTION gets its own loader, not just each category: a curated theme where one fits, and a
+// deterministic hash over all themes otherwise, so no two neighbours look the same.
+private val LOADER_THEMES = LoaderTheme.entries
+private val LOADER_OVERRIDES: Map<String, LoaderTheme> = mapOf(
+    "datacube" to LoaderTheme.NETWORK, "ledger" to LoaderTheme.NETWORK,
+    "orbitglobe" to LoaderTheme.ORBIT, "orbit" to LoaderTheme.ORBIT, "satellites" to LoaderTheme.ORBIT,
+    "radar" to LoaderTheme.RADAR, "watchlist" to LoaderTheme.RADAR,
+    "rogueap" to LoaderTheme.SONAR, "alerts" to LoaderTheme.SONAR,
+    "trackers" to LoaderTheme.PULSAR, "remote" to LoaderTheme.PULSAR, "hunts" to LoaderTheme.PULSAR,
+    "signals" to LoaderTheme.EQUALIZER, "collect" to LoaderTheme.EQUALIZER,
+    "skyar" to LoaderTheme.SPIRAL, "terrain3d" to LoaderTheme.SPIRAL,
+    "skyconditions" to LoaderTheme.RINGS, "tiredash" to LoaderTheme.RINGS, "targets" to LoaderTheme.RINGS,
+    "lightmap" to LoaderTheme.RIPPLE, "weather" to LoaderTheme.RIPPLE,
+    "airquality" to LoaderTheme.WAVEFORM, "squawk" to LoaderTheme.WAVEFORM,
+    "vision" to LoaderTheme.HELIX, "whisper" to LoaderTheme.HELIX,
+    "spaceevents" to LoaderTheme.COMET, "crew" to LoaderTheme.COMET, "feeds" to LoaderTheme.COMET,
+    "meshchat" to LoaderTheme.BROADCAST,
+    "globalstats" to LoaderTheme.BARS,
+    "games" to LoaderTheme.GEARS, "labbench" to LoaderTheme.GEARS,
+)
+private fun themeFor(route: String): LoaderTheme =
+    LOADER_OVERRIDES[route] ?: LOADER_THEMES[(route.hashCode() and 0x7fffffff) % LOADER_THEMES.size]
+
 /** A hub for the live sensing / sky tools, grouped so the long list doesn't crowd the screen. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -174,7 +197,7 @@ fun SensorsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
                 }
                 items(section.entries, key = { it.route }) { e ->
                     Card(
-                        onClick = { if (pending == null) pending = PendingOpen(e.route, e.title, e.tint, e.icon, e.route.hashCode(), section.theme) },
+                        onClick = { if (pending == null) pending = PendingOpen(e.route, e.title, e.tint, e.icon, e.route.hashCode(), themeFor(e.route)) },
                         modifier = Modifier.fillMaxWidth(),
                         shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),

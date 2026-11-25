@@ -218,9 +218,9 @@ class SettingsStore(private val context: Context) {
         context.settingsDataStore.edit { it[tourSeenKey] = true }
     }
 
-    /** The operator's saved Broadcastify feed ID (numeric), or empty. */
+    /** The operator's saved Broadcastify feed ID (numeric). Defaults to Auburn & Lewiston Fire/EMS. */
     val broadcastifyFeed: Flow<String> =
-        context.settingsDataStore.data.map { it[broadcastifyFeedKey] ?: "" }
+        context.settingsDataStore.data.map { it[broadcastifyFeedKey] ?: "4180" }
 
     suspend fun setBroadcastifyFeed(id: String) {
         context.settingsDataStore.edit { it[broadcastifyFeedKey] = id.trim() }
