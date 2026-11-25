@@ -217,6 +217,11 @@ class SettingsStore(private val context: Context) {
         context.settingsDataStore.edit { it[tourSeenKey] = true }
     }
 
+    /** Re-arm the first-run setup so the onboarding wizard shows again. */
+    suspend fun resetTour() {
+        context.settingsDataStore.edit { it[tourSeenKey] = false }
+    }
+
     /** Chosen UI "feel" (ROUNDED / CIRCUIT / NEON). Defaults to ROUNDED. */
     val appFeel: Flow<String> =
         context.settingsDataStore.data.map { it[appFeelKey] ?: "ROUNDED" }

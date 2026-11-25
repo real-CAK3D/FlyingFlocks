@@ -866,6 +866,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     // --- First-run tour ----------------------------------------------------
     val tourSeen: Flow<Boolean> = appRef.settingsStore.tourSeen
     fun dismissTour() = viewModelScope.launch { appRef.settingsStore.setTourSeen() }
+    /** Show the onboarding wizard again (e.g. from Settings → Profile → Run setup again). */
+    fun rerunSetup() = viewModelScope.launch { appRef.settingsStore.resetTour() }
 
     // --- In-app update check (GitHub Releases) -----------------------------
     private val _update = kotlinx.coroutines.flow.MutableStateFlow<com.cak3d.biscuitmesh.geo.AppRelease?>(null)

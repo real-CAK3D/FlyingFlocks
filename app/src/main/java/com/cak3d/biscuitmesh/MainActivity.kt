@@ -185,7 +185,7 @@ class MainActivity : ComponentActivity() {
                     PermissionGate { MainShell(vm) }
                     val tourSeen by vm.tourSeen.collectAsStateWithLifecycle(initialValue = true)
                     if (!tourSeen) {
-                        com.cak3d.biscuitmesh.ui.WelcomeDialog(onDismiss = { vm.dismissTour() })
+                        com.cak3d.biscuitmesh.ui.OnboardingScreen(vm = vm, onDone = { vm.dismissTour() })
                     }
                     // In-app update check (GitHub Releases) — one check per process, banner at top.
                     androidx.compose.runtime.LaunchedEffect(Unit) { vm.checkForUpdate() }

@@ -47,6 +47,7 @@ import android.net.Uri
 import kotlinx.coroutines.delay
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Straighten
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -291,6 +292,10 @@ private fun ProfileSettingsSection(
     OutlinedButton(onClick = onOpenFlock, modifier = Modifier.fillMaxWidth()) {
         Icon(Icons.Default.Groups, contentDescription = null)
         Spacer(Modifier.width(10.dp)); Text("Flock")
+    }
+    OutlinedButton(onClick = { vm.rerunSetup() }, modifier = Modifier.fillMaxWidth()) {
+        Icon(Icons.Default.Replay, contentDescription = null)
+        Spacer(Modifier.width(10.dp)); Text("Run setup again")
     }
 }
 
