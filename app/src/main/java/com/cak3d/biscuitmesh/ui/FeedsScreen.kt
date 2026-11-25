@@ -28,8 +28,14 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -105,7 +111,7 @@ fun FeedsScreen(vm: MainViewModel, onBack: () -> Unit) {
             }
             when (tab) {
                 0 -> CamerasTab(fix)
-                1 -> ScannerTab(fix)
+                1 -> ScannerTab(vm, fix)
                 else -> WebcamsTab(vm, fix)
             }
         }
@@ -153,7 +159,7 @@ private fun kindLabel(k: HazardKind): String = when (k) {
 // ---------------- Scanner (OpenMHz) ----------------
 
 @Composable
-private fun ScannerTab(fix: Pair<Double, Double>?) {
+private fun ScannerTab(vm: MainViewModel, fix: Pair<Double, Double>?) {
     val ctx = LocalContext.current
     val client = remember { OpenMhzClient() }
     var systems by remember { mutableStateOf<List<OpenMhzClient.System>>(emptyList()) }
@@ -194,6 +200,7 @@ private fun ScannerTab(fix: Pair<Double, Double>?) {
 
     Column(Modifier.fillMaxSize()) {
         if (selected == null) {
+            BroadcastifyCard(vm)
             OutlinedTextField(
                 value = query, onValueChange = { query = it },
                 label = { Text("Search systems (city / state)") },
@@ -260,6 +267,63 @@ private fun ScannerTab(fix: Pair<Double, Double>?) {
                         onClick = { play(c) },
                     )
                 }
+            }
+        }
+    }
+}
+
+/**
+ * Live police/fire/EMS via Broadcastify. Their stream now needs a session and streams through an
+ * MSE blob, so it can't be played with a plain in-app MediaPlayer — instead we hand the feed to the
+ * Broadcastify app (or the browser), which runs their player. The operator saves their county feed
+ * ID once. OpenMHz (below) still plays recorded calls directly in the app.
+ */
+@Composable
+private fun BroadcastifyCard(vm: MainViewModel) {
+    val ctx = LocalContext.current
+    val savedFeed by vm.broadcastifyFeed.collectAsStateWithLifecycle(initialValue = "")
+    var feed by remember(savedFeed) { mutableStateOf(savedFeed) }
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+        shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+    ) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("📻  BROADCASTIFY · LIVE", style = MaterialTheme.typography.labelMedium,
+                fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary)
+            Text("Live police/fire/EMS scanners. Enter your county feed ID (the number in a " +
+                "broadcastify.com/listen/feed/… link), then Listen — it opens in the Broadcastify app or " +
+                "your browser, which runs the live stream. (OpenMHz below plays recorded calls in-app.)",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+            OutlinedTextField(
+                value = feed, onValueChange = { feed = it.filter { c -> c.isDigit() } },
+                label = { Text("Feed ID") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+            )
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = {
+                        vm.setBroadcastifyFeed(feed)
+                        runCatching {
+                            ctx.startActivity(Intent(Intent.ACTION_VIEW,
+                                Uri.parse("https://www.broadcastify.com/listen/feed/$feed")))
+                        }
+                    },
+                    enabled = feed.isNotBlank(), modifier = Modifier.weight(1f),
+                ) {
+                    Icon(Icons.Default.PlayArrow, contentDescription = null)
+                    Spacer(Modifier.size(6.dp)); Text("Listen")
+                }
+                OutlinedButton(
+                    onClick = {
+                        runCatching {
+                            ctx.startActivity(Intent(Intent.ACTION_VIEW,
+                                Uri.parse("https://www.broadcastify.com/listen/near/")))
+                        }
+                    },
+                    modifier = Modifier.weight(1f),
+                ) { Text("Find my feed") }
             }
         }
     }

@@ -779,6 +779,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val flockHandle: Flow<String> = appRef.settingsStore.flockHandleFlow
     fun setFlockHandle(name: String) = viewModelScope.launch { runCatching { appRef.crew.setHandle(name) } }
 
+    /** Saved Broadcastify feed ID (numeric), for the live-scanner launcher in Feeds → Scanner. */
+    val broadcastifyFeed: Flow<String> = appRef.settingsStore.broadcastifyFeed
+    fun setBroadcastifyFeed(id: String) = viewModelScope.launch { appRef.settingsStore.setBroadcastifyFeed(id) }
+
     init {
         // Push the phone's wall clock to every connected board every 20s, so the T-Embed's
         // own top bar shows the right time/date even with no Wi-Fi/NTP. We send *local* epoch

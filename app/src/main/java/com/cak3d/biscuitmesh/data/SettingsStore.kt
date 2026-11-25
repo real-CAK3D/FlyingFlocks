@@ -35,6 +35,7 @@ class SettingsStore(private val context: Context) {
     private val crewShareKey = booleanPreferencesKey("crew_share_location")
     private val flockEnabledKey = booleanPreferencesKey("flock_enabled")
     private val flockHandleKey = stringPreferencesKey("flock_handle")
+    private val broadcastifyFeedKey = stringPreferencesKey("broadcastify_feed")
     private val tourSeenKey = booleanPreferencesKey("tour_seen")
     private val appFeelKey = stringPreferencesKey("app_feel")
     private val appAccentKey = stringPreferencesKey("app_accent")
@@ -215,6 +216,14 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setTourSeen() {
         context.settingsDataStore.edit { it[tourSeenKey] = true }
+    }
+
+    /** The operator's saved Broadcastify feed ID (numeric), or empty. */
+    val broadcastifyFeed: Flow<String> =
+        context.settingsDataStore.data.map { it[broadcastifyFeedKey] ?: "" }
+
+    suspend fun setBroadcastifyFeed(id: String) {
+        context.settingsDataStore.edit { it[broadcastifyFeedKey] = id.trim() }
     }
 
     /** Re-arm the first-run setup so the onboarding wizard shows again. */
