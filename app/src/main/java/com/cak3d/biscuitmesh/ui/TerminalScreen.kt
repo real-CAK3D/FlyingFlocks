@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -251,6 +252,16 @@ fun TerminalScreen(vm: MainViewModel, onNavigate: (String) -> Unit, onBack: () -
         },
     ) { pad ->
         Column(Modifier.fillMaxSize().padding(pad)) {
+            // Signature: a crow forged from a moving light-trail.
+            CrowTrailHeader(Modifier.fillMaxWidth().height(118.dp))
+            Text(
+                "FLOCKEDUP ⟐ TERMINAL",
+                Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                color = T_GREEN.copy(alpha = 0.8f), fontFamily = MONO, fontSize = 11.sp,
+                letterSpacing = 3.sp, fontWeight = FontWeight.Bold,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            )
+
             // Mode toggle.
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp),
