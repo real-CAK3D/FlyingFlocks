@@ -47,6 +47,7 @@ import androidx.compose.material.icons.filled.Sensors
 import androidx.compose.material.icons.filled.SettingsRemote
 import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material.icons.filled.Terrain
+import androidx.compose.material.icons.filled.TravelExplore
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.ViewInAr
 import androidx.compose.material.icons.filled.Science
@@ -132,6 +133,7 @@ fun SensorsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
             HubEntry("Orbit Globe", "Native SGP4 globe — the ISS, Tiangong & bright satellites tracked live, color-coded by orbit class. A preview of the native rebuild.", Icons.Default.SatelliteAlt, "orbitglobe", Color(0xFFFFD166)),
             HubEntry("Sky Conditions", "Real-time light pollution — how dark your sky is right now, folding in live twilight & the Moon, with what you can see and when it next gets dark", Icons.Default.Nightlight, "skyconditions", Color(0xFF6366F1)),
             HubEntry("Light Pollution Map", "Earth at night around you — NASA VIIRS city-glow tiles show how bright your skies are; pan to find a dark spot", Icons.Default.Map, "lightmap", Color(0xFFFFD166)),
+            HubEntry("Site Survey", "One Spot Score for where you're standing — light pollution, air, weather, geomag & RF rolled together. The all-three-pillars read.", Icons.Default.TravelExplore, "sitesurvey", Color(0xFF8FD694)),
             HubEntry("Vision", "God's Eye View forks, live in-app — CAK3Dvision over Tailscale, plus any fork of your own you add", Icons.Default.RemoveRedEye, "vision", Color(0xFF8B5CF6)),
         )),
         HubSection("Alerts & feeds", Color(0xFFFF9500), Icons.Default.Warning, LoaderTheme.SONAR, listOf(

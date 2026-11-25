@@ -90,6 +90,7 @@ private val DESTS = listOf(
     TermDest("orbitglobe", "orbitglobe", "Orbit Globe"),
     TermDest("skyconditions", "skyconditions", "Sky Conditions"),
     TermDest("lightmap", "lightmap", "Light Pollution map"),
+    TermDest("sitesurvey", "sitesurvey", "Site Survey"),
     TermDest("airquality", "airquality", "Air Quality"),
     TermDest("spaceevents", "spaceevents", "Space Events"),
     TermDest("skyar", "skyar", "Sky AR"),
