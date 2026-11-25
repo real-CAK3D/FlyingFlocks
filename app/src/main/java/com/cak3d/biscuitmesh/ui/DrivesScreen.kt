@@ -24,11 +24,16 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -36,6 +41,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.cak3d.biscuitmesh.MainViewModel
+import com.cak3d.biscuitmesh.progress.Progress
 import com.cak3d.biscuitmesh.wardrive.DriveSession
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -47,6 +53,7 @@ import java.util.Locale
 fun DrivesScreen(vm: MainViewModel, onBack: () -> Unit, onOpenReplay: (String) -> Unit = {}) {
     val drives by vm.drives.collectAsStateWithLifecycle(initialValue = emptyList())
     val useMph by vm.useMph.collectAsStateWithLifecycle()
+    val progress by vm.progress.collectAsStateWithLifecycle()
     val anyCapture = drives.any { it.hasCapture }
     val context = androidx.compose.ui.platform.LocalContext.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
@@ -55,7 +62,7 @@ fun DrivesScreen(vm: MainViewModel, onBack: () -> Unit, onOpenReplay: (String) -
         containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
-                title = { Text("DRIVES") },
+                title = { Text("HISTORY") },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                 navigationIcon = {
                     IconButton(onClick = onBack) {
@@ -72,44 +79,131 @@ fun DrivesScreen(vm: MainViewModel, onBack: () -> Unit, onOpenReplay: (String) -
             )
         },
     ) { padding ->
-        LazyColumn(
-            Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            if (drives.isEmpty()) {
-                item("empty") {
-                    Text(
-                        "No saved drives yet. Start a wardrive from the map, then tap Stop — each " +
-                            "run is saved here with its stats, and you can re-upload its capture to WDG.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                    )
+        Column(Modifier.fillMaxSize().padding(padding)) {
+            val tabs = listOf("Drives", "Days", "Totals")
+            var tab by remember { mutableIntStateOf(0) }
+            TabRow(selectedTabIndex = tab, containerColor = Color.Transparent) {
+                tabs.forEachIndexed { i, t ->
+                    Tab(selected = tab == i, onClick = { tab = i },
+                        text = { Text(t, fontWeight = if (tab == i) FontWeight.Bold else FontWeight.Normal) })
                 }
             }
-            if (drives.isNotEmpty()) item("reach") { RangeReachCard(drives, useMph) }
-            if (anyCapture) item("coverage") {
-                OutlinedButton(onClick = { onOpenReplay("all") }, modifier = Modifier.fillMaxWidth()) {
-                    Text("View all-drive coverage heatmap")
-                }
-            }
-            items(drives, key = { it.id }) { d ->
-                DriveCard(
-                    d, useMph,
-                    onOpen = { if (d.hasCapture) onOpenReplay(d.id) },
-                    onShare = {
-                        scope.launch {
-                            val pts = vm.captureSamples(d.id)
-                            ShareCard.share(context, d, useMph, pts)
+            when (tab) {
+                0 -> LazyColumn(
+                    Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    if (drives.isEmpty()) {
+                        item("empty") {
+                            Text(
+                                "No saved drives yet. Start a wardrive from the map, then tap Stop — each " +
+                                    "run is saved here with its stats, and you can re-upload its capture to WDG.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                            )
                         }
-                    },
-                    onReupload = { vm.reuploadDrive(d.id) },
-                    onDelete = { vm.deleteDrive(d.id) },
-                )
+                    }
+                    if (drives.isNotEmpty()) item("reach") { RangeReachCard(drives, useMph) }
+                    if (anyCapture) item("coverage") {
+                        OutlinedButton(onClick = { onOpenReplay("all") }, modifier = Modifier.fillMaxWidth()) {
+                            Text("View all-drive coverage heatmap")
+                        }
+                    }
+                    items(drives, key = { it.id }) { d ->
+                        DriveCard(
+                            d, useMph,
+                            onOpen = { if (d.hasCapture) onOpenReplay(d.id) },
+                            onShare = {
+                                scope.launch {
+                                    val pts = vm.captureSamples(d.id)
+                                    ShareCard.share(context, d, useMph, pts)
+                                }
+                            },
+                            onReupload = { vm.reuploadDrive(d.id) },
+                            onDelete = { vm.deleteDrive(d.id) },
+                        )
+                    }
+                }
+                1 -> DaysTab(drives, useMph)
+                else -> TotalsTab(drives, progress, useMph)
             }
         }
     }
 }
+
+/** History by day — each day you drove, with its totals. */
+@Composable
+private fun DaysTab(drives: List<DriveSession>, useMph: Boolean) {
+    val byDay = remember(drives) {
+        drives.groupBy { dayKey(it.startMs) }.toList().sortedByDescending { it.first }
+    }
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        if (byDay.isEmpty()) item("e") {
+            Text("No days logged yet.", style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+        }
+        items(byDay, key = { it.first }) { (day, list) ->
+            Card(shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Text(prettyDay(day), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("${list.size} drive${if (list.size == 1) "" else "s"} · ${distance(list.sumOf { it.distanceM }, useMph)} · ${duration(list.sumOf { it.durationMs })}",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                    Text("${list.sumOf { it.wifiCount }} Wi-Fi · ${list.sumOf { it.btCount }} Bluetooth · ${list.sumOf { it.cameraCount }} cameras",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                }
+            }
+        }
+    }
+}
+
+/** All-time totals — your whole journey in numbers, plus the progression tracks. */
+@Composable
+private fun TotalsTab(drives: List<DriveSession>, progress: Progress, useMph: Boolean) {
+    val days = drives.map { dayKey(it.startMs) }.distinct().size
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        item("tot") {
+            Card(shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("ALL-TIME TOTALS", style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        ReachStat("${drives.size}", "drives", MaterialTheme.colorScheme.primary, Modifier.weight(1f))
+                        ReachStat(distance(drives.sumOf { it.distanceM }, useMph), "surveyed",
+                            MaterialTheme.colorScheme.secondary, Modifier.weight(1f))
+                        ReachStat("$days", "active days", MaterialTheme.colorScheme.tertiary, Modifier.weight(1f))
+                    }
+                    Text("${drives.sumOf { it.wifiCount }} Wi-Fi · ${drives.sumOf { it.btCount }} Bluetooth · ${drives.sumOf { it.cameraCount }} cameras caught",
+                        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f))
+                }
+            }
+        }
+        item("prog") {
+            Card(shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("PROGRESSION", style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                    progress.tracks.forEach { ts ->
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(ts.track.displayName, style = MaterialTheme.typography.bodyMedium)
+                            Text("${ts.count}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun prettyDay(dayKey: String): String = runCatching {
+    SimpleDateFormat("EEEE, MMM d", Locale.US).format(SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(dayKey)!!)
+}.getOrDefault(dayKey)
 
 @Composable
 private fun DriveCard(drive: DriveSession, useMph: Boolean, onOpen: () -> Unit, onShare: () -> Unit, onReupload: () -> Unit, onDelete: () -> Unit) {
