@@ -77,6 +77,10 @@ private val LAYERS = listOf(
     LayerPlane("Bluetooth", Color(0xFFFF6FA5), 1f, 0f, 0f, 0f, 1f, 0f, 0f, 0f, 1f),
     // Satellites — BOTTOM face (y = -1)
     LayerPlane("Satellites", Color(0xFFFFD166), 0f, -1f, 0f, 1f, 0f, 0f, 0f, 0f, 1f),
+    // Cellular — FRONT face (z = +1)
+    LayerPlane("Cellular", Color(0xFFFF9F45), 0f, 0f, 1f, 1f, 0f, 0f, 0f, 1f, 0f),
+    // Sub-GHz — BACK face (z = -1)
+    LayerPlane("Sub-GHz", Color(0xFFA78BFA), 0f, 0f, -1f, 1f, 0f, 0f, 0f, 1f, 0f),
 )
 
 /** 3D point of a node at plane-local (nx, nz) on its layer's face. */
@@ -140,16 +144,22 @@ fun DataCubeScreen(vm: MainViewModel, onBack: () -> Unit) {
     DisposableEffect(vm) {
         vm.startPhoneScan(wifi = true, ble = true)
         vm.startGnss()
-        onDispose { vm.stopPhoneScan(); vm.stopGnss() }
+        vm.startCell()
+        onDispose { vm.stopPhoneScan(); vm.stopGnss(); vm.stopCell() }
     }
     val rows by vm.phoneScanResults.collectAsState()
     val gnss by vm.gnssState.collectAsState()
+    val cell by vm.cellState.collectAsState()
+    val rfFlow = remember(vm) {
+        vm.wardriveSamples ?: kotlinx.coroutines.flow.MutableStateFlow(emptyMap())
+    }
+    val rfMap by rfFlow.collectAsState()
 
     // Session sightings history: first/last seen + how many scan cycles each contact appeared in.
     val history = remember { HashMap<String, Sighting>() }
-    val nodes = remember(rows, gnss) {
+    val nodes = remember(rows, gnss, cell, rfMap) {
         updateHistory(history, rows, gnss)
-        buildNodes(rows, gnss, history)
+        buildNodes(rows, gnss, cell.cells, rfMap, history)
     }
     // Nearest-neighbour edges within each layer (index pairs into [nodes]).
     val edges = remember(nodes) { buildEdges(nodes) }
@@ -184,10 +194,11 @@ fun DataCubeScreen(vm: MainViewModel, onBack: () -> Unit) {
                 actions = {
                     HelpButton(
                         "Data Cube",
-                        "Everything the app is hearing, inside one rotatable, see-through 3D cube. Four " +
-                            "layers wrap the cube's faces — Wi-Fi 2.4 on top, Wi-Fi 5/6 and Bluetooth on the " +
-                            "side walls, satellites on the floor — each a plane of live contacts sized by " +
-                            "signal and linked to their nearest neighbour. The cube " +
+                        "Everything the app is hearing, inside one rotatable, see-through 3D cube. Six " +
+                            "layers wrap the cube's faces — Wi-Fi 2.4 on top, satellites on the floor, " +
+                            "Wi-Fi 5/6 and Bluetooth on the side walls, Cellular on the front and Sub-GHz on " +
+                            "the back — each a plane of live contacts sized by signal and linked to their " +
+                            "nearest neighbour. The cube " +
                             "is drawn as a wireframe so the front and back never hide the sides. Drag to spin; " +
                             "tap a node to read its name, vendor, signal, channel, when it was last seen, when " +
                             "you first saw it and how many times this session. The LINK control wires a tapped " +
@@ -427,6 +438,8 @@ private fun histDetail(h: Sighting?): List<Pair<String, String>> =
 
 private fun buildNodes(
     rows: List<PhoneScanRow>, gnss: com.cak3d.biscuitmesh.sensors.GnssSnapshot,
+    cells: List<com.cak3d.biscuitmesh.sensors.CellTower>,
+    rf: Map<String, com.cak3d.biscuitmesh.wardrive.WardriveSample>,
     history: Map<String, Sighting>,
 ): List<CubeNode> {
     val out = ArrayList<CubeNode>()
@@ -475,6 +488,33 @@ private fun buildNodes(
             ) + histDetail(history[id]),
         ))
     }
+    // Cellular — FRONT face (layer 4).
+    cells.sortedByDescending { it.dbm }.take(30).forEachIndexed { i, t ->
+        val id = "cell-$i-${t.tech}-${t.tier}"
+        val (x, z) = hashPos(id)
+        out.add(CubeNode(
+            id = id, label = t.tech + if (t.registered) " · serving" else "", layer = 4,
+            sig = ((t.dbm + 120f) / 70f).coerceIn(0.05f, 1f), x = x, z = z,
+            sub = "${t.dbm} dBm", group = "",
+            detail = listOf(
+                "tech" to t.tech,
+                "band" to listOf("low", "mid", "high").getOrElse(t.tier) { "—" },
+                "signal" to "${t.dbm} dBm",
+                "role" to if (t.registered) "serving cell" else "neighbour",
+            ),
+        ))
+    }
+    // Sub-GHz — BACK face (layer 5). Board-sourced RF samples (needs a connected board).
+    rf.entries.asSequence().filter { it.value.kind == SampleKind.RF }
+        .sortedByDescending { it.value.rssi }.take(30).forEach { (key, s) ->
+            val (x, z) = hashPos(key)
+            out.add(CubeNode(
+                id = key, label = s.label.ifBlank { "RF" }, layer = 5,
+                sig = rssiSig(s.rssi), x = x, z = z,
+                sub = "${s.rssi} dBm", group = "",
+                detail = listOf("freq" to s.label, "signal" to "${s.rssi} dBm"),
+            ))
+        }
     return out
 }
 

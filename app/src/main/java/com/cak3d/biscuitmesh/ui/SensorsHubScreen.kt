@@ -199,6 +199,9 @@ fun SensorsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
             LaunchedEffect(p.route) {
                 delay(1500)
                 onOpen(p.route)
+                // Keep the loader up across the nav transition so the hub never flashes back
+                // into view for a frame before the chosen screen draws.
+                delay(450)
                 pending = null
             }
             Box(
