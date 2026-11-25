@@ -1,7 +1,18 @@
 package com.cak3d.biscuitmesh.ui
 
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -98,8 +109,7 @@ fun DashboardScreen(vm: MainViewModel, onBack: () -> Unit) {
                             Box(Modifier.weight(1.1f).fillMaxWidth()) {
                                 NavigateScreen(vm = vm, onBack = onBack, startMode = NavMode.RADAR)
                             }
-                            FleetHealthPane(vm, Modifier.weight(0.7f).fillMaxWidth())
-                            DevicePane(vm, Modifier.weight(1f).fillMaxWidth())
+                            DashboardPager(vm, Modifier.weight(1.7f).fillMaxWidth())
                         }
                     }
                 }
@@ -110,9 +120,122 @@ fun DashboardScreen(vm: MainViewModel, onBack: () -> Unit) {
                     Box(Modifier.fillMaxWidth().weight(1f)) {
                         NavigateScreen(vm = vm, onBack = onBack, startMode = NavMode.RADAR)
                     }
+                    DashboardPager(vm, Modifier.fillMaxWidth().weight(1.8f))
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The dashboard's lower half: swipe between the fleet/device view and extra readings (a signal-
+ * density spectrum and a sources bar chart) without disturbing the map or radar above.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun DashboardPager(vm: MainViewModel, modifier: Modifier) {
+    val titles = listOf("FLEET", "SIGNAL", "BANDS")
+    val pager = rememberPagerState(pageCount = { titles.size })
+    Column(modifier) {
+        HorizontalPager(state = pager, modifier = Modifier.weight(1f).fillMaxWidth()) { page ->
+            when (page) {
+                0 -> Column(Modifier.fillMaxSize()) {
                     FleetHealthPane(vm, Modifier.fillMaxWidth().weight(0.8f))
                     DevicePane(vm, Modifier.fillMaxWidth().weight(1f))
                 }
+                1 -> DashSignalPage(vm)
+                else -> DashBandsPage(vm)
+            }
+        }
+        Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically) {
+            titles.forEachIndexed { i, label ->
+                if (i == pager.currentPage) {
+                    Text(label, fontFamily = FontFamily.Monospace, fontSize = 9.sp, fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.5.sp, color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(horizontal = 6.dp))
+                } else {
+                    Box(Modifier.padding(horizontal = 4.dp).size(6.dp).clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)))
+                }
+            }
+        }
+    }
+}
+
+/** Dashboard page 2: a signal-strength density ridge of every phone contact. */
+@Composable
+private fun DashSignalPage(vm: MainViewModel) {
+    val rows by vm.phoneScanResults.collectAsStateWithLifecycle(initialValue = emptyList())
+    val contacts = rows.filter { it.rssi < 0 }
+    val accent = Color(0xFF22D3EE)
+    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface).padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("SIGNAL DENSITY · ${contacts.size}", color = accent, fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Bold, fontSize = 12.sp)
+        Text("Wi-Fi + Bluetooth by signal · weak ← → strong",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+        val buckets = 30
+        val counts = IntArray(buckets)
+        contacts.forEach {
+            val f = ((it.rssi + 100f) / 70f).coerceIn(0f, 0.999f); counts[(f * buckets).toInt()]++
+        }
+        val maxC = (counts.maxOrNull() ?: 1).coerceAtLeast(1)
+        Canvas(Modifier.fillMaxWidth().weight(1f)) {
+            val w = size.width; val h = size.height; val base = h - 8f
+            val sm = FloatArray(buckets) { i ->
+                val a = counts[(i - 1).coerceAtLeast(0)].toFloat() / maxC
+                val b = counts[i].toFloat() / maxC
+                val c = counts[(i + 1).coerceAtMost(buckets - 1)].toFloat() / maxC
+                a * 0.25f + b * 0.5f + c * 0.25f
+            }
+            val line = Path(); val fill = Path()
+            for (i in 0 until buckets) {
+                val px = i / (buckets - 1f) * w; val py = base - sm[i] * (base - 6f)
+                if (i == 0) { line.moveTo(px, py); fill.moveTo(px, base); fill.lineTo(px, py) }
+                else { line.lineTo(px, py); fill.lineTo(px, py) }
+            }
+            fill.lineTo(w, base); fill.close()
+            drawPath(fill, accent.copy(alpha = 0.18f))
+            drawPath(line, accent, style = Stroke(width = 2f))
+            drawLine(accent.copy(alpha = 0.3f), Offset(0f, base), Offset(w, base), 1.5f)
+            contacts.forEach {
+                val f = ((it.rssi + 100f) / 70f).coerceIn(0f, 1f)
+                drawCircle(accent.copy(alpha = 0.4f), 2f, Offset(f * w, base - 2f))
+            }
+        }
+    }
+}
+
+/** Dashboard page 3: a bar chart of how many contacts each source is hearing. */
+@Composable
+private fun DashBandsPage(vm: MainViewModel) {
+    val rows by vm.phoneScanResults.collectAsStateWithLifecycle(initialValue = emptyList())
+    val gnss by vm.gnssState.collectAsStateWithLifecycle()
+    val cell by vm.cellState.collectAsStateWithLifecycle()
+    val bands = listOf(
+        Triple("Wi-Fi 2.4", rows.count { it.kind == SampleKind.AP && it.channel in 1..14 }, Color(0xFF5FD36A)),
+        Triple("Wi-Fi 5/6", rows.count { it.kind == SampleKind.AP && it.channel >= 32 }, Color(0xFF22D3EE)),
+        Triple("Bluetooth", rows.count { it.kind == SampleKind.BT }, Color(0xFFFF6FA5)),
+        Triple("Satellites", gnss.sats.count { it.cn0 > 0f }, Color(0xFFFFD166)),
+        Triple("Cellular", cell.cells.size, Color(0xFFFF9F45)),
+    )
+    val max = bands.maxOf { it.second }.coerceAtLeast(1)
+    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface).padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text("SIGNAL SOURCES", color = MaterialTheme.colorScheme.primary, fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Bold, fontSize = 12.sp)
+        bands.forEach { (label, n, col) ->
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(label, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace,
+                    modifier = Modifier.width(72.dp))
+                Box(Modifier.weight(1f).height(16.dp).clip(RoundedCornerShape(8.dp))
+                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))) {
+                    if (n > 0) Box(Modifier.fillMaxWidth(n.toFloat() / max).fillMaxHeight()
+                        .clip(RoundedCornerShape(8.dp)).background(col))
+                }
+                Text("$n", style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold, color = col, modifier = Modifier.width(30.dp))
             }
         }
     }
