@@ -30,6 +30,7 @@ class SettingsStore(private val context: Context) {
     private val marauderSourceEnabledKey = booleanPreferencesKey("marauder_source_enabled")
     private val keepAwakeKey = booleanPreferencesKey("keep_awake")
     private val vibrateAlertsKey = booleanPreferencesKey("vibrate_alerts")
+    private val crossingAlertsKey = booleanPreferencesKey("crossing_alerts")
     private val wigleAuthKey = stringPreferencesKey("wigle_auth")
     private val sbSessionKey = stringPreferencesKey("sb_session_json")
     private val crewShareKey = booleanPreferencesKey("crew_share_location")
@@ -216,6 +217,14 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setTourSeen() {
         context.settingsDataStore.edit { it[tourSeenKey] = true }
+    }
+
+    /** Announce when you drive into a new town, county or state. On by default. */
+    val crossingAlerts: Flow<Boolean> =
+        context.settingsDataStore.data.map { it[crossingAlertsKey] ?: true }
+
+    suspend fun setCrossingAlerts(on: Boolean) {
+        context.settingsDataStore.edit { it[crossingAlertsKey] = on }
     }
 
     /** The operator's saved Broadcastify feed ID (numeric). Defaults to Auburn & Lewiston Fire/EMS. */

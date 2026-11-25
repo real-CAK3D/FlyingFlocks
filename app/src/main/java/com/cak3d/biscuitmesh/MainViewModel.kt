@@ -25,10 +25,14 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -207,6 +211,66 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             .map { it.latitude to it.longitude }
             .catch { }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    // --- Town / county / state crossing alerts --------------------------------
+    val crossingAlerts: StateFlow<Boolean> =
+        appRef.settingsStore.crossingAlerts.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    fun setCrossingAlerts(on: Boolean) = viewModelScope.launch { appRef.settingsStore.setCrossingAlerts(on) }
+
+    private var lastPlace: PlaceContext? = null
+    private var lastGeoMs = 0L
+    private var lastGeoLat = 0.0
+    private var lastGeoLon = 0.0
+    private val visitedTowns = HashSet<String>()
+
+    /**
+     * Emits a [BoundaryCrossing] whenever the operator drives into a new town, county or state.
+     * Reverse-geocodes the live fix (throttled to ~150 m / 20 s) and only fires on a real change,
+     * flagging the first time you've reached a given town this session. Rides the shared location
+     * flow, so it costs nothing extra while the map/dashboard already have GPS up.
+     */
+    val boundaryCrossings: Flow<BoundaryCrossing> =
+        currentFix.filterNotNull().mapNotNull { (lat, lon) ->
+            val now = System.currentTimeMillis()
+            if (lastPlace != null && now - lastGeoMs < 20_000L && haversineM(lat, lon, lastGeoLat, lastGeoLon) < 150.0) {
+                return@mapNotNull null
+            }
+            lastGeoMs = now; lastGeoLat = lat; lastGeoLon = lon
+            val place = reverseGeocode(lat, lon) ?: return@mapNotNull null
+            val prev = lastPlace
+            lastPlace = place
+            if (prev == null) { if (place.town.isNotBlank()) visitedTowns.add(place.town); return@mapNotNull null }
+            val firstVisit = place.town.isNotBlank() && visitedTowns.add(place.town)
+            when {
+                place.state.isNotBlank() && place.state != prev.state ->
+                    BoundaryCrossing("state", place.state, place, firstVisit)
+                place.county.isNotBlank() && place.county != prev.county ->
+                    BoundaryCrossing("county", place.county, place, firstVisit)
+                place.town.isNotBlank() && place.town != prev.town ->
+                    BoundaryCrossing("town", place.town, place, firstVisit)
+                else -> null
+            }
+        }.flowOn(Dispatchers.IO)
+
+    private fun reverseGeocode(lat: Double, lon: Double): PlaceContext? = runCatching {
+        @Suppress("DEPRECATION")
+        val a = android.location.Geocoder(appRef, java.util.Locale.US).getFromLocation(lat, lon, 1)?.firstOrNull()
+            ?: return null
+        PlaceContext(
+            town = a.locality ?: a.subAdminArea ?: "",
+            county = a.subAdminArea ?: "",
+            state = a.adminArea ?: "",
+        )
+    }.getOrNull()
+
+    private fun haversineM(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+        val r = 6371000.0
+        val dLat = Math.toRadians(lat2 - lat1); val dLon = Math.toRadians(lon2 - lon1)
+        val a = kotlin.math.sin(dLat / 2).let { it * it } +
+            kotlin.math.cos(Math.toRadians(lat1)) * kotlin.math.cos(Math.toRadians(lat2)) *
+            kotlin.math.sin(dLon / 2).let { it * it }
+        return r * 2 * kotlin.math.atan2(kotlin.math.sqrt(a), kotlin.math.sqrt(1 - a))
+    }
 
     /**
      * Imports a What the Flock backup file's text: parses it and drops every located
@@ -1048,3 +1112,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         super.onCleared()
     }
 }
+
+/** The town / county / state the operator is in, from reverse-geocoding the fix. */
+data class PlaceContext(val town: String, val county: String, val state: String)
+
+/** Fired when the operator drives into a new [kind] (town / county / state), named [label]. */
+data class BoundaryCrossing(
+    val kind: String,
+    val label: String,
+    val place: PlaceContext,
+    val firstVisit: Boolean,
+)

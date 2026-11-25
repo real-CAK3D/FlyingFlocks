@@ -195,6 +195,21 @@ class MainActivity : ComponentActivity() {
                     update?.let { rel ->
                         com.cak3d.biscuitmesh.ui.UpdateBanner(rel, onLater = { vm.dismissUpdate() })
                     }
+                    // Town / county / state crossing alerts — piggybacks on the live fix when enabled.
+                    val crossingOn by vm.crossingAlerts.collectAsStateWithLifecycle()
+                    var crossing by remember { mutableStateOf<com.cak3d.biscuitmesh.BoundaryCrossing?>(null) }
+                    if (crossingOn) {
+                        androidx.compose.runtime.LaunchedEffect(Unit) {
+                            vm.boundaryCrossings.collect { c ->
+                                crossing = c
+                                runCatching {
+                                    val vib = getSystemService(android.content.Context.VIBRATOR_SERVICE) as? android.os.Vibrator
+                                    vib?.vibrate(android.os.VibrationEffect.createOneShot(90, android.os.VibrationEffect.DEFAULT_AMPLITUDE))
+                                }
+                            }
+                        }
+                    }
+                    crossing?.let { com.cak3d.biscuitmesh.ui.CrossingBanner(it, onDismiss = { crossing = null }) }
                     // Branded launch splash — only on a fresh start, not on rotation / config change.
                     var showSplash by remember { mutableStateOf(savedInstanceState == null) }
                     if (showSplash) {

@@ -489,12 +489,15 @@ private fun RadiusDialog(title: String, initialM: Double, onDismiss: () -> Unit,
 private fun AlertsScreenSection(vm: MainViewModel) {
     val awake by vm.keepAwake.collectAsStateWithLifecycle()
     val vibrate by vm.vibrateAlerts.collectAsStateWithLifecycle()
+    val crossing by vm.crossingAlerts.collectAsStateWithLifecycle()
     SectionCard(
         title = "Alerts & screen",
         subtitle = "How the app behaves while you're driving.",
     ) {
         ToggleRow("Keep screen on", "Stay awake everywhere, not just the map", awake) { vm.setKeepAwake(it) }
         ToggleRow("Vibrate on alert", "Buzz when a camera is close", vibrate) { vm.setVibrateAlerts(it) }
+        ToggleRow("Town & county alerts", "Announce when you drive into a new town, county or state",
+            crossing) { vm.setCrossingAlerts(it) }
     }
 }
 
