@@ -205,6 +205,45 @@ class CrewManager(
         return if (o.optBoolean("ok")) null else o.optString("error", "Couldn't claim that band")
     }
 
+    // --- Feathers mirror (gamification) -----------------------------------
+    /** One wing's standing on the Feathers leaderboard. */
+    data class FeatherRank(val rank: Int, val handle: String, val feathers: Long, val me: Boolean)
+
+    /** Mirror the local Feathers balance + flock identity to the server (hybrid sync). */
+    suspend fun syncFeathers(feathers: Long, flockName: String, title: String) {
+        runCatching {
+            val s = ensure()
+            val body = JSONObject().put("id", s.userId).put("feathers", feathers)
+            if (flockName.isNotBlank()) body.put("flock_name", flockName)
+            if (title.isNotBlank()) body.put("title", title)
+            _handle.value?.let { body.put("handle", it) }
+            SupabaseClient.upsert("ff_profiles", body.toString(), s.accessToken, onConflict = "id")
+        }
+    }
+
+    /** The global Feathers leaderboard (top 100). Empty on any failure. */
+    suspend fun feathersBoard(): List<FeatherRank> = runCatching {
+        val s = ensure()
+        val arr = JSONArray(SupabaseClient.rpc("ff_feathers_board", "{}", s.accessToken))
+        (0 until arr.length()).map { i ->
+            val o = arr.getJSONObject(i)
+            FeatherRank(
+                rank = o.optInt("rank"),
+                handle = o.optString("handle").ifBlank { "Unnamed wing" },
+                feathers = o.optLong("feathers"),
+                me = o.optString("user_id") == session?.userId,
+            )
+        }
+    }.getOrDefault(emptyList())
+
+    /** Remove this wing's profile row from the server (Danger Zone → delete account). */
+    suspend fun deleteProfile() {
+        runCatching {
+            val s = ensure()
+            SupabaseClient.delete("ff_profiles", "id=eq.${s.userId}", s.accessToken)
+        }
+    }
+
     // --- Territory ---------------------------------------------------------
     private val cellDeg = 0.004  // ~400m grid cells
     private fun cellId(lat: Double, lon: Double) =

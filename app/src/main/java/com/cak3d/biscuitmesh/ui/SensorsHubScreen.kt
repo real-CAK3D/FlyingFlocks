@@ -145,6 +145,7 @@ private val LOADER_OVERRIDES: Map<String, LoaderTheme> = mapOf(
     "elevation" to LoaderTheme.RINGS,
     "store" to LoaderTheme.SPIRAL,
     "passport" to LoaderTheme.PULSAR,
+    "feathersboard" to LoaderTheme.EQUALIZER,
     // Tools
     "tiredash" to LoaderTheme.RINGS,
     "remote" to LoaderTheme.PULSAR,
@@ -200,6 +201,7 @@ fun SensorsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
         )),
         HubSection("Play & Stats", Color(0xFFFFD166), Icons.Default.EmojiEvents, LoaderTheme.BARS, listOf(
             HubEntry("Global Stats", "The whole flock's totals and the leaderboard", Icons.Default.Leaderboard, "globalstats", Color(0xFF22D3EE)),
+            HubEntry("Feathers Board", "The whole flock ranked by Feathers earned — your balance syncs online", Icons.Default.Leaderboard, "feathersboard", Color(0xFFFFD166)),
             HubEntry("Hunts", "Bounty board — challenges that tick up as you drive", Icons.Default.EmojiEvents, "hunts", Color(0xFFFFD166)),
             HubEntry("Games", "Mini-games — hunt a signal, spot species, beat the clock", Icons.Default.SportsEsports, "games", Color(0xFF34D399)),
             HubEntry("Device Ledger", "Regulars vs transients across all your drives", Icons.Default.ReceiptLong, "ledger", Color(0xFF22D3EE)),

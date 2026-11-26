@@ -23,6 +23,7 @@ import com.cak3d.biscuitmesh.wdg.WdgClient
 import com.cak3d.biscuitmesh.wdg.WigleExport
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.Dispatchers
@@ -250,6 +251,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     init {
         viewModelScope.launch { runCatching { visitedTowns.addAll(appRef.settingsStore.visitedTowns.first()) } }
         viewModelScope.launch { watchNewDevices() }
+        // Hybrid mirror: push the Feathers balance + flock identity to the server when online,
+        // debounced so a busy drive doesn't spam the backend.
+        @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class, kotlinx.coroutines.FlowPreview::class)
+        viewModelScope.launch {
+            kotlinx.coroutines.flow.combine(
+                appRef.feathersStore.balance,
+                appRef.settingsStore.flockName,
+                appRef.inventoryStore.equippedTitle,
+                appRef.settingsStore.flockEnabled,
+            ) { bal, name, title, on -> listOf(bal, name, title, on) }
+                .debounce(5000)
+                .collect { (bal, name, title, on) ->
+                    if (on == true) appRef.crew.syncFeathers(bal as Long, name as String, title as String)
+                }
+        }
         // Captured rare birds become passport "species" stamps.
         viewModelScope.launch {
             appRef.rareBirds.birds.collect { birds ->
@@ -938,6 +954,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val lastFeathers: StateFlow<Int?> = _lastFeathers
     fun clearLastFeathers() { _lastFeathers.value = null }
 
+    // Online Feathers leaderboard (hybrid mirror).
+    private val _feathersBoard = MutableStateFlow<List<com.cak3d.biscuitmesh.crew.CrewManager.FeatherRank>>(emptyList())
+    val feathersBoard: StateFlow<List<com.cak3d.biscuitmesh.crew.CrewManager.FeatherRank>> = _feathersBoard
+    fun loadFeathersBoard() = viewModelScope.launch { _feathersBoard.value = appRef.crew.feathersBoard() }
+
     /** Award Feathers for driving into a new town/county/state (called from the crossing collector). */
     fun awardCrossing(c: BoundaryCrossing) = viewModelScope.launch {
         val amt = when (c.kind) { "state" -> 150; "county" -> 50; else -> if (c.firstVisit) 25 else 10 }
@@ -1045,8 +1066,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         appRef.settingsStore.setFlockHandle("")
         appRef.settingsStore.resetTour()
     }
-    /** Local account deletion: wipes everything on-device. (Server-side removal lands in Phase 4.) */
+    /** Account deletion: removes the server profile row, then wipes everything on-device. */
     fun deleteAccountLocal() = viewModelScope.launch {
+        runCatching { appRef.crew.deleteProfile() }
         appRef.feathersStore.reset()
         appRef.inventoryStore.reset()
         appRef.collectiblesStore.reset()
