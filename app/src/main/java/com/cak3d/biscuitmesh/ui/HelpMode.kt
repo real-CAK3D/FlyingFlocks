@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -96,7 +97,7 @@ fun Modifier.help(label: String, text: String): Modifier = composed {
 @Composable
 fun HelpOverlay(ctrl: HelpController) {
     if (!ctrl.active) return
-    val accent = Color(0xFF22D3EE)
+    val accent = Color(0xFFFFD21E)        // highlighter yellow
     val pulse = rememberInfiniteTransition(label = "help")
     val t by pulse.animateFloat(0f, 1f, infiniteRepeatable(tween(1400, easing = LinearEasing), RepeatMode.Reverse), "t")
 
@@ -112,42 +113,50 @@ fun HelpOverlay(ctrl: HelpController) {
                 }
             },
     ) {
+        // Draw the selected spot last so its ring sits on top where boxes overlap.
+        val ordered = ctrl.spots.sortedBy { it === ctrl.selected }
         Canvas(Modifier.fillMaxSize()) {
             drawRect(Color(0xE60A0E13))
-            ctrl.spots.forEach { s ->
+            ordered.forEach { s ->
                 if (s.rect.width <= 0f) return@forEach
                 val selected = s === ctrl.selected
-                val pad = 6f
-                val r = Rect(s.rect.left - pad, s.rect.top - pad, s.rect.right + pad, s.rect.bottom + pad)
-                // Punch a lighter window so the element reads through the scrim.
-                drawRoundRect(Color(0x33FFFFFF), topLeft = r.topLeft,
-                    size = r.size, cornerRadius = CornerRadius(12f, 12f))
-                val a = if (selected) 1f else 0.4f + 0.4f * t
+                // Tighter inset (not outset) so adjacent/nested boxes don't bleed into each other.
+                val pad = 2f
+                val r = Rect(s.rect.left + pad, s.rect.top + pad, s.rect.right - pad, s.rect.bottom - pad)
+                if (r.width <= 0f || r.height <= 0f) return@forEach
+                // Faint yellow wash so the element reads like it's under a highlighter.
+                drawRoundRect(accent.copy(alpha = if (selected) 0.20f else 0.10f),
+                    topLeft = r.topLeft, size = r.size, cornerRadius = CornerRadius(10f, 10f))
+                val a = if (selected) 1f else 0.55f + 0.35f * t
                 drawRoundRect(accent.copy(alpha = a), topLeft = r.topLeft, size = r.size,
-                    cornerRadius = CornerRadius(12f, 12f), style = Stroke(if (selected) 4f else 2.5f))
+                    cornerRadius = CornerRadius(10f, 10f), style = Stroke(if (selected) 4.5f else 2.5f))
             }
         }
 
-        // Top banner + exit.
-        Row(Modifier.fillMaxWidth().statusBarsPadding().padding(12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text("HELP · tap a highlighted area", color = accent, fontFamily = FontFamily.Monospace,
-                fontSize = 12.sp, fontWeight = FontWeight.Bold)
-            TextButton(onClick = { ctrl.exit() }) { Text("Done") }
+        // Top banner + exit — on its own backing so overlapping rings stay legible.
+        Surface(color = Color(0xDD0A0E13), shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(10.dp)) {
+            Row(Modifier.padding(start = 12.dp, end = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("HELP · tap a box", color = accent, fontFamily = FontFamily.Monospace,
+                    fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                TextButton(onClick = { ctrl.exit() }) { Text("Done", color = accent) }
+            }
         }
 
-        // The explanation for the tapped spot.
+        // The explanation for the tapped spot. navigationBarsPadding keeps it clear of the home/back bar.
         ctrl.selected?.let { s ->
             Surface(color = Color(0xFF16202C), shape = RoundedCornerShape(14.dp),
                 shadowElevation = 10.dp,
-                modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(14.dp)) {
+                modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                    .navigationBarsPadding().padding(14.dp)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(s.label, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = accent)
                     Text(s.text, fontSize = 13.sp, color = Color(0xFFD7DEE6))
                 }
             }
-        } ?: Surface(color = Color(0x991A2430), shape = RoundedCornerShape(10.dp),
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 20.dp)) {
+        } ?: Surface(color = Color(0xCC1A2430), shape = RoundedCornerShape(10.dp),
+            modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 16.dp)) {
             Text(if (ctrl.hasSpots()) "Tap any glowing box to learn what it does"
                 else "Nothing on this page is tagged yet — tap Done",
                 Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
