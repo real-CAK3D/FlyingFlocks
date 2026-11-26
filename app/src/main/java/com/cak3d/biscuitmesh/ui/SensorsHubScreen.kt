@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.Air
 import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Fingerprint
+import androidx.compose.material.icons.filled.Help
 import androidx.compose.material.icons.filled.ShowChart
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.Whatshot
@@ -150,6 +151,7 @@ private val LOADER_OVERRIDES: Map<String, LoaderTheme> = mapOf(
     "tiredash" to LoaderTheme.RINGS,
     "remote" to LoaderTheme.PULSAR,
     "labbench" to LoaderTheme.GEARS,
+    "guide" to LoaderTheme.WAVEFORM,
 )
 private fun themeFor(route: String): LoaderTheme =
     LOADER_OVERRIDES[route] ?: LOADER_THEMES[(route.hashCode() and 0x7fffffff) % LOADER_THEMES.size]
@@ -214,6 +216,8 @@ fun SensorsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
             HubEntry("Tire Pressure", "Learn your car's TPMS sensors, watch live pressure", Icons.Default.DirectionsCar, "tiredash", Color(0xFF38BDF8)),
             HubEntry("Universal Remote", "TV power/volume/channel over the node's IR LED — Flipper-style", Icons.Default.SettingsRemote, "remote", Color(0xFFFF5470)),
             HubEntry("Lab Bench", "MAC decoder, signal→distance, crack-time, quiz", Icons.Default.Science, "labbench", Color(0xFFF59E0B)),
+            HubEntry("Guide", "The whole app explained — what each feature is, when to use it and how. Searchable in-app manual", Icons.Default.Help, "guide", Color(0xFF22D3EE)),
+
         )),
     )
     var pending by remember { mutableStateOf<PendingOpen?>(null) }

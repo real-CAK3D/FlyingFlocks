@@ -111,6 +111,7 @@ import com.cak3d.biscuitmesh.ui.ElevationScreen
 import com.cak3d.biscuitmesh.ui.StoreScreen
 import com.cak3d.biscuitmesh.ui.PassportScreen
 import com.cak3d.biscuitmesh.ui.FeathersBoardScreen
+import com.cak3d.biscuitmesh.ui.GuideScreen
 import com.cak3d.biscuitmesh.ui.TerminalScreen
 import com.cak3d.biscuitmesh.ui.SignalsScreen
 import com.cak3d.biscuitmesh.ui.SignalsView
@@ -498,6 +499,7 @@ private fun MainShell(vm: MainViewModel) {
                 composable("store") { StoreScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("passport") { PassportScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("feathersboard") { FeathersBoardScreen(vm = vm, onBack = { nav.popBackStack() }) }
+                composable("guide") { GuideScreen(onBack = { nav.popBackStack() }) }
                 composable("cockpit/{hex}") { entry ->
                     CockpitScreen(vm = vm, hex = entry.arguments?.getString("hex") ?: "", onBack = { nav.popBackStack() })
                 }
