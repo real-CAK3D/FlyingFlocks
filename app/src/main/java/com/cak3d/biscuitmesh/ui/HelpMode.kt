@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -133,34 +132,34 @@ fun HelpOverlay(ctrl: HelpController) {
             }
         }
 
-        // Top banner + exit — on its own backing so overlapping rings stay legible.
-        Surface(color = Color(0xDD0A0E13), shape = RoundedCornerShape(12.dp),
-            modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(10.dp)) {
-            Row(Modifier.padding(start = 12.dp, end = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("HELP · tap a box", color = accent, fontFamily = FontFamily.Monospace,
-                    fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                TextButton(onClick = { ctrl.exit() }) { Text("Done", color = accent) }
-            }
-        }
-
-        // The explanation for the tapped spot. navigationBarsPadding keeps it clear of the home/back bar.
-        ctrl.selected?.let { s ->
-            Surface(color = Color(0xFF16202C), shape = RoundedCornerShape(14.dp),
-                shadowElevation = 10.dp,
-                modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
-                    .navigationBarsPadding().padding(14.dp)) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(s.label, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = accent)
-                    Text(s.text, fontSize = 13.sp, color = Color(0xFFD7DEE6))
+        // Everything the user reads/taps lives at the bottom, clear of the top-bar icons and the
+        // phone's home/back bar. A tapped spot's explanation, else the hint; Done always sits here.
+        Column(
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                .navigationBarsPadding().padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            ctrl.selected?.let { s ->
+                Surface(color = Color(0xFF16202C), shape = RoundedCornerShape(14.dp),
+                    shadowElevation = 10.dp, modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(s.label, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = accent)
+                        Text(s.text, fontSize = 13.sp, color = Color(0xFFD7DEE6))
+                    }
                 }
+            } ?: Surface(color = Color(0xDD1A2430), shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.fillMaxWidth()) {
+                Text(if (ctrl.hasSpots()) "HELP · tap any glowing box to learn what it does"
+                    else "Nothing on this page is tagged yet — tap Done",
+                    Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                    color = accent, fontFamily = FontFamily.Monospace, fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold)
             }
-        } ?: Surface(color = Color(0xCC1A2430), shape = RoundedCornerShape(10.dp),
-            modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 16.dp)) {
-            Text(if (ctrl.hasSpots()) "Tap any glowing box to learn what it does"
-                else "Nothing on this page is tagged yet — tap Done",
-                Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                color = Color(0xFFBFC6CF), fontSize = 12.sp)
+            // Done bar — always reachable, away from the top icons.
+            Surface(color = Color(0xDD0A0E13), shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.align(Alignment.End)) {
+                TextButton(onClick = { ctrl.exit() }) { Text("Done", color = accent, fontWeight = FontWeight.Bold) }
+            }
         }
     }
 }
