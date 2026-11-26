@@ -457,6 +457,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     // --- Phone-only live scanning (WiFi / Bluetooth tabs) ------------------
     val phoneScanResults get() = appRef.phoneScan.results
+
+    /** How many other cellphones we're hearing right now (BLE devices classified as phones). */
+    val phonesNearby: StateFlow<Int> = appRef.phoneScan.results
+        .map { rows -> rows.count { it.kind == com.cak3d.biscuitmesh.wardrive.SampleKind.BT &&
+            com.cak3d.biscuitmesh.sensors.BtTaxonomy.classify(it.label)?.name == "Phone" } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
     val phoneScanning get() = appRef.phoneScan.scanning
     fun startPhoneScan(wifi: Boolean, ble: Boolean) = appRef.phoneScan.start(wifi, ble)
     fun stopPhoneScan() = appRef.phoneScan.stop()

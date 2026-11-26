@@ -205,6 +205,15 @@ fun BluetoothScreen(vm: MainViewModel, onOpenTool: (String) -> Unit, onLocate: (
                 onStop = { vm.stopPhoneScan() },
             )
         }
+        val phones = catCounts["Phone"] ?: 0
+        if (phones > 0) item("phones") {
+            androidx.compose.material3.Card(colors = androidx.compose.material3.CardDefaults.cardColors(
+                containerColor = BT_BLUE.copy(alpha = 0.16f))) {
+                Text("📱  $phones other phone${plural(phones)} nearby",
+                    modifier = Modifier.padding(14.dp), color = BT_BLUE,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+            }
+        }
         if (devs.isNotEmpty()) item("search") { SearchField(query, { query = it }, BT_BLUE) }
         if (devs.isNotEmpty()) item("btspec") { BtSpectrumCard(devs, BT_BLUE) }
         if (devs.isNotEmpty()) item("priv") { PrivacyCard(devs, BT_BLUE) }

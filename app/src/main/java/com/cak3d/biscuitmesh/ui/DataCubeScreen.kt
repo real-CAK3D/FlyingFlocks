@@ -94,7 +94,7 @@ private fun nodePoint(layer: Int, nx: Float, nz: Float): FloatArray {
 }
 
 /** Which related nodes to wire up when one is selected. */
-private enum class NeighborMode(val label: String) { VENDOR("Vendor"), LAYER("Layer"), OFF("Off") }
+private enum class NeighborMode(val label: String) { VENDOR("Vendor"), LAYER("Layer"), NEARBY("Nearby"), OFF("Off") }
 
 /** One plotted contact: layer index, position on its plane, signal 0..1, and its detail. */
 private data class CubeNode(
@@ -177,6 +177,9 @@ fun DataCubeScreen(vm: MainViewModel, onBack: () -> Unit) {
             s == null || neighborMode == NeighborMode.OFF -> emptySet()
             neighborMode == NeighborMode.VENDOR -> if (s.group.isBlank()) emptySet()
                 else nodes.asSequence().filter { it.id != s.id && it.group == s.group }.map { it.id }.toSet()
+            // Similar signal strength ≈ similar distance from you (the cube's "relative distance").
+            neighborMode == NeighborMode.NEARBY ->
+                nodes.asSequence().filter { it.id != s.id && kotlin.math.abs(it.sig - s.sig) < 0.12f }.map { it.id }.toSet()
             else -> nodes.asSequence().filter { it.id != s.id && it.layer == s.layer }.map { it.id }.toSet()
         }
     }
