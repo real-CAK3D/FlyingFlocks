@@ -703,6 +703,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         appRef.wardrive?.start(mode, phoneSensors.value)
         // Keep scanning alive with the screen off / app backgrounded.
         WardriveService.start(appRef)
+        appRef.gforce.start()
     }
 
     /**
@@ -714,6 +715,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { appRef.settingsStore.setPhoneSensors(true) }
         appRef.wardrive?.start(WardriveMode.ALL, true)
         WardriveService.start(appRef)
+        appRef.gforce.start()
     }
 
     fun stopBackgroundCollect() = stopWardrive()
@@ -723,10 +725,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val st = appRef.wardrive?.state?.value
         val samples = appRef.wardrive?.samples?.value?.values?.toList() ?: emptyList()
         val track = appRef.wardrive?.track?.value ?: emptyList()
+        val gforce = appRef.gforce.stop()
         appRef.wardrive?.stop()
         WardriveService.stop(appRef)
         if (st != null && st.startMs > 0L && (st.wifiCount + st.btCount) > 0) {
-            viewModelScope.launch { saveDrive(st.startMs, st.wifiCount, st.btCount, samples, track) }
+            viewModelScope.launch { saveDrive(st.startMs, st.wifiCount, st.btCount, samples, track, gforce) }
             // Auto spoken recap when the master voice toggle is on (Speaker honours it internally).
             val mins = ((System.currentTimeMillis() - st.startMs) / 60000L).coerceAtLeast(1)
             // Award Feathers for the drive: catches + distance, a first-of-day bonus and streak multiplier.
@@ -761,6 +764,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         bt: Int,
         samples: List<com.cak3d.biscuitmesh.wardrive.WardriveSample>,
         track: List<LatLon>,
+        gforce: List<com.cak3d.biscuitmesh.sensors.GSample> = emptyList(),
     ) {
         val csv = if (WigleExport.uploadableCount(samples) > 0) WigleExport.toCsv(samples) else null
         val session = com.cak3d.biscuitmesh.wardrive.DriveSession(
@@ -773,7 +777,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             distanceM = trackDistance(track),
         )
         appRef.drivesStore.save(session, csv)
+        runCatching { appRef.gforceStore.save(session.id, gforce) }
     }
+
+    /** The g-force series recorded for a saved drive (empty if none). */
+    suspend fun gforceSeries(driveId: String): List<com.cak3d.biscuitmesh.sensors.GSample> =
+        appRef.gforceStore.load(driveId)
 
     /** Cameras actually passed on this drive — ones within ~150 m of the track, not the whole DB. */
     private fun camerasAlongTrack(track: List<LatLon>): Int {
@@ -1085,6 +1094,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun wipeHistory() = viewModelScope.launch {
         appRef.drivesStore.clearAll()
         appRef.fingerprintStore.clearAll()
+        appRef.gforceStore.clearAll()
         appRef.settingsStore.clearVisitedTowns()
     }
     fun signOutRedoOnboarding() = viewModelScope.launch {

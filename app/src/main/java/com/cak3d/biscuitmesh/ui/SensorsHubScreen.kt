@@ -210,7 +210,7 @@ fun SensorsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
             HubEntry("Store", "Spend your Feathers — profile pictures, avatar overlay rings, titles, premium accent colours & Flock Premium", Icons.Default.Storefront, "store", Color(0xFFFFD166)),
             HubEntry("Passport", "Your collectible stamps — places driven into, rare species caught, sky catches and events, each stamped in with a flourish", Icons.Default.MenuBook, "passport", Color(0xFFE8C06A)),
             HubEntry("Trip Journal", "Every finished drive written up for you — how far, how long, what you caught — with a Share button and your running towns-visited count", Icons.Default.AutoStories, "tripjournal", Color(0xFF8FD694)),
-            HubEntry("Drive Stats", "Your latest drive charted — speed profile (top & average) and the real terrain you climbed and descended, with gain, loss and range", Icons.Default.ShowChart, "elevation", Color(0xFF8FD694)),
+            HubEntry("Drive Stats", "Your latest drive charted — speed, live g-force (bumps/braking/cornering) and the real terrain you climbed and descended", Icons.Default.ShowChart, "elevation", Color(0xFF8FD694)),
         )),
         HubSection("Tools", Color(0xFFF59E0B), Icons.Default.Science, LoaderTheme.GEARS, listOf(
             HubEntry("Tire Pressure", "Learn your car's TPMS sensors, watch live pressure", Icons.Default.DirectionsCar, "tiredash", Color(0xFF38BDF8)),

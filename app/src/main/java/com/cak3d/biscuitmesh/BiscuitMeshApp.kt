@@ -86,6 +86,14 @@ class BiscuitMeshApp : Application() {
         com.cak3d.biscuitmesh.data.CollectiblesStore(this)
     }
 
+    /** Records total g-force while a drive is active; its series is saved per drive. */
+    val gforce: com.cak3d.biscuitmesh.sensors.GForceRecorder by lazy {
+        com.cak3d.biscuitmesh.sensors.GForceRecorder(this)
+    }
+    val gforceStore: com.cak3d.biscuitmesh.data.GForceStore by lazy {
+        com.cak3d.biscuitmesh.data.GForceStore(this)
+    }
+
     /** Local-only saved targets (networks/devices/locations) to locate/watch. Never uploaded. */
     val targetsStore: com.cak3d.biscuitmesh.data.TargetsStore by lazy {
         com.cak3d.biscuitmesh.data.TargetsStore(this)

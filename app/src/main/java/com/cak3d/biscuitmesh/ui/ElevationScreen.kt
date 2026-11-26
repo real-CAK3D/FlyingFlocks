@@ -60,10 +60,14 @@ fun ElevationScreen(vm: MainViewModel, onBack: () -> Unit) {
     val mph by vm.useMph.collectAsStateWithLifecycle()
     var elev by remember { mutableStateOf<List<Double>?>(null) }
     var speedMps by remember { mutableStateOf<List<Double>>(emptyList()) }
+    var gforce by remember { mutableStateOf<List<Double>>(emptyList()) }
     var done by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         val byDrive = runCatching { vm.captureSamplesByDrive(limit = 1) }.getOrDefault(emptyList())
+        val driveId = byDrive.firstOrNull()?.first
+        gforce = driveId?.let { runCatching { vm.gforceSeries(it).map { s -> s.g.toDouble() } }.getOrDefault(emptyList()) }
+            ?: emptyList()
         val pts = byDrive.firstOrNull()?.second?.filter { it.timeMs > 0 && !(it.lat == 0.0 && it.lon == 0.0) }
             ?.sortedBy { it.timeMs } ?: emptyList()
         if (pts.size < 2) { done = true; return@LaunchedEffect }
@@ -94,9 +98,10 @@ fun ElevationScreen(vm: MainViewModel, onBack: () -> Unit) {
                 },
                 actions = {
                     HelpButton("Drive Stats",
-                        "Your most recent drive, charted: the real terrain you climbed/descended (keyless elevation " +
-                            "lookup) and your speed along the way, derived from how fast your GPS-tagged catches moved. " +
-                            "G-force logging is coming to live drives next.")
+                        "Your most recent drive, charted: speed (from how fast your GPS-tagged catches moved), " +
+                            "g-force (bumps, braking and cornering, logged live from the accelerometer while you drive), " +
+                            "and the real terrain you climbed/descended (keyless elevation lookup). Drive with scanning " +
+                            "on to record g-force.")
                 },
             )
         },
@@ -132,6 +137,18 @@ fun ElevationScreen(vm: MainViewModel, onBack: () -> Unit) {
                             Stat("${e.size}", "points", EL_ACCENT)
                         }
                         ProfileChart(speedMps, Color(0xFFFF5470))
+
+                        if (gforce.size >= 2) {
+                            Text("G-FORCE", style = MaterialTheme.typography.labelMedium, color = EL_ACCENT,
+                                fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(top = 8.dp))
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Stat("%.2f g".format(gforce.maxOrNull() ?: 0.0), "peak", Color(0xFFF59E0B))
+                                Stat("%.2f g".format(gforce.average()), "average", Color(0xFF5CB4E8))
+                                Stat("${gforce.size}", "samples", EL_ACCENT)
+                            }
+                            ProfileChart(gforce, Color(0xFFF59E0B))
+                        }
 
                         Text("ELEVATION", style = MaterialTheme.typography.labelMedium, color = EL_ACCENT,
                             fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold,
