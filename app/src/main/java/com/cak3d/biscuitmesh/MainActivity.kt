@@ -105,6 +105,7 @@ import com.cak3d.biscuitmesh.ui.SiteSurveyScreen
 import com.cak3d.biscuitmesh.ui.VisiblePassesScreen
 import com.cak3d.biscuitmesh.ui.StarlinkScreen
 import com.cak3d.biscuitmesh.ui.TripJournalScreen
+import com.cak3d.biscuitmesh.ui.HoloTimelineScreen
 import com.cak3d.biscuitmesh.ui.TerminalScreen
 import com.cak3d.biscuitmesh.ui.SignalsScreen
 import com.cak3d.biscuitmesh.ui.SignalsView
@@ -479,6 +480,7 @@ private fun MainShell(vm: MainViewModel) {
                 composable("visiblepasses") { VisiblePassesScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("starlink") { StarlinkScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("tripjournal") { TripJournalScreen(vm = vm, onBack = { nav.popBackStack() }) }
+                composable("holotimeline") { HoloTimelineScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("cockpit/{hex}") { entry ->
                     CockpitScreen(vm = vm, hex = entry.arguments?.getString("hex") ?: "", onBack = { nav.popBackStack() })
                 }

@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.Equalizer
 import androidx.compose.material.icons.filled.Flight
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Insights
+import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.Train
 import androidx.compose.material.icons.filled.WbTwilight
 import androidx.compose.material.icons.filled.Campaign
@@ -105,6 +106,7 @@ private val LOADER_OVERRIDES: Map<String, LoaderTheme> = mapOf(
     // Live Visuals
     "signals" to LoaderTheme.EQUALIZER,
     "datacube" to LoaderTheme.NETWORK,
+    "holotimeline" to LoaderTheme.HELIX,
     // Sky
     "skyar" to LoaderTheme.SPIRAL,
     "orbit" to LoaderTheme.ORBIT,
@@ -158,6 +160,7 @@ fun SensorsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
         HubSection("Live Visuals", Color(0xFFEC4899), Icons.Default.Equalizer, LoaderTheme.EQUALIZER, listOf(
             HubEntry("Signals", "Every live RF visualizer in one window — the 3D scope, live console, device graph, per-device telemetry, dashboard & traffic charts, switchable at the bottom", Icons.Default.Equalizer, "signals", Color(0xFF22D3EE)),
             HubEntry("Data Cube", "The whole live picture in one rotatable 3D diagram — Wi-Fi, Bluetooth & satellites as stacked layers; drag to spin, tap a node for its details", Icons.Default.ViewInAr, "datacube", Color(0xFFFFD166)),
+            HubEntry("Holo-Timeline", "A Star Wars–style hologram of every drive on the real ground — repeated commutes stack; drag to rotate, pinch to zoom, scrub the day to watch each signal light up at the time & place it was caught", Icons.Default.Timeline, "holotimeline", Color(0xFF22D3EE)),
         )),
         HubSection("Sky", Color(0xFF8B5CF6), Icons.Default.SatelliteAlt, LoaderTheme.ORBIT, listOf(
             HubEntry("Sky AR", "Point your phone at the sky — satellites, planets, the Moon, constellations & aircraft live on the camera", Icons.Default.CameraAlt, "skyar", Color(0xFFA78BFA)),
