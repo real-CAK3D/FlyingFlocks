@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -61,7 +62,27 @@ private data class HoloPt(
     val drive: Int,
 )
 
-private data class HoloData(val pts: List<HoloPt>, val drives: Int, val minTod: Long, val maxTod: Long)
+private data class DriveMeta(val index: Int, val startMs: Long, val label: String)
+private data class HoloData(
+    val pts: List<HoloPt>, val drives: Int, val minTod: Long, val maxTod: Long,
+    val meta: List<DriveMeta> = emptyList(),
+)
+
+/** Time windows for the timeline. */
+private enum class HoloScope(val label: String) {
+    ALL("All"), DAY("Day"), WEEK("Week"), MONTH("Month");
+    fun fromMs(): Long {
+        val c = java.util.Calendar.getInstance()
+        c.set(java.util.Calendar.HOUR_OF_DAY, 0); c.set(java.util.Calendar.MINUTE, 0)
+        c.set(java.util.Calendar.SECOND, 0); c.set(java.util.Calendar.MILLISECOND, 0)
+        return when (this) {
+            ALL -> 0L
+            DAY -> c.timeInMillis
+            WEEK -> { c.add(java.util.Calendar.DAY_OF_YEAR, -6); c.timeInMillis }
+            MONTH -> { c.set(java.util.Calendar.DAY_OF_MONTH, 1); c.timeInMillis }
+        }
+    }
+}
 
 private fun todOf(timeMs: Long): Long {
     val c = java.util.Calendar.getInstance().apply { timeInMillis = timeMs }
@@ -98,9 +119,12 @@ fun HoloTimelineScreen(vm: MainViewModel, onBack: () -> Unit) {
     var autoSpin by remember { mutableStateOf(true) }
     var selected by remember { mutableStateOf<HoloPt?>(null) }
     var flick by remember { mutableFloatStateOf(0f) }
+    var scope by remember { mutableStateOf(HoloScope.ALL) }
+    var driveSel by remember { mutableStateOf<Int?>(null) }
+    var driveMenu by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
-        val byDrive = runCatching { vm.captureSamplesByDrive(limit = 12) }.getOrDefault(emptyList())
+        val byDrive = runCatching { vm.captureSamplesByDrive(limit = 24) }.getOrDefault(emptyList())
         data = buildHolo(byDrive)
         loaded = true
     }
@@ -125,6 +149,9 @@ fun HoloTimelineScreen(vm: MainViewModel, onBack: () -> Unit) {
                         Icon(if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
                             contentDescription = if (playing) "Pause" else "Play timeline")
                     }
+                    IconButton(onClick = { playing = false; cutoff = 1f }) {
+                        Icon(Icons.Default.Stop, contentDescription = "Stop")
+                    }
                     HelpButton("Holo-Timeline",
                         "A holographic table of everywhere you've driven, on the real ground. Each drive is its " +
                             "own colour; repeated commutes land on the same path and stack. Drag to rotate, pinch " +
@@ -145,6 +172,11 @@ fun HoloTimelineScreen(vm: MainViewModel, onBack: () -> Unit) {
                     val span = (d.maxTod - d.minTod).coerceAtLeast(1)
                     val cutTod = d.minTod + (span * cutoff).toLong()
                     val hits = remember { ArrayList<Triple<Float, Float, HoloPt>>() }
+                    val fromMs = scope.fromMs()
+                    val shownPts = remember(d, scope, driveSel) {
+                        d.pts.filter { (fromMs == 0L || it.timeMs >= fromMs) && (driveSel == null || it.drive == driveSel) }
+                    }
+                    val shownDrives = remember(shownPts) { shownPts.map { it.drive }.distinct().size }
 
                     Canvas(
                         Modifier.fillMaxSize()
@@ -153,7 +185,7 @@ fun HoloTimelineScreen(vm: MainViewModel, onBack: () -> Unit) {
                                     autoSpin = false
                                     rotY += panChange.x * 0.006f
                                     rotX = (rotX + panChange.y * 0.006f).coerceIn(0.1f, 1.45f)
-                                    zoom = (zoom * zoomChange).coerceIn(0.4f, 4f)
+                                    zoom = (zoom * zoomChange).coerceIn(0.4f, 10f)
                                 }
                             }
                             .pointerInput(Unit) {
@@ -199,7 +231,7 @@ fun HoloTimelineScreen(vm: MainViewModel, onBack: () -> Unit) {
                             return if (age <= window) (1f - age.toFloat() / window) * 0.82f + 0.18f else 0.16f
                         }
 
-                        val byDrive = d.pts.groupBy { it.drive }
+                        val byDrive = shownPts.groupBy { it.drive }
                         byDrive.forEach { (drive, pts) ->
                             val hue = HOLO_HUES[drive % HOLO_HUES.size]
                             val ordered = pts.sortedBy { it.todMs }
@@ -217,7 +249,7 @@ fun HoloTimelineScreen(vm: MainViewModel, onBack: () -> Unit) {
                         }
 
                         // Draw sightings far→near so the glow layers correctly.
-                        val visible = d.pts.mapNotNull { p ->
+                        val visible = shownPts.mapNotNull { p ->
                             val rc = recency(p.todMs); if (rc < 0f) null else Triple(p, rc, project(p.nx, 0.05f, p.nz)) }
                             .sortedByDescending { it.third.third }
                         visible.forEach { (p, rc, pr) ->
@@ -244,13 +276,31 @@ fun HoloTimelineScreen(vm: MainViewModel, onBack: () -> Unit) {
                         }
                     }
 
-                    // Overlay HUD: counts + scrub time + legend + the scrubber + selection.
+                    // Overlay HUD: counts + scope/drive pickers + scrub time + selection + scrubber.
                     Column(Modifier.fillMaxSize().padding(14.dp)) {
-                        Text("${d.drives} ${if (d.drives == 1) "reality" else "realities"} · ${d.pts.size} sightings",
+                        Text("${shownDrives} ${if (shownDrives == 1) "reality" else "realities"} · ${shownPts.size} sightings · ◷ ${hhmm(cutTod)}",
                             color = Color(0xFF22D3EE), fontFamily = FontFamily.Monospace, fontSize = 12.sp,
                             fontWeight = FontWeight.Bold)
-                        Text("◷ ${hhmm(cutTod)}", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
-                            fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.padding(top = 6.dp)) {
+                            HoloScope.entries.forEach { s ->
+                                androidx.compose.material3.FilterChip(selected = scope == s,
+                                    onClick = { scope = s }, label = { Text(s.label) })
+                            }
+                            Box {
+                                androidx.compose.material3.AssistChip(onClick = { driveMenu = true },
+                                    label = { Text(driveSel?.let { "Drive #${it + 1}" } ?: "All drives") })
+                                androidx.compose.material3.DropdownMenu(expanded = driveMenu, onDismissRequest = { driveMenu = false }) {
+                                    androidx.compose.material3.DropdownMenuItem(text = { Text("All drives") },
+                                        onClick = { driveSel = null; driveMenu = false })
+                                    d.meta.forEach { m ->
+                                        androidx.compose.material3.DropdownMenuItem(
+                                            text = { Text("${m.label}  (#${m.index + 1})") },
+                                            onClick = { driveSel = m.index; driveMenu = false })
+                                    }
+                                }
+                            }
+                        }
 
                         Box(Modifier.weight(1f))
 
@@ -272,7 +322,7 @@ fun HoloTimelineScreen(vm: MainViewModel, onBack: () -> Unit) {
 
                         Slider(value = cutoff, onValueChange = { cutoff = it; playing = false },
                             modifier = Modifier.fillMaxWidth())
-                        Text("drag to rotate · pinch to zoom · scrub the day with the slider",
+                        Text("drag to rotate · pinch to zoom in on a point & tap it · scope + drive pickers up top · ▶/■ to play/stop",
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
                             fontSize = 10.sp, modifier = Modifier.align(Alignment.CenterHorizontally))
                     }
@@ -317,5 +367,10 @@ private fun buildHolo(byDrive: List<Pair<String, List<GeoPt>>>): HoloData {
         }
     }
     val tods = out.map { it.todMs }
-    return HoloData(out, drives.size, tods.minOrNull() ?: 0, tods.maxOrNull() ?: 1)
+    val fmt = java.text.SimpleDateFormat("EEE MMM d", java.util.Locale.US)
+    val meta = drives.mapIndexed { di, pts ->
+        val start = pts.minOfOrNull { it.timeMs } ?: 0L
+        DriveMeta(di, start, if (start > 0) fmt.format(java.util.Date(start)) else "Drive ${di + 1}")
+    }
+    return HoloData(out, drives.size, tods.minOrNull() ?: 0, tods.maxOrNull() ?: 1, meta)
 }
