@@ -87,7 +87,8 @@ fun WatchlistScreen(vm: MainViewModel, onBack: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item("add") {
-                Card(Modifier.fillMaxWidth(), shape = appCardShape(),
+                Card(Modifier.fillMaxWidth().help("Add a watch", "Type a MAC or part of a device name; it lights up below whenever it's in range during a scan. Great for spotting a specific network/device or a known tag."),
+                    shape = appCardShape(),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("WATCH FOR", style = MaterialTheme.typography.labelMedium,

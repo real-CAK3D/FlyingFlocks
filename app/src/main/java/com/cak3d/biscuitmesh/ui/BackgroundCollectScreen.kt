@@ -111,7 +111,7 @@ fun BackgroundCollectScreen(vm: MainViewModel, onBack: () -> Unit) {
                         Icon(Icons.Default.Stop, contentDescription = null); Text("  Stop collecting")
                     }
                 } else {
-                    Button(onClick = { vm.startBackgroundCollect() }, modifier = Modifier.fillMaxWidth()) {
+                    Button(onClick = { vm.startBackgroundCollect() }, modifier = Modifier.fillMaxWidth().help("Start background collect", "Forces the phone's own radios on and keeps catching Wi-Fi/BT with the screen off (via a foreground service). Lock the phone and it keeps logging to your totals.")) {
                         Icon(Icons.Default.PlayArrow, contentDescription = null); Text("  Start background collect")
                     }
                 }

@@ -100,7 +100,8 @@ fun TrackerScreen(vm: MainViewModel, onBack: () -> Unit) {
         ) {
             item("head") {
                 Card(
-                    Modifier.fillMaxWidth(), shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
+                    Modifier.fillMaxWidth().help("Tracker check", "Best-effort anti-stalking: keep this open and move around — it flags BLE devices (AirTags, Tiles) that stay with you across time and places. Reset clears the list."),
+                    shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 ) {
                     Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically,

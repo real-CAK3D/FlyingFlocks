@@ -146,7 +146,8 @@ fun RogueApScreen(vm: MainViewModel, onBack: () -> Unit) {
         ) {
             item {
                 val crit = findings.count { it.level == RogueLevel.CRITICAL }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(Modifier.fillMaxWidth().help("Evil-twin scan", "Counts the Wi-Fi radios in range, how many SSIDs look duplicated (look-alikes), and how many are likely evil twins — a secured network also appearing open. Zero is healthy."),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     StatTile("$apCount", "AP RADIOS", R_MUTED, Modifier.weight(1f))
                     StatTile("${findings.size}", "LOOK-ALIKES",
                         if (findings.isEmpty()) R_OK else R_WARN, Modifier.weight(1f))

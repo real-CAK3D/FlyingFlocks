@@ -47,7 +47,7 @@ fun LandscapeScreen(vm: MainViewModel, onBack: () -> Unit, startMode: LandMode =
             LandMode.TERRAIN -> Terrain3DScreen(vm, onBack, onOpenEyesight = { mode = LandMode.EYESIGHT })
             LandMode.EYESIGHT -> EyesightArScreen(vm, onBack)
         }
-        LandSwitcher(mode, Modifier.align(Alignment.BottomCenter).fillMaxWidth()) { mode = it }
+        LandSwitcher(mode, Modifier.align(Alignment.BottomCenter).fillMaxWidth().help("Terrain / Eyesight", "Toggle between your drive on the real 3D landscape (Terrain) and the camera at street level with plots overlaid (Eyesight).")) { mode = it }
     }
 }
 

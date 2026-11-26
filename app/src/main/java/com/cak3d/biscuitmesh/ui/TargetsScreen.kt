@@ -120,7 +120,7 @@ fun TargetsScreen(vm: MainViewModel, onBack: () -> Unit) {
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { showAdd = true }, containerColor = MaterialTheme.colorScheme.primary) {
+            FloatingActionButton(onClick = { showAdd = true }, modifier = Modifier.help("Add target", "Save a network, device or location you want to locate later. Targets are local-only, never uploaded, and give you scan toggles to home in on them."), containerColor = MaterialTheme.colorScheme.primary) {
                 Icon(Icons.Default.Add, contentDescription = "Add target")
             }
         },

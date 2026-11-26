@@ -171,7 +171,9 @@ fun NavigateScreen(
                     NavMode.LOCATOR -> LocatorContent(vm, results, context, heading, onOpenTargets, startTargetId)
                 }
             }
-            ModeSwitcher(mode) { mode = it }
+            androidx.compose.foundation.layout.Box(Modifier.help("View switch", "Flip between Compass (point toward a target), Radar (devices sweeping around you) and Locator (hone in on one). Pick a target in Targets first.")) {
+                ModeSwitcher(mode) { mode = it }
+            }
         }
     }
 }
