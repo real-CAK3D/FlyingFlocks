@@ -52,7 +52,7 @@ object StarlinkTrains {
         val cluster = (if (fresh) low else all.sortedByDescending { safeMeanMotion(it) }).take(30)
         val avgAlt = cluster.map { altitudeKm(safeMeanMotion(it)) }.filter { it > 0 }.average()
             .let { if (it.isNaN()) 0 else it.toInt() }
-        val passes = visiblePasses(cluster, lat, lon, fromMs, windowHrs = 48, minPeakElDeg = 18)
+        val passes = visiblePasses(cluster, lat, lon, fromMs, windowHrs = 48, minPeakElDeg = 18.0)
             .sortedBy { it.aosMs }
             .take(20)
         Train(cluster.size, avgAlt, passes, fresh)

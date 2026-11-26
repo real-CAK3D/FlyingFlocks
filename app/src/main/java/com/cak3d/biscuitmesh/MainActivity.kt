@@ -103,6 +103,8 @@ import com.cak3d.biscuitmesh.ui.RogueApScreen
 import com.cak3d.biscuitmesh.ui.ScopeScreen
 import com.cak3d.biscuitmesh.ui.SiteSurveyScreen
 import com.cak3d.biscuitmesh.ui.VisiblePassesScreen
+import com.cak3d.biscuitmesh.ui.StarlinkScreen
+import com.cak3d.biscuitmesh.ui.TripJournalScreen
 import com.cak3d.biscuitmesh.ui.TerminalScreen
 import com.cak3d.biscuitmesh.ui.SignalsScreen
 import com.cak3d.biscuitmesh.ui.SignalsView
