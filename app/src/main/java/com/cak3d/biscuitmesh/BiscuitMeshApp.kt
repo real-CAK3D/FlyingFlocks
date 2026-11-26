@@ -378,6 +378,8 @@ class BiscuitMeshApp : Application() {
         // Voice: honour the on/off setting, and speak a camera alert once per hazard.
         appScope.launch { settingsStore.voiceAlerts.collect { speaker.enabled = it } }
         appScope.launch { settingsStore.vibrateAlerts.collect { vibrateEnabled = it } }
+        appScope.launch { settingsStore.ttsVoice.collect { speaker.setVoice(it) } }
+        appScope.launch { settingsStore.ttsRate.collect { speaker.setRate(it) } }
 
         // Re-arm the background bright-pass check on each start (survives a reboot once the app opens).
         appScope.launch {

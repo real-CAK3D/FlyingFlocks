@@ -37,6 +37,8 @@ class SettingsStore(private val context: Context) {
     private val skyAlertsKey = booleanPreferencesKey("sky_alerts")
     private val carAutoStartKey = booleanPreferencesKey("car_auto_start")
     private val carBtNameKey = stringPreferencesKey("car_bt_name")
+    private val ttsVoiceKey = stringPreferencesKey("tts_voice")
+    private val ttsRateKey = androidx.datastore.preferences.core.floatPreferencesKey("tts_rate")
     private val visitedTownsKey = stringSetPreferencesKey("visited_towns")
     private val wigleAuthKey = stringPreferencesKey("wigle_auth")
     private val sbSessionKey = stringPreferencesKey("sb_session_json")
@@ -276,6 +278,20 @@ class SettingsStore(private val context: Context) {
         context.settingsDataStore.data.map { it[carBtNameKey] ?: "" }
     suspend fun setCarBtName(name: String) {
         context.settingsDataStore.edit { it[carBtNameKey] = name.trim() }
+    }
+
+    /** Chosen talk-back voice (engine voice name; blank = engine default). */
+    val ttsVoice: Flow<String> =
+        context.settingsDataStore.data.map { it[ttsVoiceKey] ?: "" }
+    suspend fun setTtsVoice(name: String) {
+        context.settingsDataStore.edit { it[ttsVoiceKey] = name }
+    }
+
+    /** Talk-back speaking rate (1.0 = normal). */
+    val ttsRate: Flow<Float> =
+        context.settingsDataStore.data.map { it[ttsRateKey] ?: 1.0f }
+    suspend fun setTtsRate(rate: Float) {
+        context.settingsDataStore.edit { it[ttsRateKey] = rate }
     }
 
     /** The operator's saved Broadcastify feed ID (numeric). Defaults to Auburn & Lewiston Fire/EMS. */

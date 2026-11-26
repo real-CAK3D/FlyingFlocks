@@ -178,6 +178,7 @@ fun SettingsScreen(
                         AppearanceSection(vm)
                         HudSection(vm)
                         AlertsScreenSection(vm)
+                        VoiceSection(vm)
                     }
                     2 -> {
                         DeadZonesSection(
@@ -522,6 +523,46 @@ private fun AlertsScreenSection(vm: MainViewModel) {
                 supportingText = { Text("Matches part of the connected device's name or address") },
             )
         }
+    }
+}
+
+@Composable
+private fun VoiceSection(vm: MainViewModel) {
+    val voiceOn by vm.voiceAlerts.collectAsStateWithLifecycle()
+    val currentVoice by vm.ttsVoice.collectAsStateWithLifecycle()
+    val rate by vm.ttsRate.collectAsStateWithLifecycle()
+    val voices = remember { vm.ttsVoices() }
+    var expanded by remember { mutableStateOf(false) }
+    val currentLabel = voices.firstOrNull { it.name == currentVoice }?.label ?: "Engine default"
+
+    SectionCard(title = "Talk-back voice",
+        subtitle = "The spoken alerts — camera warnings, town crossings, new devices and bright passes. Pick a voice and speed, then test it.") {
+        ToggleRow("Speak alerts", "Say alerts aloud while driving", voiceOn) { vm.setVoiceAlerts(it) }
+        Spacer(Modifier.height(8.dp))
+        Text("VOICE", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.secondary,
+            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, fontWeight = FontWeight.Bold)
+        Box {
+            OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
+                Text(currentLabel, modifier = Modifier.weight(1f))
+                Text("▾")
+            }
+            androidx.compose.material3.DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                androidx.compose.material3.DropdownMenuItem(text = { Text("Engine default") },
+                    onClick = { vm.setTtsVoice(""); expanded = false })
+                voices.forEach { v ->
+                    androidx.compose.material3.DropdownMenuItem(text = { Text(v.label) },
+                        onClick = { vm.setTtsVoice(v.name); expanded = false })
+                }
+            }
+        }
+        if (voices.isEmpty()) Text("No extra voices found — install more under Android's Text-to-speech settings.",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+        Spacer(Modifier.height(8.dp))
+        Text("SPEED  ${"%.1f".format(rate)}×", style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.secondary,
+            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, fontWeight = FontWeight.Bold)
+        Slider(value = rate, onValueChange = { vm.setTtsRate(it) }, valueRange = 0.7f..1.6f)
+        OutlinedButton(onClick = { vm.testVoice() }, enabled = voiceOn) { Text("Test voice") }
     }
 }
 

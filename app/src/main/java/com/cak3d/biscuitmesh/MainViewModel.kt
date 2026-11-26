@@ -873,6 +873,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** Speak a line through the TTS engine. Honours the master voice toggle (Settings → voice). */
     fun speak(text: String, flush: Boolean = false) = appRef.speaker.say(text, flush)
 
+    // --- Talk-back voice --------------------------------------------------
+    /** English voices the installed TTS engine offers, for the picker. */
+    fun ttsVoices(): List<com.cak3d.biscuitmesh.audio.VoiceInfo> = appRef.speaker.availableVoices()
+    val ttsVoice: StateFlow<String> =
+        appRef.settingsStore.ttsVoice.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
+    fun setTtsVoice(name: String) = viewModelScope.launch {
+        appRef.settingsStore.setTtsVoice(name); appRef.speaker.setVoice(name)
+    }
+    val ttsRate: StateFlow<Float> =
+        appRef.settingsStore.ttsRate.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 1.0f)
+    fun setTtsRate(rate: Float) = viewModelScope.launch {
+        appRef.settingsStore.setTtsRate(rate); appRef.speaker.setRate(rate)
+    }
+    /** Speak a sample line with the current voice/rate (for the "Test" button). */
+    fun testVoice() = appRef.speaker.say("Flocked Up talk-back. New device nearby, bright pass soon.", flush = true)
+
     // --- Place RF fingerprints --------------------------------------------
     val fingerprints: Flow<List<com.cak3d.biscuitmesh.data.Fingerprint>> = appRef.fingerprintStore.fingerprints
     fun saveFingerprint(name: String, lat: Double, lon: Double, devices: Map<String, String>) =
