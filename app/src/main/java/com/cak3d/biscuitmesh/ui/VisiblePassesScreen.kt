@@ -135,7 +135,8 @@ fun VisiblePassesScreen(vm: MainViewModel, onBack: () -> Unit) {
                     item {
                         Text("${list.size} visible pass${if (list.size == 1) "" else "es"} · next 36 h",
                             color = MaterialTheme.colorScheme.primary, fontFamily = FontFamily.Monospace,
-                            fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 4.dp))
+                            fontSize = 12.sp, fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(start = 4.dp).help("Visible passes", "Each card is a satellite you can see with the naked eye: a countdown to when it rises, which way it rises and sets, and how high it climbs. When one is overhead you can stamp the catch for your passport."))
                     }
                     items(list) { p -> PassCard(p, nowMs, onLog = {
                         val day = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US).format(java.util.Date(p.aosMs))

@@ -52,7 +52,7 @@ fun OrbitScreen(
         }
         OrbitSwitcher(
             mode,
-            Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth().help("Orbit view switcher", "Flips this one window between everything overhead: the live Satellites globe, Aircraft (ADS-B) in the area, and Space weather (aurora & solar activity). Tap a label or use the arrows."),
         ) { mode = it }
     }
 }

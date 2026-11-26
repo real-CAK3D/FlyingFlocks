@@ -132,7 +132,8 @@ fun LightMapScreen(vm: MainViewModel, onBack: () -> Unit) {
             // Recentre button.
             FilledIconButton(
                 onClick = { loc?.let { mapView.controller.animateTo(GeoPoint(it.first, it.second)) } },
-                modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp).size(48.dp),
+                modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp).size(48.dp)
+                    .help("Recentre", "Snaps the night-lights map back to your location after you've panned away."),
             ) { Icon(Icons.Default.MyLocation, contentDescription = "Recentre on me") }
 
             // Legend.

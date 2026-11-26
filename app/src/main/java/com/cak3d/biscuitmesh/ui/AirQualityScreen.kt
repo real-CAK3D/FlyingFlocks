@@ -145,7 +145,7 @@ fun AirQualityScreen(vm: MainViewModel, onBack: () -> Unit) {
                 item {
                     val aqi = a.usAqi
                     Card(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().help("Air Quality Index", "The US AQI right now, colour-coded from Good (green) to Hazardous. The line under it is a plain-language health note. The pollutant breakdown below shows what's driving the number."),
                         shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     ) {

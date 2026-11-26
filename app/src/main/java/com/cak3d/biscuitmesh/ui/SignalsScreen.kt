@@ -51,7 +51,7 @@ fun SignalsScreen(
             SignalsView.DASHBOARD -> DashboardScreen(vm, onBack)
             SignalsView.TRAFFIC -> TrafficDashboardScreen(vm, onBack)
         }
-        SignalsSwitcher(view, Modifier.align(Alignment.BottomCenter).fillMaxWidth()) { view = it }
+        SignalsSwitcher(view, Modifier.align(Alignment.BottomCenter).fillMaxWidth().help("Signals view switcher", "Flips this window between every live-signal visualizer: the RF Scope, the Live mission-control console, the device Graph, the Devices list, the signal Dashboard and the Traffic charts. Scroll the strip and tap a view.")) { view = it }
     }
 }
 

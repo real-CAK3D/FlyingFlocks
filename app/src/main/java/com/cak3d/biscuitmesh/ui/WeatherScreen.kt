@@ -147,6 +147,15 @@ fun WeatherScreen(vm: MainViewModel, onBack: () -> Unit) {
             TopAppBar(
                 title = { Text("Weather") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
+                actions = {
+                    HelpButton(
+                        "Weather",
+                        "Current conditions, an animated precipitation radar (past frames plus a short " +
+                            "nowcast), an hourly strip and a multi-day forecast — all for your location, " +
+                            "keyless from Open-Meteo and RainViewer. Add a weather API key in Settings → Keys " +
+                            "for an alternate provider.",
+                    )
+                },
             )
         },
     ) { pad ->
@@ -169,7 +178,8 @@ fun WeatherScreen(vm: MainViewModel, onBack: () -> Unit) {
             ) {
                 Column {
                     Text("  PRECIPITATION RADAR", style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.secondary, modifier = Modifier.padding(top = 10.dp))
+                        color = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.padding(top = 10.dp).help("Precip radar", "An animated rain/snow radar centred on you. Play/pause loops it; the slider scrubs through past frames and the short forecast (nowcast) frames. Pinch the map to zoom."))
                     Box(Modifier.fillMaxWidth().height(300.dp)) {
                         AndroidView(factory = { mapView }, modifier = Modifier.fillMaxSize())
                     }

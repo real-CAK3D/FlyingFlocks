@@ -114,7 +114,7 @@ fun SkyConditionsScreen(vm: MainViewModel, onBack: () -> Unit) {
             } else {
                 // Darkness gauge.
                 val trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
-                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Box(Modifier.fillMaxWidth().help("Darkness gauge", "How dark your sky is right now, 0–100%. It takes your site's Bortle class and folds in the live Sun (twilight) and Moon (phase & altitude). Higher is darker and better for stargazing."), contentAlignment = Alignment.Center) {
                     Canvas(Modifier.size(180.dp)) {
                         val r = size.minDimension / 2f * 0.82f
                         val ctr = Offset(size.width / 2f, size.height / 2f)
@@ -175,7 +175,7 @@ fun SkyConditionsScreen(vm: MainViewModel, onBack: () -> Unit) {
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                 }
 
-                InfoCard {
+                InfoCard(Modifier.help("Bortle class", "Set how light-polluted your sky normally is on a 1–9 scale (1 = pristine dark-sky site, 9 = inner city). This is the baseline the live darkness gauge builds on — set it once for where you observe.")) {
                     Text("YOUR SITE'S BORTLE CLASS: $bortle", fontSize = 12.sp, fontFamily = FontFamily.Monospace,
                         color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                     Slider(value = bortle.toFloat(), onValueChange = { bortle = it.toInt().coerceIn(1, 9) },

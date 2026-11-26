@@ -174,6 +174,14 @@ fun SkyArScreen(vm: MainViewModel, onBack: () -> Unit) {
                             contentDescription = "Toggle stars & constellations",
                         )
                     }
+                    HelpButton(
+                        "Sky AR",
+                        "Point your phone at the sky and the live camera gets an overlay of what's actually " +
+                            "up there at its real bearing and height — GPS/GLONASS/Galileo satellites the " +
+                            "receiver sees, aircraft overhead (ADS-B), the Sun, Moon and planets, and the star " +
+                            "constellations. The star button toggles the star field. Move the phone around to " +
+                            "find things; the compass readout up top shows where you're pointing.",
+                    )
                 },
             )
         },
@@ -333,7 +341,7 @@ fun SkyArScreen(vm: MainViewModel, onBack: () -> Unit) {
             // Heads-up: compass heading + sat count.
             val heading = ((Math.toDegrees(atan2((-rm[2]).toDouble(), (-rm[5]).toDouble())).toFloat() + 360f) % 360f)
             val card = cardinalOf(heading)
-            Column(Modifier.fillMaxWidth().padding(12.dp)) {
+            Column(Modifier.fillMaxWidth().padding(12.dp).help("Heading & tally", "Shows which compass direction you're pointing and a live tally of how many satellites, aircraft and bodies are above the horizon right now. Sweep the phone until the thing you want lines up with the centre reticle.")) {
                 Text("$card  ${heading.toInt()}°", style = MaterialTheme.typography.titleMedium,
                     fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, color = Color.White)
                 val up = bodies.count { it.el >= 0f }

@@ -120,7 +120,7 @@ fun AlertsScreen(vm: MainViewModel, onBack: () -> Unit) {
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                item { AreaBanner(b?.local.orEmpty().size, worst, loc != null) }
+                item { Box(Modifier.help("Area status", "A one-glance read of your area: green when there are no active warnings near you, coloured by the worst alert when there are. Below it, 'affecting your area' is local (NWS/USGS/GDACS within ~400 km) and 'global events' is worldwide. Tap any card for detail.")) { AreaBanner(b?.local.orEmpty().size, worst, loc != null) } }
                 item { SectionHeader("AFFECTING YOUR AREA") }
                 if (b?.local.isNullOrEmpty()) {
                     item { AllClearCard(loc != null) }

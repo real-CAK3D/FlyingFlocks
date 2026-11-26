@@ -116,7 +116,7 @@ fun StarlinkScreen(vm: MainViewModel, onBack: () -> Unit) {
                             Modifier.fillMaxWidth(), shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                         ) {
-                            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Column(Modifier.fillMaxWidth().padding(14.dp).help("The train", "This is the Starlink cluster we're tracking — how many satellites and how high. A freshly-launched train flies low and bunched (a bright 'string of pearls'); the passes below say when it next crosses your sky sunlit. Look for several moving together."), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Text(if (t.fresh) "Freshest cluster" else "Lowest-orbit cluster",
                                     color = SL_ACCENT, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                                 Text("${t.sats} satellites · ~${t.altKm} km" +

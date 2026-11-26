@@ -199,7 +199,7 @@ fun OrbitGlobeScreen(vm: MainViewModel, onBack: () -> Unit) {
                         selected = hit
                         if (hit != null) autoSpin = false   // freeze so the selected sat stays put
                     }
-                },
+                }.help("Live satellite globe", "Each dot is a real satellite at its true position right now, propagated by SGP4 from live TLEs and coloured by orbit class (LEO/MEO/GEO/HEO). Drag to spin the Earth, tap a dot to read it and see its next pass over you. The gold dot is you."),
             ) {
                 hits.clear()
                 val r = size.minDimension / 2f * 0.82f

@@ -102,7 +102,10 @@ fun VisionScreen(vm: MainViewModel, onBack: () -> Unit) {
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { editing = EditTarget(index = -1, name = "", url = "") }) {
+            FloatingActionButton(
+                onClick = { editing = EditTarget(index = -1, name = "", url = "") },
+                modifier = Modifier.help("Add portal", "Point Vision at your own God's Eye View fork — any URL the phone can reach, including a Tailscale node. It opens full-screen in an in-app browser. Tap a portal to open it; the URLs stay on your phone."),
+            ) {
                 Icon(Icons.Default.Add, contentDescription = "Add portal")
             }
         },

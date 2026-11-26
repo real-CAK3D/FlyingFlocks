@@ -112,7 +112,7 @@ fun SpaceEventsScreen(vm: MainViewModel, onBack: () -> Unit) {
         ) {
             item {
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().help("Kp index", "The planetary geomagnetic activity level right now, 0–9. Low (green) is quiet; 5+ means a geomagnetic storm, which is when aurora can push to lower latitudes. Pairs with the Space weather / aurora view."),
                     shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 ) {

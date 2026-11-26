@@ -104,7 +104,7 @@ fun FeedsScreen(vm: MainViewModel, onBack: () -> Unit) {
         },
     ) { pad ->
         Column(Modifier.fillMaxSize().padding(pad)) {
-            TabRow(selectedTabIndex = tab) {
+            TabRow(selectedTabIndex = tab, modifier = Modifier.help("Feed tabs", "Three public, consume-only feeds for your area: Cameras (OSM-tagged surveillance/ALPR cams near you), Scanner (OpenMHz recorded calls plus a Broadcastify live link), and Webcams (live public webcams via a free Windy key). Nothing here transmits.")) {
                 tabs.forEachIndexed { i, t ->
                     Tab(selected = tab == i, onClick = { tab = i }, text = { Text(t) })
                 }

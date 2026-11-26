@@ -182,7 +182,7 @@ fun SiteSurveyScreen(vm: MainViewModel, onBack: () -> Unit) {
             // Hero score.
             item {
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().help("Spot Score", "One number, 0–100, for how good this exact spot is right now — a weighted blend of dark sky, clean air, clear weather, quiet RF and calm geomagnetic activity. Higher is better for stargazing, camping or a clean sweep. The tiles below show what's helping or hurting."),
                     shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 ) {
