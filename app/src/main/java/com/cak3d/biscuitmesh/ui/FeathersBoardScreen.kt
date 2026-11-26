@@ -28,6 +28,9 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -49,7 +52,7 @@ import com.cak3d.biscuitmesh.crew.CrewManager
 fun FeathersBoardScreen(vm: MainViewModel, onBack: () -> Unit) {
     val rows by vm.feathersBoard.collectAsStateWithLifecycle()
     val mine by vm.feathers.collectAsStateWithLifecycle()
-    var loaded by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    var loaded by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) { vm.loadFeathersBoard(); kotlinx.coroutines.delay(1200); loaded = true }
 
