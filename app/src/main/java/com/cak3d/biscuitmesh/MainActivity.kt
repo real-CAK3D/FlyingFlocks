@@ -112,6 +112,7 @@ import com.cak3d.biscuitmesh.ui.StoreScreen
 import com.cak3d.biscuitmesh.ui.PassportScreen
 import com.cak3d.biscuitmesh.ui.FeathersBoardScreen
 import com.cak3d.biscuitmesh.ui.GuideScreen
+import com.cak3d.biscuitmesh.ui.help
 import com.cak3d.biscuitmesh.ui.TerminalScreen
 import com.cak3d.biscuitmesh.ui.SignalsScreen
 import com.cak3d.biscuitmesh.ui.SignalsView
@@ -195,7 +196,10 @@ class MainActivity : ComponentActivity() {
                         else window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                         onDispose { }
                     }
-                    PermissionGate { MainShell(vm) }
+                    val helpCtrl = remember { com.cak3d.biscuitmesh.ui.HelpController() }
+                    androidx.compose.runtime.CompositionLocalProvider(com.cak3d.biscuitmesh.ui.LocalHelp provides helpCtrl) {
+                        PermissionGate { MainShell(vm) }
+                    }
                     val tourSeen by vm.tourSeen.collectAsStateWithLifecycle(initialValue = true)
                     if (!tourSeen) {
                         com.cak3d.biscuitmesh.ui.OnboardingScreen(vm = vm, onDone = { vm.dismissTour() })
@@ -226,6 +230,8 @@ class MainActivity : ComponentActivity() {
                     // Animated passport stamp when a new collectible lands.
                     val newStamp by vm.newStamp.collectAsStateWithLifecycle()
                     newStamp?.let { com.cak3d.biscuitmesh.ui.PassportStampOverlay(it, onDone = { vm.clearNewStamp() }) }
+                    // Interactive help — "tap to learn" overlay, on top of everything.
+                    com.cak3d.biscuitmesh.ui.HelpOverlay(helpCtrl)
                     // Branded launch splash — only on a fresh start, not on rotation / config change.
                     var showSplash by remember { mutableStateOf(savedInstanceState == null) }
                     if (showSplash) {
@@ -303,22 +309,31 @@ private fun MainShell(vm: MainViewModel) {
                     },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                     actions = {
-                        IconButton(onClick = { nav.navigate("dashboard") }) {
+                        com.cak3d.biscuitmesh.ui.HelpButton(
+                            "This screen",
+                            "Tap \"Explore this page\", then tap any highlighted part of the screen to learn what it is and how to use it. The bottom tabs and these top icons are tagged on every screen.")
+                        IconButton(onClick = { nav.navigate("dashboard") },
+                            modifier = Modifier.help("Dashboard", "A single-screen overview of your live totals, map and stats.")) {
                             Icon(Icons.Default.SpaceDashboard, contentDescription = "Dashboard")
                         }
-                        IconButton(onClick = { nav.navigate("rarebirds") }) {
+                        IconButton(onClick = { nav.navigate("rarebirds") },
+                            modifier = Modifier.help("Field Guide", "Your 'rare birds' collection — unusual devices to hunt and capture as you drive.")) {
                             Icon(Icons.Default.Radar, contentDescription = "Field Guide")
                         }
-                        IconButton(onClick = { nav.navigate("drives") }) {
+                        IconButton(onClick = { nav.navigate("drives") },
+                            modifier = Modifier.help("Drives", "Your saved drive history — review, replay or re-upload past wardrives.")) {
                             Icon(Icons.Default.History, contentDescription = "Drives")
                         }
-                        IconButton(onClick = { nav.navigate("sensors") }) {
+                        IconButton(onClick = { nav.navigate("sensors") },
+                            modifier = Modifier.help("Sensors & Sky hub", "The hub where almost every feature lives — scanning, visuals, sky, gamification, tools and this Guide.")) {
                             Icon(Icons.Default.SatelliteAlt, contentDescription = "Sensors & Sky")
                         }
-                        IconButton(onClick = { nav.navigate("terminal") }) {
+                        IconButton(onClick = { nav.navigate("terminal") },
+                            modifier = Modifier.help("Terminal", "A board console + app command palette — send commands to the fleet or jump to any screen.")) {
                             Icon(Icons.Default.Terminal, contentDescription = "Terminal")
                         }
-                        IconButton(onClick = { nav.navigate("settings") }) {
+                        IconButton(onClick = { nav.navigate("settings") },
+                            modifier = Modifier.help("Settings", "Your profile, Feathers, appearance, keys, voice, alerts and the Danger Zone.")) {
                             Icon(Icons.Default.Settings, contentDescription = "Settings")
                         }
                     },
@@ -328,6 +343,7 @@ private fun MainShell(vm: MainViewModel) {
         floatingActionButton = {
             if (currentRoute == "fleet") {
                 ExtendedFloatingActionButton(
+                    modifier = Modifier.help("Scan", "Starts/stops a phone-only wardrive right now — the phone's own Wi-Fi & BT radios, no board needed. Catches feed your totals and Feathers."),
                     onClick = { vm.toggleScan() },
                     icon = {
                         Icon(
@@ -344,6 +360,7 @@ private fun MainShell(vm: MainViewModel) {
                 NavigationBar(containerColor = NavigationBarDefaults.containerColor.copy(alpha = 0.92f)) {
                     TABS.forEach { tab ->
                         NavigationBarItem(
+                            modifier = Modifier.help(tab.label, com.cak3d.biscuitmesh.ui.tabHelp(tab.route)),
                             selected = currentRoute == tab.route,
                             onClick = {
                                 if (currentRoute != tab.route) {

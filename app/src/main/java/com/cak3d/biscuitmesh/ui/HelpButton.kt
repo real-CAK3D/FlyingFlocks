@@ -34,14 +34,22 @@ fun HelpButton(title: String, body: String, items: List<Pair<String, String>>? =
     IconButton(onClick = { open = true }) {
         Icon(Icons.Default.HelpOutline, contentDescription = "What is this?")
     }
+    val help = LocalHelp.current
     if (open) {
         AlertDialog(
             onDismissRequest = { open = false },
             confirmButton = { TextButton(onClick = { open = false }) { Text("Got it") } },
+            dismissButton = {
+                if (help != null && help.hasSpots()) TextButton(onClick = { open = false; help.enter() }) {
+                    Text("Explore this page")
+                }
+            },
             title = { Text(title) },
             text = {
                 Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(body, style = MaterialTheme.typography.bodyMedium)
+                    if (help != null && help.hasSpots()) Text("Tip: tap \"Explore this page\", then tap any part of the screen to learn what it does.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                     items?.forEach { (name, desc) ->
                         Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
                             Text(name, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold,
