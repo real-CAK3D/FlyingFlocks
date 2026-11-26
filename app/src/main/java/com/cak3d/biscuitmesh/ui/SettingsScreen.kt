@@ -19,9 +19,8 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.fillMaxSize
@@ -667,7 +666,7 @@ private fun HoldToConfirmButton(enabled: Boolean, label: String, onConfirm: () -
         Modifier.fillMaxWidth().height(48.dp).clip(RoundedCornerShape(10.dp))
             .background(if (enabled) Color(0xFF7F1D1D) else Color(0xFF3A2A2A))
             .pointerInput(enabled) {
-                if (enabled) androidx.compose.foundation.gestures.detectTapGestures(
+                if (enabled) detectTapGestures(
                     onPress = { holding = true; tryAwaitRelease(); holding = false })
             },
         contentAlignment = Alignment.Center,
