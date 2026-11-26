@@ -103,6 +103,7 @@ fun SettingsScreen(
     onOpenPlaces: () -> Unit = {},
     onOpenStats: () -> Unit = {},
     onOpenFlock: () -> Unit = {},
+    onOpenStore: () -> Unit = {},
 ) {
     val zones by vm.deadZones.collectAsStateWithLifecycle(initialValue = emptyList())
     val authorized by vm.authorizedUse.collectAsStateWithLifecycle()
@@ -176,7 +177,7 @@ fun SettingsScreen(
                             onOpenStats = onOpenStats,
                             onOpenFlock = onOpenFlock,
                         )
-                        FeathersSection(vm)
+                        FeathersSection(vm, onOpenStore)
                         DangerZoneSection(vm)
                     }
                     1 -> {
@@ -572,18 +573,22 @@ private fun VoiceSection(vm: MainViewModel) {
 }
 
 @Composable
-private fun FeathersSection(vm: MainViewModel) {
+private fun FeathersSection(vm: MainViewModel, onOpenStore: () -> Unit) {
     val bal by vm.feathers.collectAsStateWithLifecycle()
     val streak by vm.feathersStreak.collectAsStateWithLifecycle()
     val ledger by vm.feathersLedger.collectAsStateWithLifecycle()
+    val title by vm.equippedTitle.collectAsStateWithLifecycle()
     SectionCard(title = "Feathers",
-        subtitle = "Your gamification currency — earned by driving and catching, spent in the store (coming soon). Separate from your rank/XP.") {
+        subtitle = "Your gamification currency — earned by driving and catching, spent in the store. Separate from your rank/XP.") {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             Text("🪶 $bal", fontSize = 26.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
             if (streak > 0) Text("🔥 $streak-day streak", style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
         }
+        if (title.isNotBlank()) Text("Title: $title", style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+        OutlinedButton(onClick = onOpenStore, modifier = Modifier.fillMaxWidth()) { Text("Open store") }
         if (ledger.isNotEmpty()) {
             Spacer(Modifier.height(8.dp))
             Text("RECENT", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary,

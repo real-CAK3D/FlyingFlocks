@@ -51,13 +51,19 @@ enum class AppAccent(val label: String, val color: Color) {
 val LocalAppFeel = staticCompositionLocalOf { AppFeel.ROUNDED }
 val LocalAppAccent = staticCompositionLocalOf { AppAccent.GOLD }
 val LocalNightVision = staticCompositionLocalOf { false }
+/** A store-bought accent colour overriding the free palette (null = use the free accent). */
+val LocalCustomAccent = staticCompositionLocalOf<Color?> { null }
 
 /** Dark-sky "night vision" red — low enough to preserve dark adaptation in the field. */
 val NightRed = Color(0xFFFF3B30)
 
-/** The current accent colour, read anywhere under the theme. Red while night vision is on. */
+/** The current accent colour, read anywhere under the theme. Night vision wins, then a store accent. */
 @Composable
-fun appAccent(): Color = if (LocalNightVision.current) NightRed else LocalAppAccent.current.color
+fun appAccent(): Color = when {
+    LocalNightVision.current -> NightRed
+    LocalCustomAccent.current != null -> LocalCustomAccent.current!!
+    else -> LocalAppAccent.current.color
+}
 
 /** Card corner shape for the active feel. */
 @Composable
@@ -176,10 +182,14 @@ fun BiscuitMeshTheme(
     feel: AppFeel = AppFeel.ROUNDED,
     accent: AppAccent = AppAccent.GOLD,
     nightVision: Boolean = false,
+    customAccentHex: String? = null,
     content: @Composable () -> Unit,
 ) {
     val ink = if (feel == AppFeel.CIRCUIT) Color(0xFF080B0E) else Color(0xFF0E1116)
     val raised = if (feel == AppFeel.CIRCUIT) Color(0xFF10151B) else Color(0xFF171B22)
+    val custom = customAccentHex?.takeIf { it.isNotBlank() }
+        ?.let { runCatching { Color(android.graphics.Color.parseColor(it)) }.getOrNull() }
+    val effectiveAccent = custom ?: accent.color
     val scheme = if (nightVision) {
         // Red monochrome on near-black — keeps the operator's night vision in the dark.
         darkColorScheme(
@@ -190,11 +200,11 @@ fun BiscuitMeshTheme(
         )
     } else {
         darkColorScheme(
-            primary = accent.color,
+            primary = effectiveAccent,
             onPrimary = Color(0xFF0E1116),
             secondary = Color(0xFF5CB4E8),
             onSecondary = Color(0xFF0E1116),
-            tertiary = accent.color,
+            tertiary = effectiveAccent,
             background = ink,
             surface = raised,
             onBackground = Color(0xFFE6E8EB),
@@ -205,6 +215,7 @@ fun BiscuitMeshTheme(
         LocalAppFeel provides feel,
         LocalAppAccent provides accent,
         LocalNightVision provides nightVision,
+        LocalCustomAccent provides (if (nightVision) null else custom),
     ) {
         MaterialTheme(colorScheme = scheme, content = content)
     }

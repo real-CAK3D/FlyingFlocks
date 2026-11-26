@@ -76,6 +76,11 @@ class BiscuitMeshApp : Application() {
         com.cak3d.biscuitmesh.data.FeathersStore(this)
     }
 
+    /** Owned store cosmetics + what's equipped. */
+    val inventoryStore: com.cak3d.biscuitmesh.data.InventoryStore by lazy {
+        com.cak3d.biscuitmesh.data.InventoryStore(this)
+    }
+
     /** Local-only saved targets (networks/devices/locations) to locate/watch. Never uploaded. */
     val targetsStore: com.cak3d.biscuitmesh.data.TargetsStore by lazy {
         com.cak3d.biscuitmesh.data.TargetsStore(this)

@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.ShowChart
+import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.Whatshot
 import androidx.compose.material.icons.filled.Equalizer
 import androidx.compose.material.icons.filled.Flight
@@ -141,6 +142,7 @@ private val LOADER_OVERRIDES: Map<String, LoaderTheme> = mapOf(
     "ledger" to LoaderTheme.NETWORK,
     "tripjournal" to LoaderTheme.COMET,
     "elevation" to LoaderTheme.RINGS,
+    "store" to LoaderTheme.SPIRAL,
     // Tools
     "tiredash" to LoaderTheme.RINGS,
     "remote" to LoaderTheme.PULSAR,
@@ -199,6 +201,7 @@ fun SensorsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
             HubEntry("Hunts", "Bounty board — challenges that tick up as you drive", Icons.Default.EmojiEvents, "hunts", Color(0xFFFFD166)),
             HubEntry("Games", "Mini-games — hunt a signal, spot species, beat the clock", Icons.Default.SportsEsports, "games", Color(0xFF34D399)),
             HubEntry("Device Ledger", "Regulars vs transients across all your drives", Icons.Default.ReceiptLong, "ledger", Color(0xFF22D3EE)),
+            HubEntry("Store", "Spend your Feathers — titles, premium accent colours, and vanity renames for your flock and handle", Icons.Default.Storefront, "store", Color(0xFFFFD166)),
             HubEntry("Trip Journal", "Every finished drive written up for you — how far, how long, what you caught — with a Share button and your running towns-visited count", Icons.Default.AutoStories, "tripjournal", Color(0xFF8FD694)),
             HubEntry("Elevation Profile", "The hills you actually drove — your latest drive's climb and descent, with total gain, loss and high/low points, from real terrain data", Icons.Default.ShowChart, "elevation", Color(0xFF8FD694)),
         )),

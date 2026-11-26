@@ -100,7 +100,11 @@ fun ProfileScreen(
                             Column(Modifier.weight(1f)) {
                                 Text(handle.ifBlank { "Unnamed wing" },
                                     style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                                Text("Rank ${progress.rank} · ${progress.rankName}",
+                                val title by vm.equippedTitle.collectAsStateWithLifecycle()
+                                val flock by vm.flockName.collectAsStateWithLifecycle()
+                                if (title.isNotBlank()) Text(title, style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                                Text("Rank ${progress.rank} · ${progress.rankName}" + if (flock.isNotBlank()) " · $flock" else "",
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f))
                             }

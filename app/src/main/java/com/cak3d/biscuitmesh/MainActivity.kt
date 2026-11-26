@@ -108,6 +108,7 @@ import com.cak3d.biscuitmesh.ui.TripJournalScreen
 import com.cak3d.biscuitmesh.ui.HoloTimelineScreen
 import com.cak3d.biscuitmesh.ui.FingerprintScreen
 import com.cak3d.biscuitmesh.ui.ElevationScreen
+import com.cak3d.biscuitmesh.ui.StoreScreen
 import com.cak3d.biscuitmesh.ui.TerminalScreen
 import com.cak3d.biscuitmesh.ui.SignalsScreen
 import com.cak3d.biscuitmesh.ui.SignalsView
@@ -171,7 +172,8 @@ class MainActivity : ComponentActivity() {
             val accent = runCatching { com.cak3d.biscuitmesh.ui.theme.AppAccent.valueOf(accentName) }
                 .getOrDefault(com.cak3d.biscuitmesh.ui.theme.AppAccent.GOLD)
             val nightVision by app.settingsStore.nightVision.collectAsStateWithLifecycle(initialValue = false)
-            BiscuitMeshTheme(feel, accent, nightVision) {
+            val customAccent by app.inventoryStore.equippedAccent.collectAsStateWithLifecycle(initialValue = "")
+            BiscuitMeshTheme(feel, accent, nightVision, customAccent) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,
@@ -453,7 +455,8 @@ private fun MainShell(vm: MainViewModel) {
                         onOpenProfile = { nav.navigate("profile") },
                         onOpenPlaces = { nav.navigate("places") },
                         onOpenStats = { nav.navigate("stats") },
-                        onOpenFlock = { nav.navigate("crew") })
+                        onOpenFlock = { nav.navigate("crew") },
+                        onOpenStore = { nav.navigate("store") })
                 }
                 composable("wiglestats") { WigleStatsScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("deadzones") { DeadZonesScreen(vm = vm, onBack = { nav.popBackStack() }) }
@@ -487,6 +490,7 @@ private fun MainShell(vm: MainViewModel) {
                 composable("holotimeline") { HoloTimelineScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("fingerprint") { FingerprintScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("elevation") { ElevationScreen(vm = vm, onBack = { nav.popBackStack() }) }
+                composable("store") { StoreScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("cockpit/{hex}") { entry ->
                     CockpitScreen(vm = vm, hex = entry.arguments?.getString("hex") ?: "", onBack = { nav.popBackStack() })
                 }

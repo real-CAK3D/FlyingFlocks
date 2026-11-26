@@ -45,6 +45,7 @@ class SettingsStore(private val context: Context) {
     private val crewShareKey = booleanPreferencesKey("crew_share_location")
     private val flockEnabledKey = booleanPreferencesKey("flock_enabled")
     private val flockHandleKey = stringPreferencesKey("flock_handle")
+    private val flockNameKey = stringPreferencesKey("flock_name")
     private val broadcastifyFeedKey = stringPreferencesKey("broadcastify_feed")
     private val tourSeenKey = booleanPreferencesKey("tour_seen")
     private val appFeelKey = stringPreferencesKey("app_feel")
@@ -216,6 +217,13 @@ class SettingsStore(private val context: Context) {
 
     suspend fun flockHandle(): String =
         context.settingsDataStore.data.first()[flockHandleKey] ?: ""
+
+    /** The flock's (team's) name — distinct from your personal handle/username. */
+    val flockName: Flow<String> =
+        context.settingsDataStore.data.map { it[flockNameKey] ?: "" }
+    suspend fun setFlockName(name: String) {
+        context.settingsDataStore.edit { it[flockNameKey] = name.trim() }
+    }
 
     suspend fun setFlockHandle(name: String) {
         context.settingsDataStore.edit { it[flockHandleKey] = name.trim() }

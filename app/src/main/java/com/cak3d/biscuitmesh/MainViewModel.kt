@@ -928,9 +928,59 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         appRef.feathersStore.award(amt, "Entered ${c.label}", fromDrive = true)
     }
 
+    // --- Store / inventory / vanity ---------------------------------------
+    val owned: StateFlow<Set<String>> =
+        appRef.inventoryStore.owned.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
+    val equippedTitle: StateFlow<String> =
+        appRef.inventoryStore.equippedTitle.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
+    val equippedAccent: StateFlow<String> =
+        appRef.inventoryStore.equippedAccent.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
+    val flockName: StateFlow<String> =
+        appRef.settingsStore.flockName.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
+
+    private val _storeMsg = MutableStateFlow<String?>(null)
+    val storeMsg: StateFlow<String?> = _storeMsg
+    fun clearStoreMsg() { _storeMsg.value = null }
+
+    private fun equipLocal(item: com.cak3d.biscuitmesh.data.StoreItem) = viewModelScope.launch {
+        when (item.kind) {
+            com.cak3d.biscuitmesh.data.StoreKind.TITLE -> appRef.inventoryStore.equipTitle(item.value)
+            com.cak3d.biscuitmesh.data.StoreKind.ACCENT -> appRef.inventoryStore.equipAccent(item.value)
+        }
+    }
+
+    fun buyItem(item: com.cak3d.biscuitmesh.data.StoreItem) = viewModelScope.launch {
+        if (appRef.inventoryStore.owned.first().contains(item.id)) { equipLocal(item); return@launch }
+        if (appRef.feathersStore.spend(item.price, "Bought ${item.name}")) {
+            appRef.inventoryStore.own(item.id)
+            equipLocal(item)
+            _storeMsg.value = "Bought & equipped ${item.name}"
+        } else _storeMsg.value = "Not enough Feathers for ${item.name}"
+    }
+
+    fun equipItem(item: com.cak3d.biscuitmesh.data.StoreItem) = equipLocal(item)
+    fun unequipTitle() = viewModelScope.launch { appRef.inventoryStore.equipTitle("") }
+    fun unequipAccent() = viewModelScope.launch { appRef.inventoryStore.equipAccent("") }
+
+    /** First-time, free flock naming (only when none set). */
+    fun setFlockNameFree(name: String) = viewModelScope.launch { appRef.settingsStore.setFlockName(name) }
+
+    fun renameFlock(name: String) = viewModelScope.launch {
+        if (appRef.feathersStore.spend(com.cak3d.biscuitmesh.data.StoreCatalog.RENAME_COST, "Flock rename")) {
+            appRef.settingsStore.setFlockName(name); _storeMsg.value = "Flock renamed to $name"
+        } else _storeMsg.value = "Rename needs ${com.cak3d.biscuitmesh.data.StoreCatalog.RENAME_COST} Feathers"
+    }
+
+    fun renameUsername(name: String) = viewModelScope.launch {
+        if (appRef.feathersStore.spend(com.cak3d.biscuitmesh.data.StoreCatalog.RENAME_COST, "Username change")) {
+            runCatching { appRef.crew.setHandle(name) }; _storeMsg.value = "Username changed to $name"
+        } else _storeMsg.value = "Change needs ${com.cak3d.biscuitmesh.data.StoreCatalog.RENAME_COST} Feathers"
+    }
+
     // --- Danger Zone ------------------------------------------------------
     fun resetProgress() = viewModelScope.launch {
         appRef.feathersStore.reset()
+        appRef.inventoryStore.reset()
         appRef.progress.reset()
     }
     fun wipeHistory() = viewModelScope.launch {
@@ -946,6 +996,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** Local account deletion: wipes everything on-device. (Server-side removal lands in Phase 4.) */
     fun deleteAccountLocal() = viewModelScope.launch {
         appRef.feathersStore.reset()
+        appRef.inventoryStore.reset()
+        appRef.settingsStore.setFlockName("")
         appRef.progress.reset()
         appRef.drivesStore.clearAll()
         appRef.fingerprintStore.clearAll()
