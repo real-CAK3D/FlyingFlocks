@@ -109,6 +109,7 @@ import com.cak3d.biscuitmesh.ui.HoloTimelineScreen
 import com.cak3d.biscuitmesh.ui.FingerprintScreen
 import com.cak3d.biscuitmesh.ui.ElevationScreen
 import com.cak3d.biscuitmesh.ui.StoreScreen
+import com.cak3d.biscuitmesh.ui.PassportScreen
 import com.cak3d.biscuitmesh.ui.TerminalScreen
 import com.cak3d.biscuitmesh.ui.SignalsScreen
 import com.cak3d.biscuitmesh.ui.SignalsView
@@ -220,6 +221,9 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                     crossing?.let { com.cak3d.biscuitmesh.ui.CrossingBanner(it, onDismiss = { crossing = null }) }
+                    // Animated passport stamp when a new collectible lands.
+                    val newStamp by vm.newStamp.collectAsStateWithLifecycle()
+                    newStamp?.let { com.cak3d.biscuitmesh.ui.PassportStampOverlay(it, onDone = { vm.clearNewStamp() }) }
                     // Branded launch splash — only on a fresh start, not on rotation / config change.
                     var showSplash by remember { mutableStateOf(savedInstanceState == null) }
                     if (showSplash) {
@@ -491,6 +495,7 @@ private fun MainShell(vm: MainViewModel) {
                 composable("fingerprint") { FingerprintScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("elevation") { ElevationScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("store") { StoreScreen(vm = vm, onBack = { nav.popBackStack() }) }
+                composable("passport") { PassportScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("cockpit/{hex}") { entry ->
                     CockpitScreen(vm = vm, hex = entry.arguments?.getString("hex") ?: "", onBack = { nav.popBackStack() })
                 }

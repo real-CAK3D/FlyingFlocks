@@ -137,7 +137,10 @@ fun VisiblePassesScreen(vm: MainViewModel, onBack: () -> Unit) {
                             color = MaterialTheme.colorScheme.primary, fontFamily = FontFamily.Monospace,
                             fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 4.dp))
                     }
-                    items(list) { p -> PassCard(p, nowMs) }
+                    items(list) { p -> PassCard(p, nowMs, onLog = {
+                        val day = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US).format(java.util.Date(p.aosMs))
+                        vm.logSkyCatch("${p.name}_$day", p.name, "Seen at peak ${p.peakElDeg.toInt()}°")
+                    }) }
                 }
             }
         }
@@ -145,9 +148,10 @@ fun VisiblePassesScreen(vm: MainViewModel, onBack: () -> Unit) {
 }
 
 @Composable
-private fun PassCard(p: VisiblePass, nowMs: Long) {
+private fun PassCard(p: VisiblePass, nowMs: Long, onLog: () -> Unit) {
     val accent = Color(0xFFFFD166)
     val until = p.aosMs - nowMs
+    val overhead = until <= 0 && nowMs < p.losMs
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
@@ -166,6 +170,9 @@ private fun PassCard(p: VisiblePass, nowMs: Long) {
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f))
             Text("${clock(p.aosMs)} → ${clock(p.losMs)}", fontSize = 11.sp,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+            if (overhead) androidx.compose.material3.FilledTonalButton(onClick = onLog) {
+                Text("🛰️ Stamp this catch")
+            }
         }
     }
 }

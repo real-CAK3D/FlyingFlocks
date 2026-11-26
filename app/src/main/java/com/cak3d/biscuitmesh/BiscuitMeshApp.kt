@@ -81,6 +81,11 @@ class BiscuitMeshApp : Application() {
         com.cak3d.biscuitmesh.data.InventoryStore(this)
     }
 
+    /** The passport — collected stamps (places, species, sky catches, events). */
+    val collectiblesStore: com.cak3d.biscuitmesh.data.CollectiblesStore by lazy {
+        com.cak3d.biscuitmesh.data.CollectiblesStore(this)
+    }
+
     /** Local-only saved targets (networks/devices/locations) to locate/watch. Never uploaded. */
     val targetsStore: com.cak3d.biscuitmesh.data.TargetsStore by lazy {
         com.cak3d.biscuitmesh.data.TargetsStore(this)

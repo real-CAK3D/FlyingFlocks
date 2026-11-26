@@ -250,6 +250,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     init {
         viewModelScope.launch { runCatching { visitedTowns.addAll(appRef.settingsStore.visitedTowns.first()) } }
         viewModelScope.launch { watchNewDevices() }
+        // Captured rare birds become passport "species" stamps.
+        viewModelScope.launch {
+            appRef.rareBirds.birds.collect { birds ->
+                birds.filter { it.captured }.forEach { b ->
+                    grantStamp(com.cak3d.biscuitmesh.data.Stamp(
+                        "species_${b.id}", com.cak3d.biscuitmesh.data.StampKind.SPECIES, b.name,
+                        "Rare bird captured", "", System.currentTimeMillis()))
+                }
+            }
+        }
     }
 
     /**
@@ -699,6 +709,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val mins = ((System.currentTimeMillis() - st.startMs) / 60000L).coerceAtLeast(1)
             // Award Feathers for the drive: catches + distance, a first-of-day bonus and streak multiplier.
             viewModelScope.launch {
+                // Your very first saved drive earns a passport "First Flight" event stamp.
+                if (appRef.drivesStore.drives.first().isEmpty()) {
+                    grantStamp(com.cak3d.biscuitmesh.data.Stamp("event_first_flight",
+                        com.cak3d.biscuitmesh.data.StampKind.EVENT, "First Flight",
+                        "Your first wardrive", "", System.currentTimeMillis()))
+                }
                 val cams = camerasAlongTrack(track)
                 val miles = trackDistance(track) / 1609.344
                 val base = st.wifiCount + st.btCount + cams * 2 + (miles * 2).toInt()
@@ -926,6 +942,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun awardCrossing(c: BoundaryCrossing) = viewModelScope.launch {
         val amt = when (c.kind) { "state" -> 150; "county" -> 50; else -> if (c.firstVisit) 25 else 10 }
         appRef.feathersStore.award(amt, "Entered ${c.label}", fromDrive = true)
+        // First visit to a town/state earns a passport location stamp.
+        if (c.firstVisit || c.kind == "state") {
+            grantStamp(com.cak3d.biscuitmesh.data.Stamp(
+                "loc_${c.kind}_${c.label}", com.cak3d.biscuitmesh.data.StampKind.LOCATION, c.label,
+                c.kind.replaceFirstChar { it.uppercase() },
+                listOfNotNull(c.place.county.ifBlank { null }, c.place.state.ifBlank { null }).joinToString(" · "),
+                System.currentTimeMillis()))
+        }
     }
 
     // --- Store / inventory / vanity ---------------------------------------
@@ -977,10 +1001,38 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         } else _storeMsg.value = "Change needs ${com.cak3d.biscuitmesh.data.StoreCatalog.RENAME_COST} Feathers"
     }
 
+    // --- Collectibles / Passport ------------------------------------------
+    val stamps: StateFlow<List<com.cak3d.biscuitmesh.data.Stamp>> =
+        appRef.collectiblesStore.stamps.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    /** The just-collected stamp, for the animated passport overlay (null once dismissed). */
+    private val _newStamp = MutableStateFlow<com.cak3d.biscuitmesh.data.Stamp?>(null)
+    val newStamp: StateFlow<com.cak3d.biscuitmesh.data.Stamp?> = _newStamp
+    fun clearNewStamp() { _newStamp.value = null }
+
+    private fun stampBonus(kind: com.cak3d.biscuitmesh.data.StampKind): Int = when (kind) {
+        com.cak3d.biscuitmesh.data.StampKind.SPECIES -> 200
+        com.cak3d.biscuitmesh.data.StampKind.SKY -> 150
+        com.cak3d.biscuitmesh.data.StampKind.LOCATION -> 20
+        com.cak3d.biscuitmesh.data.StampKind.EVENT -> 100
+    }
+
+    private fun grantStamp(stamp: com.cak3d.biscuitmesh.data.Stamp) = viewModelScope.launch {
+        if (appRef.collectiblesStore.collect(stamp)) {
+            _newStamp.value = stamp
+            appRef.feathersStore.award(stampBonus(stamp.kind), "Collected ${stamp.title}", fromDrive = false)
+        }
+    }
+
+    /** Stamp a sky catch (from the Visible Passes / Starlink screens when something is overhead). */
+    fun logSkyCatch(id: String, title: String, detail: String) = grantStamp(
+        com.cak3d.biscuitmesh.data.Stamp("sky_$id", com.cak3d.biscuitmesh.data.StampKind.SKY, title,
+            "Sky catch", detail, System.currentTimeMillis()))
+
     // --- Danger Zone ------------------------------------------------------
     fun resetProgress() = viewModelScope.launch {
         appRef.feathersStore.reset()
         appRef.inventoryStore.reset()
+        appRef.collectiblesStore.reset()
         appRef.progress.reset()
     }
     fun wipeHistory() = viewModelScope.launch {
@@ -997,6 +1049,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun deleteAccountLocal() = viewModelScope.launch {
         appRef.feathersStore.reset()
         appRef.inventoryStore.reset()
+        appRef.collectiblesStore.reset()
         appRef.settingsStore.setFlockName("")
         appRef.progress.reset()
         appRef.drivesStore.clearAll()

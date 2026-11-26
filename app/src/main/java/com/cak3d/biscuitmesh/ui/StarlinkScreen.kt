@@ -143,7 +143,10 @@ fun StarlinkScreen(vm: MainViewModel, onBack: () -> Unit) {
                                 color = SL_ACCENT, fontFamily = FontFamily.Monospace, fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 4.dp))
                         }
-                        items(t.passes) { p -> TrainPassCard(p, nowMs) }
+                        items(t.passes) { p -> TrainPassCard(p, nowMs, onLog = {
+                            val day = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US).format(java.util.Date(p.aosMs))
+                            vm.logSkyCatch("starlink_${p.name}_$day", "Starlink Train", "${p.name} · peak ${p.peakElDeg.toInt()}°")
+                        }) }
                     }
                 }
             }
@@ -152,8 +155,9 @@ fun StarlinkScreen(vm: MainViewModel, onBack: () -> Unit) {
 }
 
 @Composable
-private fun TrainPassCard(p: VisiblePass, nowMs: Long) {
+private fun TrainPassCard(p: VisiblePass, nowMs: Long, onLog: () -> Unit) {
     val until = p.aosMs - nowMs
+    val overhead = until <= 0 && nowMs < p.losMs
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
@@ -173,6 +177,9 @@ private fun TrainPassCard(p: VisiblePass, nowMs: Long) {
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f))
             Text("${starlinkClock(p.aosMs)} → ${starlinkClock(p.losMs)}", fontSize = 11.sp,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+            if (overhead) androidx.compose.material3.FilledTonalButton(onClick = onLog) {
+                Text("🛰️ Stamp this catch")
+            }
         }
     }
 }
