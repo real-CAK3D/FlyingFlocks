@@ -65,7 +65,8 @@ fun FeathersBoardScreen(vm: MainViewModel, onBack: () -> Unit) {
                 },
                 actions = {
                     Text("🪶 $mine", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(end = 14.dp))
+                        modifier = Modifier.padding(end = 14.dp)
+                            .help("Your Feathers", "Your current Feathers balance — the app's points, earned by driving and catching. Spend them in the Store. With Flock enabled your balance syncs online and ranks you on this board."))
                     HelpButton("Feathers Leaderboard",
                         "The whole flock ranked by Feathers earned. Your balance syncs to the server while you're " +
                             "online (Flock enabled); your own row is highlighted.")

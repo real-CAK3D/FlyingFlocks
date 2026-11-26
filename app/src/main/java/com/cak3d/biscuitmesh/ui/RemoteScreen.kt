@@ -102,6 +102,7 @@ fun RemoteScreen(vm: MainViewModel, onBack: () -> Unit) {
                 fontFamily = FontFamily.Monospace,
                 letterSpacing = 1.5.sp,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                modifier = Modifier.help("Universal remote", "A Flipper-style TV remote. Each button blasts common-brand IR codes (Samsung/LG/Sony) out of the connected node's IR LED — so aim the node at the TV. Power also fires a TV-B-Gone sweep. Needs a node with an IR LED connected."),
             )
 
             // Power — the big one

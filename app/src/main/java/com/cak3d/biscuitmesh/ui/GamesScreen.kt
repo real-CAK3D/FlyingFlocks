@@ -82,7 +82,8 @@ fun GamesScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(14.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             items(entries, key = { it.route }) { e ->
-                Card(onClick = { onOpen(e.route) }, modifier = Modifier.fillMaxWidth(),
+                Card(onClick = { onOpen(e.route) },
+                    modifier = Modifier.fillMaxWidth().help(e.title, e.sub + ". Tap to play — it runs on the live Wi-Fi/Bluetooth signals around you, so move about."),
                     shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                     Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically,

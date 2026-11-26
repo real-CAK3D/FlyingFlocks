@@ -108,7 +108,8 @@ fun WhisperListScreen(vm: MainViewModel, onBack: () -> Unit, onOpen: (String, St
                     else "Private 1:1 chirps. Only you and the other wing can read them — good for swapping Band codes and Meshtastic details.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                    modifier = Modifier.padding(bottom = 4.dp),
+                    modifier = Modifier.padding(bottom = 4.dp)
+                        .help("Chirps", "Private, one-to-one messages — only you and the wing you pick can read them. Set a handle in Flock first so others can find you; then tap a wing below to open a thread. Handy for swapping Band codes or Meshtastic details privately."),
                 )
             }
             if (!loading && wings.isEmpty()) {

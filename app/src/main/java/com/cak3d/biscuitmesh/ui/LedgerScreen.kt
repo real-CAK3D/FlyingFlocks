@@ -118,7 +118,7 @@ fun LedgerScreen(vm: MainViewModel, onBack: () -> Unit) {
                 }
             } else {
                 item("stats") {
-                    LCard {
+                    LCard(Modifier.help("Device ledger", "A roll-up of every device across all your saved drives. Regulars are ones you've seen on two or more drives (your neighbours, your routine); transients showed up just once. The breakdown splits them by Wi-Fi, Bluetooth and sub-GHz. Tap a regular for its history.")) {
                         Text("ACROSS ${(s.total)} DEVICES", style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.primary, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
                         Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -166,8 +166,8 @@ fun LedgerScreen(vm: MainViewModel, onBack: () -> Unit) {
 }
 
 @Composable
-private fun LCard(content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
-    Card(Modifier.fillMaxWidth(), shape = appCardShape(),
+private fun LCard(modifier: Modifier = Modifier, content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
+    Card(Modifier.fillMaxWidth().then(modifier), shape = appCardShape(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp), content = content)
     }

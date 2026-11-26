@@ -81,7 +81,7 @@ fun GlobalStatsScreen(vm: MainViewModel, onBack: () -> Unit) {
                 }
             }
             item("alltime") {
-                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                Card(Modifier.help("All-time totals", "The combined tally of everything every wing in the flock has ever caught — Wi-Fi, Bluetooth, cameras, drives and distance. Your own numbers are in Profile; the leaderboard below ranks wings by score."), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                     Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("ALL-TIME · EVERYONE", style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.secondary, fontFamily = FontFamily.Monospace)

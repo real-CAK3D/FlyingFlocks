@@ -87,7 +87,8 @@ fun FlockChatScreen(vm: MainViewModel, onBack: () -> Unit) {
         },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 12.dp)) {
-            Card(Modifier.fillMaxWidth().padding(top = 8.dp),
+            Card(Modifier.fillMaxWidth().padding(top = 8.dp)
+                .help("Room status", "Green means you're connected to the online room and shows how many wings are here right now. Pick a handle below so your posts are attributed, then type at the bottom. Everyone running the app sees this same room — it needs no board or mesh node."),
                 shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                 Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {

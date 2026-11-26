@@ -132,7 +132,7 @@ fun CrewScreen(vm: MainViewModel, onBack: () -> Unit) {
                 }
             }
             item("mycode") {
-                FCard {
+                FCard(Modifier.help("Bands", "A band is a one-time invite code. Ring one and hand it to another wing; when they enter it under 'Tail a wing', you two can see each other on the map. Each band works once — make a new one for the next person.")) {
                     Text("MY BAND", style = MaterialTheme.typography.labelMedium, color = ACCENT,
                         fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
                     Text("Hand this to another wing so you can see them on your map. Works once — then make a new band.",
@@ -169,7 +169,7 @@ fun CrewScreen(vm: MainViewModel, onBack: () -> Unit) {
                 }
             }
             item("share") {
-                FCard {
+                FCard(Modifier.help("Position sharing", "When on, wings holding one of your bands can see your live position on their map. Off means you fly dark — nobody sees where you are. Your choice, flip it any time.")) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text("Show my position", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -261,8 +261,8 @@ fun CrewScreen(vm: MainViewModel, onBack: () -> Unit) {
 }
 
 @Composable
-private fun FCard(content: @Composable ColumnScope.() -> Unit) {
-    com.cak3d.biscuitmesh.ui.theme.ThemedCard(Modifier.fillMaxWidth()) {
+private fun FCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+    com.cak3d.biscuitmesh.ui.theme.ThemedCard(Modifier.fillMaxWidth().then(modifier)) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp), content = content)
     }
 }

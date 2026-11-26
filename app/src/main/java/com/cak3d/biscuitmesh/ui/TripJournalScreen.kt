@@ -110,7 +110,8 @@ fun TripJournalScreen(vm: MainViewModel, onBack: () -> Unit) {
             item {
                 Text("$towns town${if (towns == 1) "" else "s"} visited · ${drives.size} drive${if (drives.size == 1) "" else "s"} logged",
                     color = TJ_ACCENT, fontFamily = FontFamily.Monospace, fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 4.dp))
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(start = 4.dp).help("Trip journal", "A running tally of distinct towns you've driven through and how many drives are logged. Below, each finished drive is written up as a plain-language recap — the latest in full with a Share button, older ones as one-liners."))
             }
             if (drives.isEmpty()) {
                 item {

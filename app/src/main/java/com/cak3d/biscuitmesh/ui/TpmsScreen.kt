@@ -110,7 +110,8 @@ fun TpmsScreen(vm: MainViewModel, onBack: () -> Unit) {
             }
 
             Text("YOUR CAR · tap a tire to assign a sensor", style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                color = MaterialTheme.colorScheme.primary, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold,
+                modifier = Modifier.help("Tire map", "Tap a wheel to assign one of the detected TPMS sensors to it, so each position shows its own live pressure and temperature. A tire turns red below your low-pressure threshold (set at the bottom). Sensors wake when wheels spin — sweep on the Sub-GHz tab while near traffic."))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 TireCard(TirePos.FL, assigns[TirePos.FL], sensors, lowPsi, Modifier.weight(1f)) { pickFor = TirePos.FL }
                 TireCard(TirePos.FR, assigns[TirePos.FR], sensors, lowPsi, Modifier.weight(1f)) { pickFor = TirePos.FR }

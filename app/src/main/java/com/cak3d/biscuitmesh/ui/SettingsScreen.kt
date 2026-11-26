@@ -154,6 +154,7 @@ fun SettingsScreen(
                 selectedTabIndex = tab,
                 containerColor = Color.Transparent,
                 edgePadding = 12.dp,
+                modifier = Modifier.help("Settings tabs", "Settings are grouped across these tabs: Profile (your handle, Feathers, Store, Danger Zone), General (appearance, HUD, alerts, voice), Privacy (dead zones), Devices (boards & sensors), Data (keys, export, collecting), and About. Scroll the strip and tap a tab; changes take effect right away."),
             ) {
                 tabs.forEachIndexed { i, t ->
                     Tab(selected = tab == i, onClick = { tab = i },
@@ -1073,7 +1074,8 @@ private fun ApiKeysSection(vm: MainViewModel) {
         Spacer(Modifier.height(10.dp))
         Text("YOUR KEYS", style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.secondary,
-            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+            modifier = Modifier.help("API keys", "Paste any optional API keys here — aircraft, weather, live traffic, webcams, scanner audio, maps. Everything works with a keyless default, so a key only raises limits, switches provider or unlocks a source. If you hold more than one key for a feature, the first listed wins. Keys stay on this device only."))
         com.cak3d.biscuitmesh.data.ApiKeys.services.forEach { svc ->
             ApiKeyField(svc, keys[svc.id] ?: "") { vm.setApiKey(svc.id, it) }
         }

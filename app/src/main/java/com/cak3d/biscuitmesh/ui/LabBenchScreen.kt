@@ -87,7 +87,7 @@ fun LabBenchScreen(onBack: () -> Unit) {
             Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            MacDecoderCard()
+            Box(Modifier.help("Lab Bench", "A set of hands-on learning tools — decode a MAC address, estimate distance from signal strength, see how long a password takes to crack, pick apart a Wi-Fi beacon frame, plan non-overlapping channels, and quiz yourself. Tap through each card; nothing here transmits.")) { MacDecoderCard() }
             SignalDistanceCard()
             CrackTimeCard()
             BeaconAnatomyCard()

@@ -81,7 +81,8 @@ fun MeshChatScreen(vm: MainViewModel, onBack: () -> Unit) {
         },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 12.dp)) {
-            Card(Modifier.fillMaxWidth().padding(top = 8.dp),
+            Card(Modifier.fillMaxWidth().padding(top = 8.dp)
+                .help("Mesh link", "Shows whether you're connected to a paired Meshtastic node and how many nodes are on the mesh. Use Connect/Disconnect here; once green you can type at the bottom and it broadcasts to the whole mesh with no internet."),
                 shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                 Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {

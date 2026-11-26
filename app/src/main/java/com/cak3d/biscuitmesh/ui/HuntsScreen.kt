@@ -109,7 +109,7 @@ fun HuntsScreen(vm: MainViewModel, onBack: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item("head") {
-                Card(Modifier.fillMaxWidth(), shape = appCardShape(),
+                Card(Modifier.fillMaxWidth().help("Bounty board", "Your overall hunt progress: how many tiers you've cleared and how many hunts are fully maxed. Each hunt below ticks up on its own as you drive and grind, rolling to the next target (5 → 10 → 15) when you clear one. Tap a hunt for its targets."), shape = appCardShape(),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text("BOUNTY BOARD", style = MaterialTheme.typography.labelMedium,

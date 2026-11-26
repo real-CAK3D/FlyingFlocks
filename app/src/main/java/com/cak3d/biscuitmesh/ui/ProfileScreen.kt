@@ -95,7 +95,7 @@ fun ProfileScreen(
         ) {
             // Identity + rank
             item("id") {
-                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                Card(Modifier.help("Your identity", "Your avatar, handle, equipped title, flock and rank. The bar shows how much XP until your next rank. Change the avatar, ring overlay and title in the Store; rename your handle or flock just below (costs Feathers)."), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                     Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                             val avatarGlyph by vm.equippedAvatar.collectAsStateWithLifecycle()
