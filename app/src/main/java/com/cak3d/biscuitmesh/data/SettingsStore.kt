@@ -306,6 +306,13 @@ class SettingsStore(private val context: Context) {
         context.settingsDataStore.edit { it[ttsRateKey] = rate }
     }
 
+    /** Talk-back voice pitch (1.0 = normal) — changes the character of the chosen voice. */
+    val ttsPitch: Flow<Float> =
+        context.settingsDataStore.data.map { it[androidx.datastore.preferences.core.floatPreferencesKey("tts_pitch")] ?: 1.0f }
+    suspend fun setTtsPitch(pitch: Float) {
+        context.settingsDataStore.edit { it[androidx.datastore.preferences.core.floatPreferencesKey("tts_pitch")] = pitch }
+    }
+
     /** The operator's saved Broadcastify feed ID (numeric). Defaults to Auburn & Lewiston Fire/EMS. */
     val broadcastifyFeed: Flow<String> =
         context.settingsDataStore.data.map { it[broadcastifyFeedKey] ?: "4180" }

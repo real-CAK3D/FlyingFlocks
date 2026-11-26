@@ -568,6 +568,13 @@ private fun VoiceSection(vm: MainViewModel) {
             color = MaterialTheme.colorScheme.secondary,
             fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, fontWeight = FontWeight.Bold)
         Slider(value = rate, onValueChange = { vm.setTtsRate(it) }, valueRange = 0.7f..1.6f)
+        val pitch by vm.ttsPitch.collectAsStateWithLifecycle()
+        Text("PITCH  ${"%.1f".format(pitch)}×", style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.secondary,
+            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, fontWeight = FontWeight.Bold)
+        Text("Change the pitch to make one voice sound like several — deep, normal or high.",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+        Slider(value = pitch, onValueChange = { vm.setTtsPitch(it) }, valueRange = 0.6f..1.8f)
         OutlinedButton(onClick = { vm.testVoice() }, enabled = voiceOn) { Text("Test voice") }
     }
 }

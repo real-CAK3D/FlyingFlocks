@@ -19,6 +19,7 @@ class Speaker(context: Context) {
     @Volatile var enabled = true
     @Volatile private var pendingVoice: String? = null
     @Volatile private var pendingRate: Float = 1f
+    @Volatile private var pendingPitch: Float = 1f
 
     init {
         tts = TextToSpeech(context.applicationContext) { status ->
@@ -27,6 +28,7 @@ class Speaker(context: Context) {
                 ready = true
                 applyVoice()
                 applyRate()
+                applyPitch()
             }
         }
     }
@@ -78,6 +80,16 @@ class Speaker(context: Context) {
 
     private fun applyRate() {
         runCatching { tts?.setSpeechRate(pendingRate) }
+    }
+
+    /** Voice pitch (0.5 deep … 2.0 high; 1.0 normal). Lets one engine voice sound like several. */
+    fun setPitch(pitch: Float) {
+        pendingPitch = pitch.coerceIn(0.5f, 2.0f)
+        if (ready) runCatching { tts?.setPitch(pendingPitch) }
+    }
+
+    private fun applyPitch() {
+        runCatching { tts?.setPitch(pendingPitch) }
     }
 
     fun stop() { runCatching { tts?.stop() } }

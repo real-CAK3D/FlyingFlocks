@@ -395,6 +395,7 @@ class BiscuitMeshApp : Application() {
         appScope.launch { settingsStore.vibrateAlerts.collect { vibrateEnabled = it } }
         appScope.launch { settingsStore.ttsVoice.collect { speaker.setVoice(it) } }
         appScope.launch { settingsStore.ttsRate.collect { speaker.setRate(it) } }
+        appScope.launch { settingsStore.ttsPitch.collect { speaker.setPitch(it) } }
 
         // Re-arm the background bright-pass check on each start (survives a reboot once the app opens).
         appScope.launch {

@@ -65,14 +65,13 @@ fun StoreScreen(vm: MainViewModel, onBack: () -> Unit) {
     val owned by vm.owned.collectAsStateWithLifecycle()
     val equippedTitle by vm.equippedTitle.collectAsStateWithLifecycle()
     val equippedAccent by vm.equippedAccent.collectAsStateWithLifecycle()
-    val flockName by vm.flockName.collectAsStateWithLifecycle()
-    val handle by vm.flockHandle.collectAsStateWithLifecycle(initialValue = "")
+    val equippedAvatar by vm.equippedAvatar.collectAsStateWithLifecycle()
+    val equippedOverlay by vm.equippedOverlay.collectAsStateWithLifecycle()
+    val premium by vm.premium.collectAsStateWithLifecycle()
     val msg by vm.storeMsg.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
 
     LaunchedEffect(msg) { msg?.let { snackbar.showSnackbar(it); vm.clearStoreMsg() } }
-
-    var renameTarget by remember { mutableStateOf<String?>(null) } // "flock" | "user" | "flock_free"
 
     Scaffold(
         topBar = {
@@ -94,30 +93,63 @@ fun StoreScreen(vm: MainViewModel, onBack: () -> Unit) {
             contentPadding = PaddingValues(14.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            // Identity / vanity renames.
-            item { SectionLabel("IDENTITY") }
+            // Flock Premium.
+            item { SectionLabel("FLOCK PREMIUM") }
             item {
+                val premiumItem = StoreCatalog.items.first { it.kind == StoreKind.PREMIUM }
                 StoreCard {
-                    Text("Flock name", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                    Text(flockName.ifBlank { "— not set —" }, fontFamily = FontFamily.Monospace, fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f))
-                    if (flockName.isBlank()) {
-                        FilledTonalButton(onClick = { renameTarget = "flock_free" }) { Text("Name your flock (free)") }
+                    Text("Flock Premium ✦", fontWeight = FontWeight.Bold, color = Color(0xFFFFD166), fontSize = 16.sp)
+                    Text(premiumItem.desc, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                    if (premium) {
+                        Text("✓ Active", color = Color(0xFF34D399), fontWeight = FontWeight.Bold)
                     } else {
-                        OutlinedButton(onClick = { renameTarget = "flock" },
-                            enabled = feathers >= StoreCatalog.RENAME_COST) {
-                            Text("Rename flock · 🪶 ${StoreCatalog.RENAME_COST}")
+                        Button(onClick = { vm.buyItem(premiumItem) }, enabled = feathers >= premiumItem.price) {
+                            Text("Unlock · 🪶 ${premiumItem.price}")
                         }
+                        Text("A \$2/month option would need Google Play Billing (not wired yet).",
+                            fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
                     }
                 }
             }
-            item {
+
+            // Profile pictures.
+            item { SectionLabel("PROFILE PICTURES") }
+            items2(StoreCatalog.items.filter { it.kind == StoreKind.AVATAR }) { item ->
+                val isOwned = item.id in owned || item.price == 0
+                val isEquipped = equippedAvatar == item.value || (equippedAvatar.isBlank() && item.id == "avatar_crow")
                 StoreCard {
-                    Text("Username (handle)", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                    Text(handle.ifBlank { "— not set —" }, fontFamily = FontFamily.Monospace, fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f))
-                    OutlinedButton(onClick = { renameTarget = "user" }, enabled = feathers >= StoreCatalog.RENAME_COST) {
-                        Text("Change username · 🪶 ${StoreCatalog.RENAME_COST}")
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            AvatarRing(item.value, equippedOverlay, 46.dp)
+                            Text(item.name, fontWeight = FontWeight.Bold)
+                        }
+                        BuyEquip(item, isOwned, isEquipped, feathers,
+                            onBuy = { vm.buyItem(item) }, onEquip = { vm.equipItem(item) }, onUnequip = {})
+                    }
+                }
+            }
+
+            // Overlays (rings around the avatar).
+            item { SectionLabel("AVATAR OVERLAYS") }
+            items2(StoreCatalog.items.filter { it.kind == StoreKind.OVERLAY }) { item ->
+                val isOwned = item.id in owned
+                val isEquipped = equippedOverlay == item.value
+                StoreCard {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            AvatarRing(equippedAvatar.ifBlank { "🐦‍⬛" }, item.value, 46.dp)
+                            Column {
+                                Text(item.name, fontWeight = FontWeight.Bold)
+                                if (item.premiumOnly) Text("Premium only", fontSize = 11.sp, color = Color(0xFFFFD166))
+                            }
+                        }
+                        BuyEquip(item, isOwned, isEquipped, feathers,
+                            onBuy = { vm.buyItem(item) }, onEquip = { vm.equipItem(item) },
+                            onUnequip = { vm.unequipOverlay() })
                     }
                 }
             }
@@ -163,35 +195,6 @@ fun StoreScreen(vm: MainViewModel, onBack: () -> Unit) {
             }
             item { androidx.compose.foundation.layout.Spacer(Modifier.size(24.dp)) }
         }
-    }
-
-    renameTarget?.let { target ->
-        var text by remember { mutableStateOf(if (target == "user") handle else flockName) }
-        val free = target == "flock_free"
-        AlertDialog(
-            onDismissRequest = { renameTarget = null },
-            title = { Text(if (target == "user") "Change username" else if (free) "Name your flock" else "Rename flock") },
-            text = {
-                Column {
-                    OutlinedTextField(value = text, onValueChange = { text = it }, singleLine = true,
-                        label = { Text("New name") })
-                    if (!free) Text("Costs 🪶 ${StoreCatalog.RENAME_COST} Feathers.", fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                        modifier = Modifier.padding(top = 8.dp))
-                }
-            },
-            confirmButton = {
-                Button(enabled = text.isNotBlank(), onClick = {
-                    when (target) {
-                        "user" -> vm.renameUsername(text.trim())
-                        "flock" -> vm.renameFlock(text.trim())
-                        else -> vm.setFlockNameFree(text.trim())
-                    }
-                    renameTarget = null
-                }) { Text(if (free) "Set" else "Confirm · 🪶 ${StoreCatalog.RENAME_COST}") }
-            },
-            dismissButton = { TextButton(onClick = { renameTarget = null }) { Text("Cancel") } },
-        )
     }
 }
 

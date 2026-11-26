@@ -735,7 +735,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 val miles = trackDistance(track) / 1609.344
                 val base = st.wifiCount + st.btCount + cams * 2 + (miles * 2).toInt()
                 val (firstBonus, mult) = appRef.feathersStore.recordDriveDay()
-                val earned = ((base + firstBonus) * mult).toInt().coerceAtLeast(0)
+                val premiumMult = if (appRef.inventoryStore.premium.first()) 2 else 1
+                val earned = (((base + firstBonus) * mult).toInt() * premiumMult).coerceAtLeast(0)
                 if (earned > 0) {
                     appRef.feathersStore.award(earned, "Drive · ${st.wifiCount + st.btCount} catches", fromDrive = true)
                     _lastFeathers.value = earned
@@ -930,6 +931,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun setTtsRate(rate: Float) = viewModelScope.launch {
         appRef.settingsStore.setTtsRate(rate); appRef.speaker.setRate(rate)
     }
+    val ttsPitch: StateFlow<Float> =
+        appRef.settingsStore.ttsPitch.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 1.0f)
+    fun setTtsPitch(pitch: Float) = viewModelScope.launch {
+        appRef.settingsStore.setTtsPitch(pitch); appRef.speaker.setPitch(pitch)
+    }
     /** Speak a sample line with the current voice/rate (for the "Test" button). */
     fun testVoice() = appRef.speaker.say("Flocked Up talk-back. New device nearby, bright pass soon.", flush = true)
 
@@ -980,6 +986,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         appRef.inventoryStore.equippedTitle.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
     val equippedAccent: StateFlow<String> =
         appRef.inventoryStore.equippedAccent.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
+    val equippedAvatar: StateFlow<String> =
+        appRef.inventoryStore.equippedAvatar.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
+    val equippedOverlay: StateFlow<String> =
+        appRef.inventoryStore.equippedOverlay.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
+    val premium: StateFlow<Boolean> =
+        appRef.inventoryStore.premium.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val flockName: StateFlow<String> =
         appRef.settingsStore.flockName.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
 
@@ -991,21 +1003,29 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         when (item.kind) {
             com.cak3d.biscuitmesh.data.StoreKind.TITLE -> appRef.inventoryStore.equipTitle(item.value)
             com.cak3d.biscuitmesh.data.StoreKind.ACCENT -> appRef.inventoryStore.equipAccent(item.value)
+            com.cak3d.biscuitmesh.data.StoreKind.AVATAR -> appRef.inventoryStore.equipAvatar(item.value)
+            com.cak3d.biscuitmesh.data.StoreKind.OVERLAY -> appRef.inventoryStore.equipOverlay(item.value)
+            com.cak3d.biscuitmesh.data.StoreKind.PREMIUM -> appRef.inventoryStore.setPremium(true)
         }
     }
 
     fun buyItem(item: com.cak3d.biscuitmesh.data.StoreItem) = viewModelScope.launch {
         if (appRef.inventoryStore.owned.first().contains(item.id)) { equipLocal(item); return@launch }
-        if (appRef.feathersStore.spend(item.price, "Bought ${item.name}")) {
+        if (item.premiumOnly && !appRef.inventoryStore.premium.first()) {
+            _storeMsg.value = "Flock Premium required for ${item.name}"; return@launch
+        }
+        if (item.price == 0 || appRef.feathersStore.spend(item.price, "Bought ${item.name}")) {
             appRef.inventoryStore.own(item.id)
             equipLocal(item)
-            _storeMsg.value = "Bought & equipped ${item.name}"
+            _storeMsg.value = if (item.kind == com.cak3d.biscuitmesh.data.StoreKind.PREMIUM)
+                "Flock Premium unlocked!" else "Bought & equipped ${item.name}"
         } else _storeMsg.value = "Not enough Feathers for ${item.name}"
     }
 
     fun equipItem(item: com.cak3d.biscuitmesh.data.StoreItem) = equipLocal(item)
     fun unequipTitle() = viewModelScope.launch { appRef.inventoryStore.equipTitle("") }
     fun unequipAccent() = viewModelScope.launch { appRef.inventoryStore.equipAccent("") }
+    fun unequipOverlay() = viewModelScope.launch { appRef.inventoryStore.equipOverlay("") }
 
     /** First-time, free flock naming (only when none set). */
     fun setFlockNameFree(name: String) = viewModelScope.launch { appRef.settingsStore.setFlockName(name) }

@@ -20,7 +20,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -29,6 +34,9 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -90,18 +98,17 @@ fun ProfileScreen(
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                     Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                            Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
-                                modifier = Modifier.size(64.dp)) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Text("${progress.rank}", style = MaterialTheme.typography.headlineMedium,
-                                        fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                                }
-                            }
+                            val avatarGlyph by vm.equippedAvatar.collectAsStateWithLifecycle()
+                            val overlayId by vm.equippedOverlay.collectAsStateWithLifecycle()
+                            AvatarRing(avatarGlyph.ifBlank { "🐦‍⬛" }, overlayId, 64.dp)
                             Column(Modifier.weight(1f)) {
                                 Text(handle.ifBlank { "Unnamed wing" },
                                     style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                                 val title by vm.equippedTitle.collectAsStateWithLifecycle()
                                 val flock by vm.flockName.collectAsStateWithLifecycle()
+                                val premium by vm.premium.collectAsStateWithLifecycle()
+                                if (premium) Text("✦ PREMIUM", style = MaterialTheme.typography.labelMedium,
+                                    color = Color(0xFFFFD166), fontWeight = FontWeight.Bold)
                                 if (title.isNotBlank()) Text(title, style = MaterialTheme.typography.labelLarge,
                                     color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                                 Text("Rank ${progress.rank} · ${progress.rankName}" + if (flock.isNotBlank()) " · $flock" else "",
@@ -130,6 +137,9 @@ fun ProfileScreen(
                     }
                 }
             }
+
+            // Identity — rename flock / username (spends Feathers)
+            item("identity") { IdentityCard(vm) }
 
             // Finds
             item("finds") {
@@ -170,6 +180,57 @@ fun ProfileScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun IdentityCard(vm: MainViewModel) {
+    val flock by vm.flockName.collectAsStateWithLifecycle()
+    val handle by vm.flockHandle.collectAsStateWithLifecycle(initialValue = "")
+    val feathers by vm.feathers.collectAsStateWithLifecycle()
+    val cost = com.cak3d.biscuitmesh.data.StoreCatalog.RENAME_COST
+    var dialog by remember { mutableStateOf<String?>(null) } // "flock" | "flock_free" | "user"
+    SectionCard("IDENTITY") {
+        InfoRow("Flock name", flock.ifBlank { "— not set —" })
+        if (flock.isBlank())
+            FilledTonalButton(onClick = { dialog = "flock_free" }, modifier = Modifier.fillMaxWidth()) {
+                Text("Name your flock (free)")
+            }
+        else
+            OutlinedButton(onClick = { dialog = "flock" }, enabled = feathers >= cost, modifier = Modifier.fillMaxWidth()) {
+                Text("Rename flock · 🪶 $cost")
+            }
+        InfoRow("Username", handle.ifBlank { "— not set —" })
+        OutlinedButton(onClick = { dialog = "user" }, enabled = feathers >= cost, modifier = Modifier.fillMaxWidth()) {
+            Text("Change username · 🪶 $cost")
+        }
+    }
+    dialog?.let { target ->
+        var text by remember { mutableStateOf(if (target == "user") handle else flock) }
+        val free = target == "flock_free"
+        AlertDialog(
+            onDismissRequest = { dialog = null },
+            title = { Text(if (target == "user") "Change username" else if (free) "Name your flock" else "Rename flock") },
+            text = {
+                Column {
+                    OutlinedTextField(value = text, onValueChange = { text = it }, singleLine = true,
+                        label = { Text("New name") })
+                    if (!free) Text("Costs 🪶 $cost Feathers.", style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), modifier = Modifier.padding(top = 8.dp))
+                }
+            },
+            confirmButton = {
+                Button(enabled = text.isNotBlank(), onClick = {
+                    when (target) {
+                        "user" -> vm.renameUsername(text.trim())
+                        "flock" -> vm.renameFlock(text.trim())
+                        else -> vm.setFlockNameFree(text.trim())
+                    }
+                    dialog = null
+                }) { Text(if (free) "Set" else "Confirm · 🪶 $cost") }
+            },
+            dismissButton = { TextButton(onClick = { dialog = null }) { Text("Cancel") } },
+        )
     }
 }
 
