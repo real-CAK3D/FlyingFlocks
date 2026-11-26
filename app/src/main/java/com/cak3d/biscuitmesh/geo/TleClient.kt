@@ -17,6 +17,7 @@ class TleClient {
     companion object {
         const val STATIONS = "stations"     // ISS, Tiangong/CSS, etc.
         const val VISUAL = "visual"          // ~160 brightest, easily-seen satellites
+        const val STARLINK = "starlink"      // the full Starlink fleet (used to find fresh trains)
         private const val BASE = "https://celestrak.org/NORAD/elements/gp.php?FORMAT=tle&GROUP="
     }
 

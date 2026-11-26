@@ -83,6 +83,18 @@
             android:exported="false"
             android:foregroundServiceType="location" />
 
+        <!-- Quick Settings tile: one-tap wardrive toggle from the notification shade. -->
+        <service
+            android:name=".tile.QuickScanTile"
+            android:exported="true"
+            android:icon="@drawable/ic_tile_scan"
+            android:label="Wardrive"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
         <!-- Stop/Start scan buttons in the notification shade. -->
         <receiver android:name=".ScanControlReceiver" android:exported="false">
             <intent-filter>

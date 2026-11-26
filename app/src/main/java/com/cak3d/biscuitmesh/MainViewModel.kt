@@ -643,6 +643,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         WardriveService.stop(appRef)
         if (st != null && st.startMs > 0L && (st.wifiCount + st.btCount) > 0) {
             viewModelScope.launch { saveDrive(st.startMs, st.wifiCount, st.btCount, samples, track) }
+            // Auto spoken recap when the master voice toggle is on (Speaker honours it internally).
+            val mins = ((System.currentTimeMillis() - st.startMs) / 60000L).coerceAtLeast(1)
+            speak("Drive saved. ${mins} minute${if (mins == 1L) "" else "s"}, " +
+                "${st.wifiCount} Wi-Fi and ${st.btCount} Bluetooth.")
         }
         // Fire-and-forget upload when the operator has opted into auto-upload.
         if (wdgAutoUpload.value && wdgApiKey.value.isNotBlank()) uploadToWdg()
@@ -813,6 +817,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     // --- Location passthrough (for the live aircraft view) -----------------
     fun locationUpdates() = appRef.locationProvider.locationUpdates()
+
+    /** Speak a line through the TTS engine. Honours the master voice toggle (Settings → voice). */
+    fun speak(text: String, flush: Boolean = false) = appRef.speaker.say(text, flush)
 
     // --- WiGLE account stats -----------------------------------------------
     val wigleAuth: Flow<String> = appRef.settingsStore.wigleAuth

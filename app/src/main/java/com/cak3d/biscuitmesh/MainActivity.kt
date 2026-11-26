@@ -202,6 +202,7 @@ class MainActivity : ComponentActivity() {
                         androidx.compose.runtime.LaunchedEffect(Unit) {
                             vm.boundaryCrossings.collect { c ->
                                 crossing = c
+                                vm.speak("Now entering ${c.label}", flush = true)
                                 runCatching {
                                     val vib = getSystemService(android.content.Context.VIBRATOR_SERVICE) as? android.os.Vibrator
                                     vib?.vibrate(android.os.VibrationEffect.createOneShot(90, android.os.VibrationEffect.DEFAULT_AMPLITUDE))
@@ -474,6 +475,8 @@ private fun MainShell(vm: MainViewModel) {
                 composable("sitesurvey") { SiteSurveyScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("spaceevents") { SpaceEventsScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("visiblepasses") { VisiblePassesScreen(vm = vm, onBack = { nav.popBackStack() }) }
+                composable("starlink") { StarlinkScreen(vm = vm, onBack = { nav.popBackStack() }) }
+                composable("tripjournal") { TripJournalScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("cockpit/{hex}") { entry ->
                     CockpitScreen(vm = vm, hex = entry.arguments?.getString("hex") ?: "", onBack = { nav.popBackStack() })
                 }

@@ -14,11 +14,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Air
+import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Equalizer
 import androidx.compose.material.icons.filled.Flight
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Insights
+import androidx.compose.material.icons.filled.Train
 import androidx.compose.material.icons.filled.WbTwilight
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.CameraAlt
@@ -109,6 +111,7 @@ private val LOADER_OVERRIDES: Map<String, LoaderTheme> = mapOf(
     "orbitglobe" to LoaderTheme.COMET,
     "satellites" to LoaderTheme.ORBIT,
     "visiblepasses" to LoaderTheme.PULSAR,
+    "starlink" to LoaderTheme.WAVEFORM,
     "skyconditions" to LoaderTheme.RINGS,
     "lightmap" to LoaderTheme.RIPPLE,
     "vision" to LoaderTheme.HELIX,
@@ -129,6 +132,7 @@ private val LOADER_OVERRIDES: Map<String, LoaderTheme> = mapOf(
     "hunts" to LoaderTheme.RADAR,
     "games" to LoaderTheme.GEARS,
     "ledger" to LoaderTheme.NETWORK,
+    "tripjournal" to LoaderTheme.COMET,
     // Tools
     "tiredash" to LoaderTheme.RINGS,
     "remote" to LoaderTheme.PULSAR,
@@ -160,6 +164,7 @@ fun SensorsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
             HubEntry("Orbit", "Everything overhead in one window — GPS satellites, ADS-B aircraft & aurora/space weather, switchable", Icons.Default.Public, "orbit", Color(0xFF38BDF8)),
             HubEntry("Orbit Globe", "Native SGP4 globe — the ISS, Tiangong & bright satellites tracked live, color-coded by orbit class. A preview of the native rebuild.", Icons.Default.SatelliteAlt, "orbitglobe", Color(0xFFFFD166)),
             HubEntry("Visible Passes", "Satellites you'll actually SEE soon — bright, sunlit birds against a dark sky, with a countdown to each rise and where to look", Icons.Default.Visibility, "visiblepasses", Color(0xFFFFD166)),
+            HubEntry("Starlink Train", "The freshest \"string of pearls\" — just-launched Starlinks still flying low & bunched, with a countdown to when they next cross your sky together", Icons.Default.Train, "starlink", Color(0xFF7DD3FC)),
             HubEntry("Sky Conditions", "Real-time light pollution — how dark your sky is right now, folding in live twilight & the Moon, with what you can see and when it next gets dark", Icons.Default.Nightlight, "skyconditions", Color(0xFF6366F1)),
             HubEntry("Light Pollution Map", "Earth at night around you — NASA VIIRS city-glow tiles show how bright your skies are; pan to find a dark spot", Icons.Default.Map, "lightmap", Color(0xFFFFD166)),
             HubEntry("Site Survey", "One Spot Score for where you're standing — light pollution, air, weather, geomag & RF rolled together. The all-three-pillars read.", Icons.Default.TravelExplore, "sitesurvey", Color(0xFF8FD694)),
@@ -183,6 +188,7 @@ fun SensorsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
             HubEntry("Hunts", "Bounty board — challenges that tick up as you drive", Icons.Default.EmojiEvents, "hunts", Color(0xFFFFD166)),
             HubEntry("Games", "Mini-games — hunt a signal, spot species, beat the clock", Icons.Default.SportsEsports, "games", Color(0xFF34D399)),
             HubEntry("Device Ledger", "Regulars vs transients across all your drives", Icons.Default.ReceiptLong, "ledger", Color(0xFF22D3EE)),
+            HubEntry("Trip Journal", "Every finished drive written up for you — how far, how long, what you caught — with a Share button and your running towns-visited count", Icons.Default.AutoStories, "tripjournal", Color(0xFF8FD694)),
         )),
         HubSection("Tools", Color(0xFFF59E0B), Icons.Default.Science, LoaderTheme.GEARS, listOf(
             HubEntry("Tire Pressure", "Learn your car's TPMS sensors, watch live pressure", Icons.Default.DirectionsCar, "tiredash", Color(0xFF38BDF8)),

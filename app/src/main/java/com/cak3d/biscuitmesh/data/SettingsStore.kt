@@ -291,6 +291,21 @@ class SettingsStore(private val context: Context) {
 /** A third-party service whose optional key/credential the app can store. */
 data class ApiService(val id: String, val label: String, val hint: String, val url: String, val secret: Boolean = false)
 
+/**
+ * A capability the app can power from more than one provider. The app always has a working
+ * keyless default (shown in [keylessDefault]); if the operator has entered a key for any of the
+ * [providers] — in priority order — that one is used instead. "If a user has one key over another,
+ * it's handy," without ever requiring one.
+ */
+data class ApiFeature(
+    val id: String,
+    val title: String,
+    /** What runs with no key at all — this is what everyone gets by default. */
+    val keylessDefault: String,
+    /** Candidate service ids, highest priority first. First one with a stored key wins. */
+    val providers: List<String>,
+)
+
 /** The catalog of services shown in Settings → API Keys. Add a row to add a field. */
 object ApiKeys {
     val services = listOf(
@@ -301,10 +316,41 @@ object ApiKeys {
         ApiService("dot511_key", "511 / DOT cameras key",
             "Some state traffic-camera feeds need a free developer key; many are open.", ""),
         ApiService("windy_webcams", "Windy Webcams key",
-            "Optional public-webcam source near you.", "https://api.windy.com/webcams"),
+            "Public-webcam source near you. Powers the webcams in Live Feeds.", "https://api.windy.com/webcams"),
+        ApiService("windy_point", "Windy Point-Forecast key",
+            "Alternate weather provider — Windy's point forecast. Weather still works keyless without it.", "https://api.windy.com/keys"),
+        ApiService("openweather", "OpenWeatherMap key",
+            "Alternate weather provider (One Call 3.0). Weather still works keyless without it.", "https://openweathermap.org/api"),
         ApiService("broadcastify_user", "Broadcastify username",
             "Live police/fire scanner feeds (optional — OpenMHz needs no key).", "https://www.broadcastify.com"),
         ApiService("broadcastify_pass", "Broadcastify password",
             "Paired with the Broadcastify username.", "https://www.broadcastify.com", secret = true),
     )
+
+    /**
+     * Capabilities that can run on more than one provider. Each keeps a keyless default; a stored
+     * key for any listed provider upgrades that capability. One key can serve several features
+     * (e.g. an OpenWeather key powers both Weather and Air Quality).
+     */
+    val features = listOf(
+        ApiFeature("weather", "Weather & forecast", "Open-Meteo (keyless)",
+            listOf("windy_point", "openweather")),
+        ApiFeature("webcams", "Nearby webcams", "none — needs a key",
+            listOf("windy_webcams")),
+        ApiFeature("aircraft", "Live aircraft", "adsb.fi / OpenSky anonymous",
+            listOf("opensky_client_id")),
+    )
+
+    /**
+     * The provider + key to use for [featureId], or null to use the keyless default. Picks the
+     * first provider in priority order that has a non-blank stored key.
+     */
+    fun resolve(featureId: String, keys: Map<String, String>): Pair<String, String>? {
+        val f = features.firstOrNull { it.id == featureId } ?: return null
+        for (id in f.providers) {
+            val v = keys[id]?.trim().orEmpty()
+            if (v.isNotEmpty()) return id to v
+        }
+        return null
+    }
 }

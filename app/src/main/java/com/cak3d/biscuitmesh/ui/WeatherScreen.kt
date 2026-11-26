@@ -90,6 +90,7 @@ fun WeatherScreen(vm: MainViewModel, onBack: () -> Unit) {
     val context = LocalContext.current
     val fix by vm.currentFix.collectAsStateWithLifecycle()
     val client = remember { WeatherClient() }
+    val apiKeys by vm.apiKeys.collectAsStateWithLifecycle()
 
     var loc by remember { mutableStateOf<Pair<Double, Double>?>(null) }
     var forecast by remember { mutableStateOf<WeatherForecast?>(null) }
@@ -103,7 +104,8 @@ fun WeatherScreen(vm: MainViewModel, onBack: () -> Unit) {
     LaunchedEffect(loc) {
         val ll = loc ?: return@LaunchedEffect
         loading = true
-        forecast = client.forecast(ll.first, ll.second)
+        val wx = com.cak3d.biscuitmesh.data.ApiKeys.resolve("weather", apiKeys)
+        forecast = client.forecast(ll.first, ll.second, wx?.first, wx?.second)
         frames = client.radarFrames()
         frameIdx = frames.indexOfLast { !it.nowcast }.coerceAtLeast(0)
         loading = false
