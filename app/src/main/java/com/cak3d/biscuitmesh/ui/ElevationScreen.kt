@@ -130,7 +130,8 @@ fun ElevationScreen(vm: MainViewModel, onBack: () -> Unit) {
                     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(14.dp)) {
                         Text("SPEED", style = MaterialTheme.typography.labelMedium, color = EL_ACCENT,
-                            fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                            fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold,
+                            modifier = Modifier.help("Speed profile", "Your top and average speed on this drive, and the speed chart — derived from how fast your GPS-tagged catches moved along the route."))
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Stat(showSpd(maxSpd), "top speed", Color(0xFFFF5470))
                             Stat(showSpd(avgSpd), "average", Color(0xFF5CB4E8))

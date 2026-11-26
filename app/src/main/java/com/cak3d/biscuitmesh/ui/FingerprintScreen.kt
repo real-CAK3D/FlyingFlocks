@@ -106,7 +106,8 @@ fun FingerprintScreen(vm: MainViewModel, onBack: () -> Unit) {
                             fontFamily = FontFamily.Monospace, fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f))
                         Button(onClick = { name = ""; naming = true },
-                            enabled = liveDevices.isNotEmpty() && fix != null) {
+                            enabled = liveDevices.isNotEmpty() && fix != null,
+                            modifier = Modifier.help("Save fingerprint", "Records every Wi-Fi/BT device you hear right here as a named snapshot. Come back later and Compare to see what changed.")) {
                             Text("Save fingerprint here")
                         }
                         if (fix == null) Text("Waiting for a location fix…", fontSize = 11.sp,

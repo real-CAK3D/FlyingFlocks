@@ -217,6 +217,7 @@ fun DataCubeScreen(vm: MainViewModel, onBack: () -> Unit) {
 
             Canvas(
                 Modifier.fillMaxSize()
+                    .help("The cube", "Everything you're hearing now as a rotatable 3D diagram — Wi-Fi 2.4/5, Bluetooth, satellites & sub-GHz as stacked layers. Drag to spin; tap a glowing node for its details.")
                     .pointerInput(Unit) {
                         detectDragGestures(onDragStart = { autoSpin = false }) { change, drag ->
                             change.consume()
@@ -348,7 +349,8 @@ fun DataCubeScreen(vm: MainViewModel, onBack: () -> Unit) {
 
             // Neighbour-link mode — what a tapped node wires to (like the reference's Select Neighbors).
             Row(
-                Modifier.align(Alignment.TopCenter).padding(top = 8.dp),
+                Modifier.align(Alignment.TopCenter).padding(top = 8.dp)
+                    .help("Link mode", "After you tap a node, this draws lines to its neighbours — by Vendor (same maker), Layer (same band), or Nearby (similar signal ≈ similar distance from you). Off hides them."),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {

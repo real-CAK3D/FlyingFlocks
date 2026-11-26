@@ -180,6 +180,7 @@ fun HoloTimelineScreen(vm: MainViewModel, onBack: () -> Unit) {
 
                     Canvas(
                         Modifier.fillMaxSize()
+                            .help("The hologram", "Your drives laid on the real ground. Drag to rotate, pinch to zoom right in, then tap a signal for its name, type and timestamp. Repeated commutes stack on the same path.")
                             .pointerInput(Unit) {
                                 detectTransformGestures { _, panChange, zoomChange, _ ->
                                     autoSpin = false
@@ -282,7 +283,8 @@ fun HoloTimelineScreen(vm: MainViewModel, onBack: () -> Unit) {
                             color = Color(0xFF22D3EE), fontFamily = FontFamily.Monospace, fontSize = 12.sp,
                             fontWeight = FontWeight.Bold)
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            modifier = Modifier.padding(top = 6.dp)) {
+                            modifier = Modifier.padding(top = 6.dp).help("Scope & drive",
+                                "Pick a time window (Day/Week/Month/All) or a single drive by date, to see just that or let repeated drives overlap. Use ▶/■ up top to play or stop the day's scrub.")) {
                             HoloScope.entries.forEach { s ->
                                 androidx.compose.material3.FilterChip(selected = scope == s,
                                     onClick = { scope = s }, label = { Text(s.label) })

@@ -76,7 +76,8 @@ fun PassportScreen(vm: MainViewModel, onBack: () -> Unit) {
                     fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 4.dp))
             }
             item {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.help("Collection filter", "Switch between your stamp families — All, Places, Species, Sky catches and Events. The number is how many you've collected in each.")) {
                     FilterChip(selected = filter == null, onClick = { filter = null },
                         label = { Text("All ${stamps.size}") })
                     StampKind.entries.forEach { k ->

@@ -82,7 +82,9 @@ fun StoreScreen(vm: MainViewModel, onBack: () -> Unit) {
                 },
                 actions = {
                     Text("🪶 $feathers", fontWeight = FontWeight.Bold, fontSize = 16.sp,
-                        color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(end = 14.dp))
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(end = 14.dp).help("Feathers balance",
+                            "Your spendable currency. Earn it by driving and catching; spend it here on cosmetics and renames."))
                 },
             )
         },
@@ -97,7 +99,7 @@ fun StoreScreen(vm: MainViewModel, onBack: () -> Unit) {
             item { SectionLabel("FLOCK PREMIUM") }
             item {
                 val premiumItem = StoreCatalog.items.first { it.kind == StoreKind.PREMIUM }
-                StoreCard {
+                StoreCard(Modifier.help("Flock Premium", "Unlock for 20,000 Feathers: 2x earning, a PREMIUM badge, and premium-only cosmetics. (A \$2/mo option would need Google Play Billing.)")) {
                     Text("Flock Premium ✦", fontWeight = FontWeight.Bold, color = Color(0xFFFFD166), fontSize = 16.sp)
                     Text(premiumItem.desc, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
                     if (premium) {
@@ -221,8 +223,8 @@ private fun SectionLabel(text: String) {
 }
 
 @Composable
-private fun StoreCard(content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
-    Card(Modifier.fillMaxWidth(), shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
+private fun StoreCard(modifier: Modifier = Modifier, content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
+    Card(modifier.fillMaxWidth(), shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp), content = content)
     }
