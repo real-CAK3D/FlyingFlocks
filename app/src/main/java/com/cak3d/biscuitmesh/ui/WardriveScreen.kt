@@ -255,6 +255,9 @@ fun WardriveScreen(vm: MainViewModel, onOpenEyesight: () -> Unit = {}) {
     }
     var menuOpen by remember { mutableStateOf(false) }
     var showOffline by remember { mutableStateOf(false) }
+    val apiKeys by vm.apiKeys.collectAsStateWithLifecycle()
+    val tomtomKey = apiKeys["tomtom"].orEmpty()
+    var trafficOn by remember { mutableStateOf(false) }
     var viewMode by remember { mutableStateOf(MapViewMode.DEFAULT) }
     // While Territory is open: claim the cell you're in and pull nearby claims every 12s.
     LaunchedEffect(viewMode) {
@@ -372,6 +375,14 @@ fun WardriveScreen(vm: MainViewModel, onOpenEyesight: () -> Unit = {}) {
             update = { map ->
                 map.overlays.clear()
                 map.overlays.add(rotationOverlay)
+
+                // TomTom live traffic-flow tiles, drawn over the base map and under the sightings.
+                if (trafficOn && tomtomKey.isNotBlank()) {
+                    val prov = org.osmdroid.tileprovider.MapTileProviderBasic(map.context, tomtomFlowSource(tomtomKey))
+                    val tov = TilesOverlay(prov, map.context)
+                    tov.loadingBackgroundColor = AndroidColor.TRANSPARENT
+                    map.overlays.add(tov)
+                }
 
                 // WDG owned-territory cells first, so samples/track draw on top.
                 if (viewMode == MapViewMode.DEFAULT) cells.forEach { c ->
@@ -734,6 +745,7 @@ fun WardriveScreen(vm: MainViewModel, onOpenEyesight: () -> Unit = {}) {
                     showEmergency = showEmergency, onEmergency = { showEmergency = it },
                     style = mapStyle, onStyle = { mapStyle = it; vm.setMapStyle(it.name) },
                     camCount = hazards.size,
+                    traffic = trafficOn, onTraffic = { trafficOn = it }, trafficKeyed = tomtomKey.isNotBlank(),
                     onOffline = { menuOpen = false; showOffline = true },
                 )
             }
@@ -1029,6 +1041,19 @@ private val TOPO_SOURCE = org.osmdroid.tileprovider.tilesource.XYTileSource(
     "© OpenTopoMap (CC-BY-SA), © OpenStreetMap contributors",
 )
 
+/** TomTom live traffic-flow tiles (transparent PNG overlay). Needs the operator's TomTom key. */
+private fun tomtomFlowSource(key: String) = object : org.osmdroid.tileprovider.tilesource.OnlineTileSourceBase(
+    "TomTomFlow", 0, 22, 256, ".png",
+    arrayOf("https://api.tomtom.com/traffic/map/4/tile/flow/relative0/"),
+    "© TomTom",
+) {
+    override fun getTileURLString(pMapTileIndex: Long): String =
+        baseUrl +
+            org.osmdroid.util.MapTileIndex.getZoom(pMapTileIndex) + "/" +
+            org.osmdroid.util.MapTileIndex.getX(pMapTileIndex) + "/" +
+            org.osmdroid.util.MapTileIndex.getY(pMapTileIndex) + ".png?key=" + key
+}
+
 // Esri World Imagery — free aerial/satellite tiles. Note the URL is z/y/x (not the
 // z/x/y that XYTileSource builds), so we format it ourselves.
 private val SATELLITE_SOURCE = object : org.osmdroid.tileprovider.tilesource.OnlineTileSourceBase(
@@ -1054,6 +1079,7 @@ private fun MapMenu(
     showEmergency: Boolean, onEmergency: (Boolean) -> Unit,
     style: MapStyle, onStyle: (MapStyle) -> Unit,
     camCount: Int,
+    traffic: Boolean, onTraffic: (Boolean) -> Unit, trafficKeyed: Boolean,
     onOffline: () -> Unit,
 ) {
     Card(shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
@@ -1067,6 +1093,13 @@ private fun MapMenu(
             MenuToggle("Police", showPolice, onPolice)
             MenuToggle("Emergency (fire/hospital)", showEmergency, onEmergency)
             MenuToggle("Saved places", showPlaces, onPlaces)
+            if (trafficKeyed) {
+                MenuToggle("Live traffic (TomTom)", traffic, onTraffic)
+            } else {
+                Text("Live traffic — add a TomTom key in Settings → Keys",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+            }
             Text("MAP STYLE", style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.secondary, modifier = Modifier.padding(top = 4.dp))
             androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {

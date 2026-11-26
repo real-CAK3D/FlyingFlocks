@@ -893,11 +893,23 @@ private fun ToggleRow(title: String, subtitle: String, checked: Boolean, onChang
 private fun ApiKeysSection(vm: MainViewModel) {
     val keys by vm.apiKeys.collectAsStateWithLifecycle()
     SectionCard(
-        title = "API keys",
-        subtitle = "Optional keys for the live feeds — ADS-B aircraft, traffic cameras, webcams and scanner audio. " +
-            "Everything works on the open/anonymous path without them; add a key only to raise limits or unlock a source. " +
-            "OpenStreetMap, Overpass and OpenMHz need no key. Keys are stored only on this device.",
+        title = "Keys",
+        subtitle = "One place for every optional API key — aircraft, weather, live traffic, webcams, scanner audio " +
+            "and maps. Everything has a working keyless default; add a key only to raise limits, switch provider or " +
+            "unlock a source. If you hold more than one key for a feature, the first listed wins. Stored only on this device.",
     ) {
+        // What runs with no key at all, so it's clear nothing here is required.
+        Text("WORKS WITHOUT A KEY", style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.secondary,
+            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+        com.cak3d.biscuitmesh.data.ApiKeys.features.forEach { f ->
+            Text("• ${f.title}: ${f.keylessDefault}", style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+        }
+        Spacer(Modifier.height(10.dp))
+        Text("YOUR KEYS", style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.secondary,
+            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
         com.cak3d.biscuitmesh.data.ApiKeys.services.forEach { svc ->
             ApiKeyField(svc, keys[svc.id] ?: "") { vm.setApiKey(svc.id, it) }
         }
