@@ -48,13 +48,13 @@ private val EL_ACCENT = Color(0xFF8FD694)
  * real terrain elevation for each point (keyless), and draws the climb-and-descent profile with
  * total gain, loss and high/low points.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 private fun havM(aLat: Double, aLon: Double, bLat: Double, bLon: Double): Double {
     val dLat = (bLat - aLat) * 110_540.0
     val dLon = (bLon - aLon) * 111_320.0 * kotlin.math.cos(Math.toRadians((aLat + bLat) / 2))
     return Math.hypot(dLat, dLon)
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ElevationScreen(vm: MainViewModel, onBack: () -> Unit) {
     val mph by vm.useMph.collectAsStateWithLifecycle()
