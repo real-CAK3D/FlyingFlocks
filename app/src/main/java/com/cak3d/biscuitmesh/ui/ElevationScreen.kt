@@ -1,6 +1,8 @@
 package com.cak3d.biscuitmesh.ui
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -47,35 +49,54 @@ private val EL_ACCENT = Color(0xFF8FD694)
  * total gain, loss and high/low points.
  */
 @OptIn(ExperimentalMaterial3Api::class)
+private fun havM(aLat: Double, aLon: Double, bLat: Double, bLon: Double): Double {
+    val dLat = (bLat - aLat) * 110_540.0
+    val dLon = (bLon - aLon) * 111_320.0 * kotlin.math.cos(Math.toRadians((aLat + bLat) / 2))
+    return Math.hypot(dLat, dLon)
+}
+
 @Composable
 fun ElevationScreen(vm: MainViewModel, onBack: () -> Unit) {
     val mph by vm.useMph.collectAsStateWithLifecycle()
     var elev by remember { mutableStateOf<List<Double>?>(null) }
+    var speedMps by remember { mutableStateOf<List<Double>>(emptyList()) }
     var done by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         val byDrive = runCatching { vm.captureSamplesByDrive(limit = 1) }.getOrDefault(emptyList())
         val pts = byDrive.firstOrNull()?.second?.filter { it.timeMs > 0 && !(it.lat == 0.0 && it.lon == 0.0) }
             ?.sortedBy { it.timeMs } ?: emptyList()
-        if (pts.isEmpty()) { done = true; return@LaunchedEffect }
+        if (pts.size < 2) { done = true; return@LaunchedEffect }
         val step = (pts.size / 80).coerceAtLeast(1)
-        val sampled = pts.filterIndexed { i, _ -> i % step == 0 }.take(100).map { it.lat to it.lon }
-        elev = ElevationClient.elevations(sampled)
+        val sampled = pts.filterIndexed { i, _ -> i % step == 0 }.take(100)
+        // Speed between consecutive sampled points (m/s), lightly smoothed.
+        val raw = DoubleArray(sampled.size)
+        for (i in 1 until sampled.size) {
+            val dt = (sampled[i].timeMs - sampled[i - 1].timeMs) / 1000.0
+            val d = havM(sampled[i - 1].lat, sampled[i - 1].lon, sampled[i].lat, sampled[i].lon)
+            raw[i] = if (dt in 0.5..3600.0) (d / dt).coerceIn(0.0, 60.0) else raw[i - 1]
+        }
+        if (sampled.size > 1) raw[0] = raw[1]
+        speedMps = (raw.indices).map { i ->
+            val lo = (i - 1).coerceAtLeast(0); val hi = (i + 1).coerceAtMost(raw.size - 1)
+            (raw[lo] + raw[i] + raw[hi]) / (hi - lo + 1)
+        }
+        elev = ElevationClient.elevations(sampled.map { it.lat to it.lon })
         done = true
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Elevation Profile") },
+                title = { Text("Drive Stats") },
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
                 actions = {
-                    HelpButton("Elevation Profile",
-                        "The terrain you climbed and descended on your most recent drive. We sample your path and " +
-                            "look up real ground elevation for each point (keyless), then chart it with total gain, " +
-                            "loss and the high and low points.")
+                    HelpButton("Drive Stats",
+                        "Your most recent drive, charted: the real terrain you climbed/descended (keyless elevation " +
+                            "lookup) and your speed along the way, derived from how fast your GPS-tagged catches moved. " +
+                            "G-force logging is coming to live drives next.")
                 },
             )
         },
@@ -85,7 +106,7 @@ fun ElevationScreen(vm: MainViewModel, onBack: () -> Unit) {
             when {
                 !done -> CenterMsg {
                     CircularProgressIndicator(strokeWidth = 2.dp, color = EL_ACCENT)
-                    Text("Reading the terrain…", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), fontSize = 13.sp)
+                    Text("Reading your drive…", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), fontSize = 13.sp)
                 }
                 e == null || e.size < 2 -> CenterMsg {
                     Text("No located drive to profile yet. Finish a wardrive with GPS-tagged captures and come back.",
@@ -96,43 +117,65 @@ fun ElevationScreen(vm: MainViewModel, onBack: () -> Unit) {
                     val lo = e.min(); val hi = e.max()
                     var gain = 0.0; var loss = 0.0
                     for (i in 1 until e.size) { val d = e[i] - e[i - 1]; if (d > 0) gain += d else loss += -d }
-                    val toFt = mph
-                    fun show(m: Double) = if (toFt) "${(m * 3.28084).toInt()} ft" else "${m.toInt()} m"
+                    fun showDist(m: Double) = if (mph) "${(m * 3.28084).toInt()} ft" else "${m.toInt()} m"
+                    fun showSpd(ms: Double) = if (mph) "${(ms * 2.23694).toInt()} mph" else "${(ms * 3.6).toInt()} km/h"
+                    val maxSpd = speedMps.maxOrNull() ?: 0.0
+                    val avgSpd = if (speedMps.isNotEmpty()) speedMps.average() else 0.0
 
-                    Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                        Text("SPEED", style = MaterialTheme.typography.labelMedium, color = EL_ACCENT,
+                            fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Stat("▲ ${show(gain)}", "climb", Color(0xFFFF8A3D))
-                            Stat("▼ ${show(loss)}", "descent", Color(0xFF5CB4E8))
-                            Stat(show(hi - lo), "range", EL_ACCENT)
+                            Stat(showSpd(maxSpd), "top speed", Color(0xFFFF5470))
+                            Stat(showSpd(avgSpd), "average", Color(0xFF5CB4E8))
+                            Stat("${e.size}", "points", EL_ACCENT)
                         }
-                        Canvas(Modifier.fillMaxWidth().height(220.dp)) {
-                            val n = e.size
-                            val range = (hi - lo).coerceAtLeast(1.0)
-                            fun px(i: Int) = size.width * i / (n - 1).toFloat()
-                            fun py(v: Double) = size.height * (1f - ((v - lo) / range).toFloat()) * 0.88f + size.height * 0.06f
-                            // Baseline grid.
-                            for (g in 0..4) {
-                                val y = size.height * g / 4f
-                                drawLine(Color(0xFF2A3540).copy(alpha = 0.5f), Offset(0f, y), Offset(size.width, y), 1f)
-                            }
-                            val fill = Path().apply {
-                                moveTo(0f, size.height)
-                                for (i in 0 until n) lineTo(px(i), py(e[i]))
-                                lineTo(size.width, size.height); close()
-                            }
-                            drawPath(fill, EL_ACCENT.copy(alpha = 0.16f))
-                            val line = Path().apply {
-                                moveTo(px(0), py(e[0])); for (i in 1 until n) lineTo(px(i), py(e[i]))
-                            }
-                            drawPath(line, EL_ACCENT, style = Stroke(width = 2.5f))
+                        ProfileChart(speedMps, Color(0xFFFF5470))
+
+                        Text("ELEVATION", style = MaterialTheme.typography.labelMedium, color = EL_ACCENT,
+                            fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(top = 8.dp))
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Stat("▲ ${showDist(gain)}", "climb", Color(0xFFFF8A3D))
+                            Stat("▼ ${showDist(loss)}", "descent", Color(0xFF5CB4E8))
+                            Stat(showDist(hi - lo), "range", EL_ACCENT)
                         }
-                        Text("low ${show(lo)} · high ${show(hi)} · ${e.size} points along the drive",
+                        ProfileChart(e, EL_ACCENT)
+                        Text("low ${showDist(lo)} · high ${showDist(hi)}",
                             fontFamily = FontFamily.Monospace, fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                     }
                 }
             }
         }
+    }
+}
+
+/** A filled line chart of a numeric series. */
+@Composable
+private fun ProfileChart(series: List<Double>, tint: Color) {
+    if (series.size < 2) return
+    val lo = series.min(); val hi = series.max()
+    Canvas(Modifier.fillMaxWidth().height(180.dp)) {
+        val n = series.size
+        val range = (hi - lo).coerceAtLeast(1e-6)
+        fun px(i: Int) = size.width * i / (n - 1).toFloat()
+        fun py(v: Double) = size.height * (1f - ((v - lo) / range).toFloat()) * 0.86f + size.height * 0.07f
+        for (g in 0..4) {
+            val y = size.height * g / 4f
+            drawLine(Color(0xFF2A3540).copy(alpha = 0.5f), Offset(0f, y), Offset(size.width, y), 1f)
+        }
+        val fill = Path().apply {
+            moveTo(0f, size.height)
+            for (i in 0 until n) lineTo(px(i), py(series[i]))
+            lineTo(size.width, size.height); close()
+        }
+        drawPath(fill, tint.copy(alpha = 0.16f))
+        val line = Path().apply {
+            moveTo(px(0), py(series[0])); for (i in 1 until n) lineTo(px(i), py(series[i]))
+        }
+        drawPath(line, tint, style = Stroke(width = 2.5f))
     }
 }
 
