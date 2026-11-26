@@ -119,7 +119,12 @@ fun FleetScreen(vm: MainViewModel, onOpen: (String) -> Unit = {}, onHealth: () -
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 if (usb.isNotEmpty()) item("usb") { UsbBanner(usb, vm) }
-                item("wtf") { WtfFleetCard(vm, onOpen = onOpenWtf) }
+                item("wtf") {
+                    androidx.compose.foundation.layout.Box(Modifier.help("What the Flock dongle",
+                        "Your Wi-Fi/BT camera-scanner dongle (XIAO S3). Shows its link (USB/BLE) and feeds surveillance-camera sightings onto your map. Tap to open its detail.")) {
+                        WtfFleetCard(vm, onOpen = onOpenWtf)
+                    }
+                }
                 if (all.isNotEmpty()) {
                     item("header") {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -128,9 +133,11 @@ fun FleetScreen(vm: MainViewModel, onOpen: (String) -> Unit = {}, onHealth: () -
                                 style = MaterialTheme.typography.labelMedium,
                                 fontFamily = FontFamily.Monospace,
                                 color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier.weight(1f).help("Fleet status",
+                                    "How many of your saved boards are connected right now (LIVE) out of all you've paired (KNOWN)."),
                             )
-                            FilledTonalButton(onClick = onHealth) {
+                            FilledTonalButton(onClick = onHealth, modifier = Modifier.help("Health",
+                                "Fleet Health — connection quality, signal and per-board diagnostics for everything you've paired.")) {
                                 Icon(Icons.Default.MonitorHeart, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(Modifier.width(6.dp))
                                 Text("Health")
@@ -392,14 +399,17 @@ private fun androidx.compose.foundation.lazy.LazyListScope.section(
         )
     }
     items(devices, key = { it.address }) { device ->
-        DeviceCard(
-            device = device,
-            onOpen = { onOpen(device.address) },
-            onConnect = { vm.connect(device.address) },
-            onDisconnect = { vm.disconnect(device.address) },
-            onForget = { vm.forget(device.address) },
-            onRename = { onRename(device) },
-        )
+        androidx.compose.foundation.layout.Box(Modifier.help("Board card",
+            "A saved board. Tap Connect to pair it over BLE/USB; the ⋮ menu opens its tools (console, live mirror, settings). \"Out of range\" means it isn't powered or near you.")) {
+            DeviceCard(
+                device = device,
+                onOpen = { onOpen(device.address) },
+                onConnect = { vm.connect(device.address) },
+                onDisconnect = { vm.disconnect(device.address) },
+                onForget = { vm.forget(device.address) },
+                onRename = { onRename(device) },
+            )
+        }
     }
 }
 

@@ -198,26 +198,30 @@ fun SubGhzScreen(vm: MainViewModel, onOpenMap: () -> Unit, onOpenSaved: () -> Un
                             if (sweeping) { vm.stopSubGhzSweep(); sweeping = false }
                             else { vm.startSubGhzSweep(); sweeping = true }
                         },
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).help("Start/stop sweep",
+                            "Tells a connected CC1101 board to sweep the sub-GHz bands and stream what it hears (keyfobs, TPMS, weather sensors). Needs a board."),
                     ) {
                         Icon(if (sweeping) Icons.Default.Stop else Icons.Default.PlayArrow, contentDescription = null)
                         Spacer(Modifier.width(6.dp))
                         Text(if (sweeping) "Stop sweep" else "Start sweep")
                     }
-                    OutlinedButton(onClick = onOpenMap, modifier = Modifier.weight(1f)) {
+                    OutlinedButton(onClick = onOpenMap, modifier = Modifier.weight(1f).help("Map",
+                        "Plot where each sub-GHz hit was caught on the map.")) {
                         Icon(Icons.Default.Map, contentDescription = null)
                         Spacer(Modifier.width(6.dp))
                         Text("Map")
                     }
                 }
                 Spacer(Modifier.height(8.dp))
-                Button(onClick = onOpenSaved, modifier = Modifier.fillMaxWidth()) {
+                Button(onClick = onOpenSaved, modifier = Modifier.fillMaxWidth().help("Saved Devices",
+                    "Capture a remote/keyfob as a named device with labelled buttons, then replay it later (sub-GHz Flipper-style).")) {
                     Icon(Icons.Default.SettingsRemote, contentDescription = null)
                     Spacer(Modifier.width(6.dp))
                     Text("Saved Devices  (capture & replay remotes)")
                 }
                 Spacer(Modifier.height(8.dp))
-                OutlinedButton(onClick = onOpenAudio, modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(onClick = onOpenAudio, modifier = Modifier.fillMaxWidth().help("Audio",
+                    "The board's mic spectrum and speaker — listen, visualize audio, and play tones/the crow call.")) {
                     Icon(Icons.Default.GraphicEq, contentDescription = null)
                     Spacer(Modifier.width(6.dp))
                     Text("Audio  (mic spectrum + speaker)")

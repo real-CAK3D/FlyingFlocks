@@ -118,17 +118,23 @@ fun WifiScreen(vm: MainViewModel, onOpenTool: (String) -> Unit, onLocate: (Strin
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item("head") {
-            ScanHeaderCard(
-                accent = WIFI_CYAN, icon = Icons.Default.Wifi, title = "WiFi",
-                subtitle = if (scanning) "${nets.size} network${plural(nets.size)} · ${g5.size} on 5 GHz — live"
-                else "Scan with the phone's own radio — no board needed",
-                scanning = scanning,
-                onScan = { vm.clearPhoneScan(); vm.startPhoneScan(wifi = true, ble = false) },
-                onStop = { vm.stopPhoneScan() },
-            )
+            Box(Modifier.help("Scan control", "Shows how many Wi-Fi networks are heard and whether a scan is live. Tap Scan to use the phone's own radio (no board needed); Stop to end it.")) {
+                ScanHeaderCard(
+                    accent = WIFI_CYAN, icon = Icons.Default.Wifi, title = "WiFi",
+                    subtitle = if (scanning) "${nets.size} network${plural(nets.size)} · ${g5.size} on 5 GHz — live"
+                    else "Scan with the phone's own radio — no board needed",
+                    scanning = scanning,
+                    onScan = { vm.clearPhoneScan(); vm.startPhoneScan(wifi = true, ble = false) },
+                    onStop = { vm.stopPhoneScan() },
+                )
+            }
         }
         if (nets.isNotEmpty()) item("search") { SearchField(query, { query = it }, WIFI_CYAN) }
-        if (nets.isNotEmpty()) item("spectrum") { SpectrumCard(g24, g5, WIFI_CYAN) }
+        if (nets.isNotEmpty()) item("spectrum") {
+            Box(Modifier.help("Channel spectrum", "A live graph of which Wi-Fi channels are busy around you — tall bars are crowded channels, split by the 2.4 and 5 GHz bands.")) {
+                SpectrumCard(g24, g5, WIFI_CYAN)
+            }
+        }
         if (nets.isNotEmpty()) item("arch") { ArchSpectrumCard(g24, g5, WIFI_CYAN) }
         if (nets.isNotEmpty()) item("gen") { WifiGenerationsCard(nets, WIFI_CYAN) }
         if (nets.isNotEmpty()) item("enc") { EncryptionCard(nets, WIFI_CYAN) }
@@ -196,18 +202,22 @@ fun BluetoothScreen(vm: MainViewModel, onOpenTool: (String) -> Unit, onLocate: (
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item("head") {
-            ScanHeaderCard(
-                accent = BT_BLUE, icon = Icons.Default.Bluetooth, title = "Bluetooth",
-                subtitle = if (scanning) "${devs.size} device${plural(devs.size)} — live"
-                else "Scan with the phone's own radio — no board needed",
-                scanning = scanning,
-                onScan = { vm.clearPhoneScan(); vm.startPhoneScan(wifi = false, ble = true) },
-                onStop = { vm.stopPhoneScan() },
-            )
+            Box(Modifier.help("Scan control", "Shows how many Bluetooth/BLE devices are heard and whether a scan is live. Tap Scan to use the phone's own radio; Stop to end it.")) {
+                ScanHeaderCard(
+                    accent = BT_BLUE, icon = Icons.Default.Bluetooth, title = "Bluetooth",
+                    subtitle = if (scanning) "${devs.size} device${plural(devs.size)} — live"
+                    else "Scan with the phone's own radio — no board needed",
+                    scanning = scanning,
+                    onScan = { vm.clearPhoneScan(); vm.startPhoneScan(wifi = false, ble = true) },
+                    onStop = { vm.stopPhoneScan() },
+                )
+            }
         }
         val phones = catCounts["Phone"] ?: 0
         if (phones > 0) item("phones") {
-            androidx.compose.material3.Card(colors = androidx.compose.material3.CardDefaults.cardColors(
+            androidx.compose.material3.Card(modifier = Modifier.help("Phones nearby",
+                "How many of the BLE devices around you look like other people's phones (classified by their advertised name). Useful for crowd/anti-stalking awareness."),
+                colors = androidx.compose.material3.CardDefaults.cardColors(
                 containerColor = BT_BLUE.copy(alpha = 0.16f))) {
                 Text("📱  $phones other phone${plural(phones)} nearby",
                     modifier = Modifier.padding(14.dp), color = BT_BLUE,
@@ -215,7 +225,11 @@ fun BluetoothScreen(vm: MainViewModel, onOpenTool: (String) -> Unit, onLocate: (
             }
         }
         if (devs.isNotEmpty()) item("search") { SearchField(query, { query = it }, BT_BLUE) }
-        if (devs.isNotEmpty()) item("btspec") { BtSpectrumCard(devs, BT_BLUE) }
+        if (devs.isNotEmpty()) item("btspec") {
+            Box(Modifier.help("BT spectrum", "A live graph of the Bluetooth devices around you by signal strength — the 'BT house' below sorts the named ones into rooms.")) {
+                BtSpectrumCard(devs, BT_BLUE)
+            }
+        }
         if (devs.isNotEmpty()) item("priv") { PrivacyCard(devs, BT_BLUE) }
         if (devs.isNotEmpty()) {
             item("ld") { SectionLabel("DEVICES · ${shown.size}", BT_BLUE) }
@@ -280,7 +294,8 @@ fun MiscScreen(vm: MainViewModel, onOpenTool: (String) -> Unit) {
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item("head") {
-            com.cak3d.biscuitmesh.ui.theme.ThemedCard(Modifier.fillMaxWidth()) {
+            com.cak3d.biscuitmesh.ui.theme.ThemedCard(Modifier.fillMaxWidth().help("Device Lab",
+                "Live meters fed by a connected board (T-Embed / Marauder) — packets, probe requests, stations, wardrive and mode. Run a board scan to light them up.")) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Icon(Icons.Default.Dashboard, contentDescription = null, tint = accent, modifier = Modifier.size(30.dp))
                     Column {
@@ -292,8 +307,8 @@ fun MiscScreen(vm: MainViewModel, onOpenTool: (String) -> Unit) {
                 }
             }
         }
-        item("modes") { ModeChips(log) }
-        item("pkt") { PacketMonitorCard(log) }
+        item("modes") { Box(Modifier.help("Board mode", "Which mode the connected board is in right now (scan, sniff, wardrive…) — tap a chip on the board or watch it update here.")) { ModeChips(log) } }
+        item("pkt") { Box(Modifier.help("Packet monitor", "Live Wi-Fi packet throughput the board is seeing — a quick pulse of how busy the air is.")) { PacketMonitorCard(log) } }
         item("probe") { ProbeRequestCard(log) }
         item("sta") { StationListCard(log) }
         item("cap") { CaptureCounterCard(log) }
