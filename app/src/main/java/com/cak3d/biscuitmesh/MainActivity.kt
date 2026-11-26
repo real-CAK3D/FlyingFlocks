@@ -106,6 +106,8 @@ import com.cak3d.biscuitmesh.ui.VisiblePassesScreen
 import com.cak3d.biscuitmesh.ui.StarlinkScreen
 import com.cak3d.biscuitmesh.ui.TripJournalScreen
 import com.cak3d.biscuitmesh.ui.HoloTimelineScreen
+import com.cak3d.biscuitmesh.ui.FingerprintScreen
+import com.cak3d.biscuitmesh.ui.ElevationScreen
 import com.cak3d.biscuitmesh.ui.TerminalScreen
 import com.cak3d.biscuitmesh.ui.SignalsScreen
 import com.cak3d.biscuitmesh.ui.SignalsView
@@ -168,7 +170,8 @@ class MainActivity : ComponentActivity() {
                 .getOrDefault(com.cak3d.biscuitmesh.ui.theme.AppFeel.ROUNDED)
             val accent = runCatching { com.cak3d.biscuitmesh.ui.theme.AppAccent.valueOf(accentName) }
                 .getOrDefault(com.cak3d.biscuitmesh.ui.theme.AppAccent.GOLD)
-            BiscuitMeshTheme(feel, accent) {
+            val nightVision by app.settingsStore.nightVision.collectAsStateWithLifecycle(initialValue = false)
+            BiscuitMeshTheme(feel, accent, nightVision) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,
@@ -481,6 +484,8 @@ private fun MainShell(vm: MainViewModel) {
                 composable("starlink") { StarlinkScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("tripjournal") { TripJournalScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("holotimeline") { HoloTimelineScreen(vm = vm, onBack = { nav.popBackStack() }) }
+                composable("fingerprint") { FingerprintScreen(vm = vm, onBack = { nav.popBackStack() }) }
+                composable("elevation") { ElevationScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("cockpit/{hex}") { entry ->
                     CockpitScreen(vm = vm, hex = entry.arguments?.getString("hex") ?: "", onBack = { nav.popBackStack() })
                 }

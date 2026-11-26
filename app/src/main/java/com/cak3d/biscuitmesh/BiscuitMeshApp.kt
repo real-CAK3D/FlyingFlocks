@@ -66,6 +66,11 @@ class BiscuitMeshApp : Application() {
         com.cak3d.biscuitmesh.data.WatchlistStore(this)
     }
 
+    /** Saved RF fingerprints of places — snapshot the air here, detect what changed on return. */
+    val fingerprintStore: com.cak3d.biscuitmesh.data.FingerprintStore by lazy {
+        com.cak3d.biscuitmesh.data.FingerprintStore(this)
+    }
+
     /** Local-only saved targets (networks/devices/locations) to locate/watch. Never uploaded. */
     val targetsStore: com.cak3d.biscuitmesh.data.TargetsStore by lazy {
         com.cak3d.biscuitmesh.data.TargetsStore(this)
@@ -373,6 +378,11 @@ class BiscuitMeshApp : Application() {
         // Voice: honour the on/off setting, and speak a camera alert once per hazard.
         appScope.launch { settingsStore.voiceAlerts.collect { speaker.enabled = it } }
         appScope.launch { settingsStore.vibrateAlerts.collect { vibrateEnabled = it } }
+
+        // Re-arm the background bright-pass check on each start (survives a reboot once the app opens).
+        appScope.launch {
+            runCatching { com.cak3d.biscuitmesh.sky.SkyAlertScheduler.apply(this@BiscuitMeshApp, settingsStore.skyAlerts.first()) }
+        }
 
         // Mirror the dongle-source toggle, and plot its live sightings as Flock
         // hazards (using the sighting's own GPS if it has one, else the current fix).

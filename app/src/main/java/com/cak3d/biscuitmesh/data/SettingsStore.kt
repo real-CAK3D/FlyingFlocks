@@ -32,6 +32,11 @@ class SettingsStore(private val context: Context) {
     private val keepAwakeKey = booleanPreferencesKey("keep_awake")
     private val vibrateAlertsKey = booleanPreferencesKey("vibrate_alerts")
     private val crossingAlertsKey = booleanPreferencesKey("crossing_alerts")
+    private val newDeviceAlertsKey = booleanPreferencesKey("new_device_alerts")
+    private val nightVisionKey = booleanPreferencesKey("night_vision")
+    private val skyAlertsKey = booleanPreferencesKey("sky_alerts")
+    private val carAutoStartKey = booleanPreferencesKey("car_auto_start")
+    private val carBtNameKey = stringPreferencesKey("car_bt_name")
     private val visitedTownsKey = stringSetPreferencesKey("visited_towns")
     private val wigleAuthKey = stringPreferencesKey("wigle_auth")
     private val sbSessionKey = stringPreferencesKey("sb_session_json")
@@ -236,6 +241,41 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setCrossingAlerts(on: Boolean) {
         context.settingsDataStore.edit { it[crossingAlertsKey] = on }
+    }
+
+    /** Buzz + speak the first time a never-before-seen device shows up while wardriving. */
+    val newDeviceAlerts: Flow<Boolean> =
+        context.settingsDataStore.data.map { it[newDeviceAlertsKey] ?: false }
+    suspend fun setNewDeviceAlerts(on: Boolean) {
+        context.settingsDataStore.edit { it[newDeviceAlertsKey] = on }
+    }
+
+    /** Red-on-black "night vision" theme for dark-sky field use. */
+    val nightVision: Flow<Boolean> =
+        context.settingsDataStore.data.map { it[nightVisionKey] ?: false }
+    suspend fun setNightVision(on: Boolean) {
+        context.settingsDataStore.edit { it[nightVisionKey] = on }
+    }
+
+    /** Background notifications for bright satellite passes coming up soon. */
+    val skyAlerts: Flow<Boolean> =
+        context.settingsDataStore.data.map { it[skyAlertsKey] ?: false }
+    suspend fun setSkyAlerts(on: Boolean) {
+        context.settingsDataStore.edit { it[skyAlertsKey] = on }
+    }
+
+    /** Auto-start a wardrive when a matching car Bluetooth device connects. */
+    val carAutoStart: Flow<Boolean> =
+        context.settingsDataStore.data.map { it[carAutoStartKey] ?: false }
+    suspend fun setCarAutoStart(on: Boolean) {
+        context.settingsDataStore.edit { it[carAutoStartKey] = on }
+    }
+
+    /** The car's Bluetooth name or MAC to match for auto-start (blank = off). */
+    val carBtName: Flow<String> =
+        context.settingsDataStore.data.map { it[carBtNameKey] ?: "" }
+    suspend fun setCarBtName(name: String) {
+        context.settingsDataStore.edit { it[carBtNameKey] = name.trim() }
     }
 
     /** The operator's saved Broadcastify feed ID (numeric). Defaults to Auburn & Lewiston Fire/EMS. */

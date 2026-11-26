@@ -50,10 +50,14 @@ enum class AppAccent(val label: String, val color: Color) {
 
 val LocalAppFeel = staticCompositionLocalOf { AppFeel.ROUNDED }
 val LocalAppAccent = staticCompositionLocalOf { AppAccent.GOLD }
+val LocalNightVision = staticCompositionLocalOf { false }
 
-/** The current accent colour, read anywhere under the theme. */
+/** Dark-sky "night vision" red — low enough to preserve dark adaptation in the field. */
+val NightRed = Color(0xFFFF3B30)
+
+/** The current accent colour, read anywhere under the theme. Red while night vision is on. */
 @Composable
-fun appAccent(): Color = LocalAppAccent.current.color
+fun appAccent(): Color = if (LocalNightVision.current) NightRed else LocalAppAccent.current.color
 
 /** Card corner shape for the active feel. */
 @Composable
@@ -171,22 +175,37 @@ private fun Modifier.neonEdge(accent: Color): Modifier = drawBehind {
 fun BiscuitMeshTheme(
     feel: AppFeel = AppFeel.ROUNDED,
     accent: AppAccent = AppAccent.GOLD,
+    nightVision: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val ink = if (feel == AppFeel.CIRCUIT) Color(0xFF080B0E) else Color(0xFF0E1116)
     val raised = if (feel == AppFeel.CIRCUIT) Color(0xFF10151B) else Color(0xFF171B22)
-    val scheme = darkColorScheme(
-        primary = accent.color,
-        onPrimary = Color(0xFF0E1116),
-        secondary = Color(0xFF5CB4E8),
-        onSecondary = Color(0xFF0E1116),
-        tertiary = accent.color,
-        background = ink,
-        surface = raised,
-        onBackground = Color(0xFFE6E8EB),
-        onSurface = Color(0xFFE6E8EB),
-    )
-    CompositionLocalProvider(LocalAppFeel provides feel, LocalAppAccent provides accent) {
+    val scheme = if (nightVision) {
+        // Red monochrome on near-black — keeps the operator's night vision in the dark.
+        darkColorScheme(
+            primary = NightRed, onPrimary = Color.Black,
+            secondary = NightRed, onSecondary = Color.Black, tertiary = NightRed,
+            background = Color(0xFF060000), surface = Color(0xFF140303),
+            onBackground = Color(0xFFFF6A5A), onSurface = Color(0xFFFF6A5A),
+        )
+    } else {
+        darkColorScheme(
+            primary = accent.color,
+            onPrimary = Color(0xFF0E1116),
+            secondary = Color(0xFF5CB4E8),
+            onSecondary = Color(0xFF0E1116),
+            tertiary = accent.color,
+            background = ink,
+            surface = raised,
+            onBackground = Color(0xFFE6E8EB),
+            onSurface = Color(0xFFE6E8EB),
+        )
+    }
+    CompositionLocalProvider(
+        LocalAppFeel provides feel,
+        LocalAppAccent provides accent,
+        LocalNightVision provides nightVision,
+    ) {
         MaterialTheme(colorScheme = scheme, content = content)
     }
 }

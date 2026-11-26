@@ -16,6 +16,9 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Air
 import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.Fingerprint
+import androidx.compose.material.icons.filled.ShowChart
+import androidx.compose.material.icons.filled.Whatshot
 import androidx.compose.material.icons.filled.Equalizer
 import androidx.compose.material.icons.filled.Flight
 import androidx.compose.material.icons.filled.GraphicEq
@@ -103,6 +106,8 @@ private val LOADER_OVERRIDES: Map<String, LoaderTheme> = mapOf(
     "rogueap" to LoaderTheme.PULSAR,
     "targets" to LoaderTheme.SPIRAL,
     "terrain3d" to LoaderTheme.HELIX,
+    "fingerprint" to LoaderTheme.WAVEFORM,
+    "replay/all" to LoaderTheme.RIPPLE,
     // Live Visuals
     "signals" to LoaderTheme.EQUALIZER,
     "datacube" to LoaderTheme.NETWORK,
@@ -135,6 +140,7 @@ private val LOADER_OVERRIDES: Map<String, LoaderTheme> = mapOf(
     "games" to LoaderTheme.GEARS,
     "ledger" to LoaderTheme.NETWORK,
     "tripjournal" to LoaderTheme.COMET,
+    "elevation" to LoaderTheme.RINGS,
     // Tools
     "tiredash" to LoaderTheme.RINGS,
     "remote" to LoaderTheme.PULSAR,
@@ -156,6 +162,8 @@ fun SensorsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
             HubEntry("Rogue AP", "Evil-twin sweep — flags a Wi-Fi name coming from more than one radio, worst when a secured network also shows up open", Icons.Default.Security, "rogueap", Color(0xFFFF5470)),
             HubEntry("Targets", "Networks, devices & locations to locate — scan toggles, local only", Icons.Default.GpsFixed, "targets", Color(0xFFF59E0B)),
             HubEntry("3D Terrain & AR", "Your drive on the real landscape in 3D, or through the camera at street level — toggle between the two in one window", Icons.Default.Terrain, "terrain3d", Color(0xFF8FD694)),
+            HubEntry("Place Fingerprint", "Snapshot every Wi-Fi/BT device where you're standing, then compare on return — what's new, what's gone, what's still here. A change-detector for a spot", Icons.Default.Fingerprint, "fingerprint", Color(0xFF34D399)),
+            HubEntry("Coverage Heatmap", "Everywhere you've driven, heat-mapped by how much you caught — your whole survey footprint on one map", Icons.Default.Whatshot, "replay/all", Color(0xFFFF8A3D)),
         )),
         HubSection("Live Visuals", Color(0xFFEC4899), Icons.Default.Equalizer, LoaderTheme.EQUALIZER, listOf(
             HubEntry("Signals", "Every live RF visualizer in one window — the 3D scope, live console, device graph, per-device telemetry, dashboard & traffic charts, switchable at the bottom", Icons.Default.Equalizer, "signals", Color(0xFF22D3EE)),
@@ -192,6 +200,7 @@ fun SensorsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
             HubEntry("Games", "Mini-games — hunt a signal, spot species, beat the clock", Icons.Default.SportsEsports, "games", Color(0xFF34D399)),
             HubEntry("Device Ledger", "Regulars vs transients across all your drives", Icons.Default.ReceiptLong, "ledger", Color(0xFF22D3EE)),
             HubEntry("Trip Journal", "Every finished drive written up for you — how far, how long, what you caught — with a Share button and your running towns-visited count", Icons.Default.AutoStories, "tripjournal", Color(0xFF8FD694)),
+            HubEntry("Elevation Profile", "The hills you actually drove — your latest drive's climb and descent, with total gain, loss and high/low points, from real terrain data", Icons.Default.ShowChart, "elevation", Color(0xFF8FD694)),
         )),
         HubSection("Tools", Color(0xFFF59E0B), Icons.Default.Science, LoaderTheme.GEARS, listOf(
             HubEntry("Tire Pressure", "Learn your car's TPMS sensors, watch live pressure", Icons.Default.DirectionsCar, "tiredash", Color(0xFF38BDF8)),

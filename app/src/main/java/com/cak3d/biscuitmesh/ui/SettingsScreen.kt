@@ -335,6 +335,10 @@ private fun AppearanceSection(vm: MainViewModel) {
                 )
             }
         }
+        Spacer(Modifier.height(6.dp))
+        val night by vm.nightVision.collectAsStateWithLifecycle()
+        ToggleRow("Night vision", "Red-on-black everywhere — preserves your dark-adapted eyes in the field",
+            night) { vm.setNightVision(it) }
     }
 }
 
@@ -490,6 +494,10 @@ private fun AlertsScreenSection(vm: MainViewModel) {
     val awake by vm.keepAwake.collectAsStateWithLifecycle()
     val vibrate by vm.vibrateAlerts.collectAsStateWithLifecycle()
     val crossing by vm.crossingAlerts.collectAsStateWithLifecycle()
+    val newDev by vm.newDeviceAlerts.collectAsStateWithLifecycle()
+    val sky by vm.skyAlerts.collectAsStateWithLifecycle()
+    val carStart by vm.carAutoStart.collectAsStateWithLifecycle()
+    val carName by vm.carBtName.collectAsStateWithLifecycle()
     SectionCard(
         title = "Alerts & screen",
         subtitle = "How the app behaves while you're driving.",
@@ -498,6 +506,22 @@ private fun AlertsScreenSection(vm: MainViewModel) {
         ToggleRow("Vibrate on alert", "Buzz when a camera is close", vibrate) { vm.setVibrateAlerts(it) }
         ToggleRow("Town & county alerts", "Announce when you drive into a new town, county or state",
             crossing) { vm.setCrossingAlerts(it) }
+        ToggleRow("New-device alerts", "Buzz & speak the first time a never-before-seen device shows up while wardriving",
+            newDev) { vm.setNewDeviceAlerts(it) }
+        ToggleRow("Bright-pass sky alerts", "Background heads-up when a bright satellite will be visible overhead soon",
+            sky) { vm.setSkyAlerts(it) }
+        ToggleRow("Car auto-start", "Start a wardrive automatically when your car's Bluetooth connects",
+            carStart) { vm.setCarAutoStart(it) }
+        if (carStart) {
+            Spacer(Modifier.height(6.dp))
+            var text by remember(carName) { mutableStateOf(carName) }
+            OutlinedTextField(
+                value = text, onValueChange = { text = it; vm.setCarBtName(it) },
+                singleLine = true, modifier = Modifier.fillMaxWidth(),
+                label = { Text("Car Bluetooth name or MAC") },
+                supportingText = { Text("Matches part of the connected device's name or address") },
+            )
+        }
     }
 }
 

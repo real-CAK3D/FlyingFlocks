@@ -95,6 +95,20 @@
             </intent-filter>
         </service>
 
+        <!-- Auto-start a wardrive when the car's Bluetooth connects. -->
+        <receiver android:name=".car.CarConnectReceiver" android:exported="true">
+            <intent-filter>
+                <action android:name="android.bluetooth.device.action.ACL_CONNECTED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Hourly background check for bright satellite passes (scheduled via AlarmManager). -->
+        <receiver android:name=".sky.SkyAlertReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="com.cak3d.biscuitmesh.action.SKY_CHECK" />
+            </intent-filter>
+        </receiver>
+
         <!-- Stop/Start scan buttons in the notification shade. -->
         <receiver android:name=".ScanControlReceiver" android:exported="false">
             <intent-filter>

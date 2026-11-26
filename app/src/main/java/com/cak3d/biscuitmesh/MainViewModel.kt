@@ -217,14 +217,66 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         appRef.settingsStore.crossingAlerts.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     fun setCrossingAlerts(on: Boolean) = viewModelScope.launch { appRef.settingsStore.setCrossingAlerts(on) }
 
+    val newDeviceAlerts: StateFlow<Boolean> =
+        appRef.settingsStore.newDeviceAlerts.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    fun setNewDeviceAlerts(on: Boolean) = viewModelScope.launch { appRef.settingsStore.setNewDeviceAlerts(on) }
+
+    val nightVision: StateFlow<Boolean> =
+        appRef.settingsStore.nightVision.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    fun setNightVision(on: Boolean) = viewModelScope.launch { appRef.settingsStore.setNightVision(on) }
+
+    val skyAlerts: StateFlow<Boolean> =
+        appRef.settingsStore.skyAlerts.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    fun setSkyAlerts(on: Boolean) = viewModelScope.launch {
+        appRef.settingsStore.setSkyAlerts(on)
+        com.cak3d.biscuitmesh.sky.SkyAlertScheduler.apply(appRef, on)
+    }
+
+    val carAutoStart: StateFlow<Boolean> =
+        appRef.settingsStore.carAutoStart.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    fun setCarAutoStart(on: Boolean) = viewModelScope.launch { appRef.settingsStore.setCarAutoStart(on) }
+    val carBtName: StateFlow<String> =
+        appRef.settingsStore.carBtName.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
+    fun setCarBtName(name: String) = viewModelScope.launch { appRef.settingsStore.setCarBtName(name) }
+
     private var lastPlace: PlaceContext? = null
     private var lastGeoMs = 0L
     private var lastGeoLat = 0.0
     private var lastGeoLon = 0.0
     private val visitedTowns = HashSet<String>()
 
+    private val seenDeviceIds = HashSet<String>()
+
     init {
         viewModelScope.launch { runCatching { visitedTowns.addAll(appRef.settingsStore.visitedTowns.first()) } }
+        viewModelScope.launch { watchNewDevices() }
+    }
+
+    /**
+     * Buzz + speak the first time a never-before-seen device appears while wardriving. Seeds the
+     * "seen" set from every past drive's capture so only genuinely-new MACs fire; bulk scan dumps
+     * (many new at once) are absorbed silently so it can't spam.
+     */
+    private suspend fun watchNewDevices() {
+        runCatching { captureSamplesByDrive(60) }.getOrDefault(emptyList())
+            .forEach { (_, pts) -> pts.forEach { if (it.id.isNotBlank()) seenDeviceIds.add(it.id) } }
+        val wd = appRef.wardrive ?: return
+        wd.samples.collect { map ->
+            if (!newDeviceAlerts.value || wd.state.value.active != true) {
+                map.keys.forEach { seenDeviceIds.add(it) }   // keep the set current but stay quiet
+                return@collect
+            }
+            val fresh = map.entries.filter { it.key.isNotBlank() && it.key !in seenDeviceIds }
+            fresh.forEach { seenDeviceIds.add(it.key) }
+            if (fresh.isEmpty() || fresh.size > 5) return@collect   // a bulk dump = not a live arrival
+            val s = fresh.first().value
+            val what = s.label.ifBlank { s.id.ifBlank { s.kind.name } }
+            runCatching {
+                val vib = appRef.getSystemService(android.content.Context.VIBRATOR_SERVICE) as? android.os.Vibrator
+                vib?.vibrate(android.os.VibrationEffect.createOneShot(70, android.os.VibrationEffect.DEFAULT_AMPLITUDE))
+            }
+            speak("New device nearby: $what", flush = true)
+        }
     }
 
     /** How many distinct towns you've ever been in. */
@@ -820,6 +872,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Speak a line through the TTS engine. Honours the master voice toggle (Settings → voice). */
     fun speak(text: String, flush: Boolean = false) = appRef.speaker.say(text, flush)
+
+    // --- Place RF fingerprints --------------------------------------------
+    val fingerprints: Flow<List<com.cak3d.biscuitmesh.data.Fingerprint>> = appRef.fingerprintStore.fingerprints
+    fun saveFingerprint(name: String, lat: Double, lon: Double, devices: Map<String, String>) =
+        viewModelScope.launch {
+            appRef.fingerprintStore.add(com.cak3d.biscuitmesh.data.Fingerprint(
+                java.util.UUID.randomUUID().toString(), name, lat, lon, System.currentTimeMillis(), devices))
+        }
+    fun removeFingerprint(id: String) = viewModelScope.launch { appRef.fingerprintStore.remove(id) }
 
     // --- WiGLE account stats -----------------------------------------------
     val wigleAuth: Flow<String> = appRef.settingsStore.wigleAuth
