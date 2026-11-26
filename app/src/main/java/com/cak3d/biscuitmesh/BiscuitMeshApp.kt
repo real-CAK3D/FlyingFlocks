@@ -71,6 +71,11 @@ class BiscuitMeshApp : Application() {
         com.cak3d.biscuitmesh.data.FingerprintStore(this)
     }
 
+    /** The Feathers economy — gamification currency earned by driving, spent in the store. */
+    val feathersStore: com.cak3d.biscuitmesh.data.FeathersStore by lazy {
+        com.cak3d.biscuitmesh.data.FeathersStore(this)
+    }
+
     /** Local-only saved targets (networks/devices/locations) to locate/watch. Never uploaded. */
     val targetsStore: com.cak3d.biscuitmesh.data.TargetsStore by lazy {
         com.cak3d.biscuitmesh.data.TargetsStore(this)
@@ -385,6 +390,9 @@ class BiscuitMeshApp : Application() {
         appScope.launch {
             runCatching { com.cak3d.biscuitmesh.sky.SkyAlertScheduler.apply(this@BiscuitMeshApp, settingsStore.skyAlerts.first()) }
         }
+
+        // Apply any gentle Feathers idle-decay once per start.
+        appScope.launch { runCatching { feathersStore.applyDecayIfIdle() } }
 
         // Mirror the dongle-source toggle, and plot its live sightings as Flock
         // hazards (using the sighting's own GPS if it has one, else the current fix).

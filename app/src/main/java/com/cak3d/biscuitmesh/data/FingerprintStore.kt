@@ -48,6 +48,10 @@ class FingerprintStore(private val context: Context) {
         context.fingerprintDataStore.edit { it[key] = toJson(current().filterNot { f -> f.id == id }) }
     }
 
+    suspend fun clearAll() {
+        context.fingerprintDataStore.edit { it[key] = "[]" }
+    }
+
     private fun toJson(list: List<Fingerprint>): String {
         val arr = JSONArray()
         list.forEach { f ->

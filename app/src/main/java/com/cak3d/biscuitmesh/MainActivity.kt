@@ -208,6 +208,7 @@ class MainActivity : ComponentActivity() {
                         androidx.compose.runtime.LaunchedEffect(Unit) {
                             vm.boundaryCrossings.collect { c ->
                                 crossing = c
+                                vm.awardCrossing(c)
                                 vm.speak("Now entering ${c.label}", flush = true)
                                 runCatching {
                                     val vib = getSystemService(android.content.Context.VIBRATOR_SERVICE) as? android.os.Vibrator

@@ -19,7 +19,11 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -173,6 +177,8 @@ fun SettingsScreen(
                             onOpenStats = onOpenStats,
                             onOpenFlock = onOpenFlock,
                         )
+                        FeathersSection(vm)
+                        DangerZoneSection(vm)
                     }
                     1 -> {
                         AppearanceSection(vm)
@@ -563,6 +569,112 @@ private fun VoiceSection(vm: MainViewModel) {
             fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, fontWeight = FontWeight.Bold)
         Slider(value = rate, onValueChange = { vm.setTtsRate(it) }, valueRange = 0.7f..1.6f)
         OutlinedButton(onClick = { vm.testVoice() }, enabled = voiceOn) { Text("Test voice") }
+    }
+}
+
+@Composable
+private fun FeathersSection(vm: MainViewModel) {
+    val bal by vm.feathers.collectAsStateWithLifecycle()
+    val streak by vm.feathersStreak.collectAsStateWithLifecycle()
+    val ledger by vm.feathersLedger.collectAsStateWithLifecycle()
+    SectionCard(title = "Feathers",
+        subtitle = "Your gamification currency — earned by driving and catching, spent in the store (coming soon). Separate from your rank/XP.") {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            Text("🪶 $bal", fontSize = 26.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+            if (streak > 0) Text("🔥 $streak-day streak", style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+        }
+        if (ledger.isNotEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            Text("RECENT", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary,
+                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+            ledger.take(8).forEach { e ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(e.reason, style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                    Text((if (e.amount >= 0) "+" else "") + e.amount, style = MaterialTheme.typography.bodySmall,
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                        color = if (e.amount >= 0) Color(0xFF34D399) else Color(0xFFFF8A3D))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DangerZoneSection(vm: MainViewModel) {
+    SectionCard(title = "Danger zone",
+        subtitle = "Irreversible. Each one needs you to type a word and then press-and-hold to commit.") {
+        DangerAction("Reset progress & points",
+            "Zeroes your Feathers, rank, XP and awards. Keeps the app installed and your saved drives.",
+            "RESET", "Hold to reset") { vm.resetProgress() }
+        Spacer(Modifier.height(6.dp))
+        DangerAction("Wipe captures & history",
+            "Permanently deletes every saved drive, capture file, place fingerprint and visited-town record.",
+            "WIPE", "Hold to wipe") { vm.wipeHistory() }
+        Spacer(Modifier.height(6.dp))
+        DangerAction("Sign out / redo onboarding",
+            "Signs out of the Flock layer and re-runs the setup wizard the next time you open the app.",
+            "SIGN OUT", "Hold to sign out") { vm.signOutRedoOnboarding() }
+        Spacer(Modifier.height(6.dp))
+        DangerAction("Delete account",
+            "Wipes ALL local data and your flock identity on this device. Online account removal arrives with the server phase.",
+            "DELETE", "Hold to delete") { vm.deleteAccountLocal() }
+    }
+}
+
+@Composable
+private fun DangerAction(title: String, body: String, confirmWord: String, holdLabel: String, onConfirm: () -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    OutlinedButton(onClick = { open = true }, modifier = Modifier.fillMaxWidth(),
+        colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFF6B6B))) {
+        Text(title)
+    }
+    if (open) {
+        var typed by remember { mutableStateOf("") }
+        val match = typed.trim().equals(confirmWord, ignoreCase = true)
+        AlertDialog(
+            onDismissRequest = { open = false },
+            title = { Text(title) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(body, style = MaterialTheme.typography.bodyMedium)
+                    OutlinedTextField(value = typed, onValueChange = { typed = it }, singleLine = true,
+                        modifier = Modifier.fillMaxWidth(), label = { Text("Type $confirmWord to confirm") })
+                    HoldToConfirmButton(enabled = match, label = holdLabel) { onConfirm(); open = false }
+                }
+            },
+            confirmButton = {},
+            dismissButton = { TextButton(onClick = { open = false }) { Text("Cancel") } },
+        )
+    }
+}
+
+@Composable
+private fun HoldToConfirmButton(enabled: Boolean, label: String, onConfirm: () -> Unit) {
+    var holding by remember { mutableStateOf(false) }
+    var progress by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    androidx.compose.runtime.LaunchedEffect(holding) {
+        if (holding) {
+            while (progress < 1f) { progress += 0.03f; kotlinx.coroutines.delay(45) }
+            if (progress >= 1f) { onConfirm(); holding = false }
+        } else {
+            progress = 0f
+        }
+    }
+    Box(
+        Modifier.fillMaxWidth().height(48.dp).clip(RoundedCornerShape(10.dp))
+            .background(if (enabled) Color(0xFF7F1D1D) else Color(0xFF3A2A2A))
+            .pointerInput(enabled) {
+                if (enabled) androidx.compose.foundation.gestures.detectTapGestures(
+                    onPress = { holding = true; tryAwaitRelease(); holding = false })
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        if (progress > 0f) Box(Modifier.fillMaxWidth(progress.coerceIn(0f, 1f)).height(48.dp)
+            .background(Color(0xFFDC2626)).align(Alignment.CenterStart))
+        Text(if (holding) "Hold…" else label, color = Color.White, fontWeight = FontWeight.Bold)
     }
 }
 

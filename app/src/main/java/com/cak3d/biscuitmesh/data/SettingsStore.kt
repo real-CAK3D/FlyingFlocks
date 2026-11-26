@@ -232,6 +232,10 @@ class SettingsStore(private val context: Context) {
     val visitedTowns: Flow<Set<String>> =
         context.settingsDataStore.data.map { it[visitedTownsKey] ?: emptySet() }
 
+    suspend fun clearVisitedTowns() {
+        context.settingsDataStore.edit { it[visitedTownsKey] = emptySet() }
+    }
+
     suspend fun addVisitedTown(town: String) {
         if (town.isBlank()) return
         context.settingsDataStore.edit { it[visitedTownsKey] = (it[visitedTownsKey] ?: emptySet()) + town }
@@ -381,6 +385,8 @@ object ApiKeys {
             "Live traffic-flow overlay on the wardrive map. The map works fully without it.", "https://developer.tomtom.com"),
         ApiService("mapbox", "Mapbox token",
             "Optional Mapbox styles/imagery. The app ships the free MapLibre engine, so maps work without it.", "https://account.mapbox.com/access-tokens"),
+        ApiService("cesium_ion", "Cesium Ion token",
+            "For a future photoreal 3D globe/terrain view. Stored now; wired when that view is built.", "https://ion.cesium.com/tokens"),
         ApiService("broadcastify_user", "Broadcastify username",
             "Live police/fire scanner feeds (optional — OpenMHz needs no key).", "https://www.broadcastify.com"),
         ApiService("broadcastify_pass", "Broadcastify password",

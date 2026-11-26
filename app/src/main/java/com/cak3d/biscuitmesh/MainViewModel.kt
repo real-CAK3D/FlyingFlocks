@@ -697,8 +697,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             viewModelScope.launch { saveDrive(st.startMs, st.wifiCount, st.btCount, samples, track) }
             // Auto spoken recap when the master voice toggle is on (Speaker honours it internally).
             val mins = ((System.currentTimeMillis() - st.startMs) / 60000L).coerceAtLeast(1)
-            speak("Drive saved. ${mins} minute${if (mins == 1L) "" else "s"}, " +
-                "${st.wifiCount} Wi-Fi and ${st.btCount} Bluetooth.")
+            // Award Feathers for the drive: catches + distance, a first-of-day bonus and streak multiplier.
+            viewModelScope.launch {
+                val cams = camerasAlongTrack(track)
+                val miles = trackDistance(track) / 1609.344
+                val base = st.wifiCount + st.btCount + cams * 2 + (miles * 2).toInt()
+                val (firstBonus, mult) = appRef.feathersStore.recordDriveDay()
+                val earned = ((base + firstBonus) * mult).toInt().coerceAtLeast(0)
+                if (earned > 0) {
+                    appRef.feathersStore.award(earned, "Drive · ${st.wifiCount + st.btCount} catches", fromDrive = true)
+                    _lastFeathers.value = earned
+                }
+                speak("Drive saved. ${mins} minute${if (mins == 1L) "" else "s"}, " +
+                    "${st.wifiCount} Wi-Fi and ${st.btCount} Bluetooth. Earned $earned feathers.")
+            }
         }
         // Fire-and-forget upload when the operator has opted into auto-upload.
         if (wdgAutoUpload.value && wdgApiKey.value.isNotBlank()) uploadToWdg()
@@ -897,6 +909,51 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 java.util.UUID.randomUUID().toString(), name, lat, lon, System.currentTimeMillis(), devices))
         }
     fun removeFingerprint(id: String) = viewModelScope.launch { appRef.fingerprintStore.remove(id) }
+
+    // --- Feathers (gamification currency) ---------------------------------
+    val feathers: StateFlow<Long> =
+        appRef.feathersStore.balance.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
+    val feathersStreak: StateFlow<Int> =
+        appRef.feathersStore.streak.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+    val feathersLedger: StateFlow<List<com.cak3d.biscuitmesh.data.FeatherEntry>> =
+        appRef.feathersStore.ledger.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    /** The most recent drive's Feather award, for a one-shot "+N" cue (null once consumed). */
+    private val _lastFeathers = MutableStateFlow<Int?>(null)
+    val lastFeathers: StateFlow<Int?> = _lastFeathers
+    fun clearLastFeathers() { _lastFeathers.value = null }
+
+    /** Award Feathers for driving into a new town/county/state (called from the crossing collector). */
+    fun awardCrossing(c: BoundaryCrossing) = viewModelScope.launch {
+        val amt = when (c.kind) { "state" -> 150; "county" -> 50; else -> if (c.firstVisit) 25 else 10 }
+        appRef.feathersStore.award(amt, "Entered ${c.label}", fromDrive = true)
+    }
+
+    // --- Danger Zone ------------------------------------------------------
+    fun resetProgress() = viewModelScope.launch {
+        appRef.feathersStore.reset()
+        appRef.progress.reset()
+    }
+    fun wipeHistory() = viewModelScope.launch {
+        appRef.drivesStore.clearAll()
+        appRef.fingerprintStore.clearAll()
+        appRef.settingsStore.clearVisitedTowns()
+    }
+    fun signOutRedoOnboarding() = viewModelScope.launch {
+        appRef.settingsStore.setFlockEnabled(false)
+        appRef.settingsStore.setFlockHandle("")
+        appRef.settingsStore.resetTour()
+    }
+    /** Local account deletion: wipes everything on-device. (Server-side removal lands in Phase 4.) */
+    fun deleteAccountLocal() = viewModelScope.launch {
+        appRef.feathersStore.reset()
+        appRef.progress.reset()
+        appRef.drivesStore.clearAll()
+        appRef.fingerprintStore.clearAll()
+        appRef.settingsStore.clearVisitedTowns()
+        appRef.settingsStore.setFlockEnabled(false)
+        appRef.settingsStore.setFlockHandle("")
+        appRef.settingsStore.resetTour()
+    }
 
     // --- WiGLE account stats -----------------------------------------------
     val wigleAuth: Flow<String> = appRef.settingsStore.wigleAuth

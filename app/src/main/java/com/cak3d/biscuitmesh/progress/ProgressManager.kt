@@ -73,6 +73,15 @@ class ProgressManager(
         }
     }
 
+    /** Wipe all XP, counts and awards back to zero (Danger Zone → Reset progress). */
+    fun reset() {
+        scope.launch {
+            xp.clear(); count.clear(); awarded.clear(); bonusLevels = 0
+            store.save(ProgressData(HashMap(), HashMap(), LinkedHashSet()))
+            _state.value = rebuild()
+        }
+    }
+
     private fun awardSamples(samples: Collection<com.cak3d.biscuitmesh.wardrive.WardriveSample>) {
         var changed = false
         samples.forEach { s ->

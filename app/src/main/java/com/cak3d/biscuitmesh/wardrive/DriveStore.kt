@@ -50,6 +50,14 @@ class DriveStore(private val context: Context) {
         context.drivesDataStore.edit { it[key] = toJson(current().filterNot { d -> d.id == id }) }
     }
 
+    /** Delete every saved drive and its capture file (Danger Zone → Wipe captures & history). */
+    suspend fun clearAll() {
+        withContext(Dispatchers.IO) {
+            runCatching { dir.listFiles()?.forEach { it.delete() } }
+            context.drivesDataStore.edit { it[key] = "[]" }
+        }
+    }
+
     suspend fun markUploaded(id: String) {
         context.drivesDataStore.edit {
             it[key] = toJson(current().map { d -> if (d.id == id) d.copy(uploaded = true) else d })
