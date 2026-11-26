@@ -89,22 +89,50 @@ private data class PendingOpen(val route: String, val label: String, val accent:
 // Each SELECTION gets its own loader, not just each category: a curated theme where one fits, and a
 // deterministic hash over all themes otherwise, so no two neighbours look the same.
 private val LOADER_THEMES = LoaderTheme.entries
+// A fitting loader for every selection, chosen so no two cards in the same section share one and
+// the visual suits the content. The hash fallback only covers routes added later.
 private val LOADER_OVERRIDES: Map<String, LoaderTheme> = mapOf(
-    "datacube" to LoaderTheme.NETWORK, "ledger" to LoaderTheme.NETWORK,
-    "orbitglobe" to LoaderTheme.ORBIT, "orbit" to LoaderTheme.ORBIT, "satellites" to LoaderTheme.ORBIT,
-    "radar" to LoaderTheme.RADAR, "watchlist" to LoaderTheme.RADAR,
-    "rogueap" to LoaderTheme.SONAR, "alerts" to LoaderTheme.SONAR,
-    "trackers" to LoaderTheme.PULSAR, "remote" to LoaderTheme.PULSAR, "hunts" to LoaderTheme.PULSAR,
-    "signals" to LoaderTheme.EQUALIZER, "collect" to LoaderTheme.EQUALIZER,
-    "skyar" to LoaderTheme.SPIRAL, "terrain3d" to LoaderTheme.SPIRAL,
-    "skyconditions" to LoaderTheme.RINGS, "tiredash" to LoaderTheme.RINGS, "targets" to LoaderTheme.RINGS,
-    "lightmap" to LoaderTheme.RIPPLE, "weather" to LoaderTheme.RIPPLE,
-    "airquality" to LoaderTheme.WAVEFORM, "squawk" to LoaderTheme.WAVEFORM,
-    "vision" to LoaderTheme.HELIX, "whisper" to LoaderTheme.HELIX,
-    "spaceevents" to LoaderTheme.COMET, "crew" to LoaderTheme.COMET, "feeds" to LoaderTheme.COMET,
+    // Sense & Navigate
+    "radar" to LoaderTheme.RADAR,
+    "collect" to LoaderTheme.EQUALIZER,
+    "trackers" to LoaderTheme.SONAR,
+    "watchlist" to LoaderTheme.RINGS,
+    "rogueap" to LoaderTheme.PULSAR,
+    "targets" to LoaderTheme.SPIRAL,
+    "terrain3d" to LoaderTheme.HELIX,
+    // Live Visuals
+    "signals" to LoaderTheme.EQUALIZER,
+    "datacube" to LoaderTheme.NETWORK,
+    // Sky
+    "skyar" to LoaderTheme.SPIRAL,
+    "orbit" to LoaderTheme.ORBIT,
+    "orbitglobe" to LoaderTheme.COMET,
+    "satellites" to LoaderTheme.ORBIT,
+    "visiblepasses" to LoaderTheme.PULSAR,
+    "skyconditions" to LoaderTheme.RINGS,
+    "lightmap" to LoaderTheme.RIPPLE,
+    "vision" to LoaderTheme.HELIX,
+    "sitesurvey" to LoaderTheme.NETWORK,
+    // Alerts & feeds
+    "alerts" to LoaderTheme.SONAR,
+    "spaceevents" to LoaderTheme.PULSAR,
+    "weather" to LoaderTheme.RIPPLE,
+    "airquality" to LoaderTheme.WAVEFORM,
+    "feeds" to LoaderTheme.BROADCAST,
+    // Comms
     "meshchat" to LoaderTheme.BROADCAST,
+    "squawk" to LoaderTheme.WAVEFORM,
+    "whisper" to LoaderTheme.HELIX,
+    "crew" to LoaderTheme.COMET,
+    // Play & Stats
     "globalstats" to LoaderTheme.BARS,
-    "games" to LoaderTheme.GEARS, "labbench" to LoaderTheme.GEARS,
+    "hunts" to LoaderTheme.RADAR,
+    "games" to LoaderTheme.GEARS,
+    "ledger" to LoaderTheme.NETWORK,
+    // Tools
+    "tiredash" to LoaderTheme.RINGS,
+    "remote" to LoaderTheme.PULSAR,
+    "labbench" to LoaderTheme.GEARS,
 )
 private fun themeFor(route: String): LoaderTheme =
     LOADER_OVERRIDES[route] ?: LOADER_THEMES[(route.hashCode() and 0x7fffffff) % LOADER_THEMES.size]
