@@ -104,6 +104,7 @@ fun SettingsScreen(
     onOpenStats: () -> Unit = {},
     onOpenFlock: () -> Unit = {},
     onOpenStore: () -> Unit = {},
+    onOpenNav: () -> Unit = {},
 ) {
     val zones by vm.deadZones.collectAsStateWithLifecycle(initialValue = emptyList())
     val authorized by vm.authorizedUse.collectAsStateWithLifecycle()
@@ -183,6 +184,7 @@ fun SettingsScreen(
                     }
                     1 -> {
                         AppearanceSection(vm)
+                        NavigationSection(onOpenNav)
                         HudSection(vm)
                         AlertsScreenSection(vm)
                         VoiceSection(vm)
@@ -388,6 +390,17 @@ private fun FeelRow(
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f))
         }
         if (selected) Icon(Icons.Default.Check, contentDescription = "Selected", tint = accent.color)
+    }
+}
+
+@Composable
+private fun NavigationSection(onOpenNav: () -> Unit) {
+    SectionCard(
+        title = "Navigation",
+        subtitle = "Choose which feature sits on each bottom tab and top-bar icon, and reorder them. " +
+            "Make the app yours — put what you use most within reach.",
+    ) {
+        Button(onClick = onOpenNav, modifier = Modifier.fillMaxWidth()) { Text("Customize navigation") }
     }
 }
 

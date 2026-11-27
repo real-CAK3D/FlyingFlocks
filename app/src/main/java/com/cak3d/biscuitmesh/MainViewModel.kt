@@ -1157,6 +1157,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun resetHubLayout() =
         viewModelScope.launch { appRef.hubLayoutStore.reset() }
 
+    // --- Navigation layout (user-chosen bottom tabs & top icons) ------------
+    val navLayout: StateFlow<com.cak3d.biscuitmesh.data.NavLayout> =
+        appRef.navLayoutStore.layout.stateIn(
+            viewModelScope, SharingStarted.WhileSubscribed(5000),
+            com.cak3d.biscuitmesh.data.NavLayout(),
+        )
+    fun setNavBottom(ids: List<String>) = viewModelScope.launch { appRef.navLayoutStore.setBottom(ids) }
+    fun setNavTop(ids: List<String>) = viewModelScope.launch { appRef.navLayoutStore.setTop(ids) }
+    fun resetNavLayout() = viewModelScope.launch { appRef.navLayoutStore.reset() }
+
     // --- Tracker-following detector ----------------------------------------
     val trackerFollowers: StateFlow<List<com.cak3d.biscuitmesh.sensors.Follower>> = appRef.trackerFollow.followers
     fun recordTrackerSighting(mac: String, name: String, rssi: Int, lat: Double, lon: Double, timeMs: Long) =

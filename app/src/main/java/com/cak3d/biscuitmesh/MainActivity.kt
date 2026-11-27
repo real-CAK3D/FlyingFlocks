@@ -41,6 +41,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarDefaults
 import androidx.compose.material3.NavigationBarItem
+import androidx.navigation.NavGraph.Companion.findStartDestination
+import com.cak3d.biscuitmesh.nav.NavCatalog
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -139,6 +141,7 @@ import com.cak3d.biscuitmesh.ui.RemoteScreen
 import com.cak3d.biscuitmesh.ui.ProximityBanner
 import com.cak3d.biscuitmesh.ui.SatellitesScreen
 import com.cak3d.biscuitmesh.ui.SensorsHubScreen
+import com.cak3d.biscuitmesh.ui.NavLayoutScreen
 import com.cak3d.biscuitmesh.ui.TrackerScreen
 import com.cak3d.biscuitmesh.ui.WigleStatsScreen
 import com.cak3d.biscuitmesh.ui.ConstellationBackground
@@ -257,25 +260,21 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private data class Tab(val route: String, val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector)
-
-private val TABS = listOf(
-    Tab("fleet", "Fleet", Icons.Default.Dashboard),
-    Tab("wardrive", "Wardrive", Icons.Default.Map),
-    Tab("wifi", "WiFi", Icons.Default.Wifi),
-    Tab("bluetooth", "Bluetooth", Icons.Default.Bluetooth),
-    Tab("subghz", "Sub-GHz", Icons.Default.SettingsInputAntenna),
-    Tab("misc", "Misc", Icons.Default.Apps),
-)
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MainShell(vm: MainViewModel) {
     val nav = rememberNavController()
     val backStack by nav.currentBackStackEntryAsState()
     val currentRoute = backStack?.destination?.route
-    val currentTab = TABS.firstOrNull { it.route == currentRoute }
-    val isTopLevel = currentTab != null
+    val navLayout by vm.navLayout.collectAsStateWithLifecycle()
+    // Core screens are headerless — the shell draws their title bar and always gives them the nav
+    // bar (even one the user dropped from the tabs, so the start screen can never strand them). Any
+    // other page the user puts on a tab keeps its own header, with the tab bar still beneath it.
+    val onCoreScreen = currentRoute?.let { NavCatalog.isCore(it) } == true
+    val onBottomTab = currentRoute != null && currentRoute in navLayout.bottom
+    val showShellTop = onCoreScreen
+    val showBottomBar = onBottomTab || onCoreScreen
+    val currentDest = currentRoute?.let { NavCatalog.byId(it) }
     val onMap = currentRoute == "wardrive"
     val scanning by vm.scanning.collectAsStateWithLifecycle()
 
@@ -295,13 +294,13 @@ private fun MainShell(vm: MainViewModel) {
     Scaffold(
         containerColor = Color.Transparent,
         topBar = {
-            if (isTopLevel) {
+            if (showShellTop) {
                 TopAppBar(
-                    // Single line, sized to clear the 7 action icons so long tabs
+                    // Single line, sized to clear the action icons so long tabs
                     // ("BLUETOOTH", "SUB-GHZ") don't wrap to two lines.
                     title = {
                         Text(
-                            currentTab!!.label.uppercase(),
+                            (currentDest?.label ?: "").uppercase(),
                             maxLines = 1,
                             softWrap = false,
                             style = MaterialTheme.typography.titleMedium,
@@ -309,32 +308,18 @@ private fun MainShell(vm: MainViewModel) {
                     },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                     actions = {
-                        com.cak3d.biscuitmesh.ui.HelpButton(
-                            "This screen",
-                            "Tap \"Explore this page\", then tap any highlighted part of the screen to learn what it is and how to use it. The bottom tabs and these top icons are tagged on every screen.")
-                        IconButton(onClick = { nav.navigate("dashboard") },
-                            modifier = Modifier.help("Dashboard", "A single-screen overview of your live totals, map and stats.")) {
-                            Icon(Icons.Default.SpaceDashboard, contentDescription = "Dashboard")
-                        }
-                        IconButton(onClick = { nav.navigate("rarebirds") },
-                            modifier = Modifier.help("Field Guide", "Your 'rare birds' collection — unusual devices to hunt and capture as you drive.")) {
-                            Icon(Icons.Default.Radar, contentDescription = "Field Guide")
-                        }
-                        IconButton(onClick = { nav.navigate("drives") },
-                            modifier = Modifier.help("Drives", "Your saved drive history — review, replay or re-upload past wardrives.")) {
-                            Icon(Icons.Default.History, contentDescription = "Drives")
-                        }
-                        IconButton(onClick = { nav.navigate("sensors") },
-                            modifier = Modifier.help("Sensors & Sky hub", "The hub where almost every feature lives — scanning, visuals, sky, gamification, tools and this Guide.")) {
-                            Icon(Icons.Default.SatelliteAlt, contentDescription = "Sensors & Sky")
-                        }
-                        IconButton(onClick = { nav.navigate("terminal") },
-                            modifier = Modifier.help("Terminal", "A board console + app command palette — send commands to the fleet or jump to any screen.")) {
-                            Icon(Icons.Default.Terminal, contentDescription = "Terminal")
-                        }
-                        IconButton(onClick = { nav.navigate("settings") },
-                            modifier = Modifier.help("Settings", "Your profile, Feathers, appearance, keys, voice, alerts and the Danger Zone.")) {
-                            Icon(Icons.Default.Settings, contentDescription = "Settings")
+                        navLayout.top.forEach { id ->
+                            if (id == NavCatalog.HELP) {
+                                com.cak3d.biscuitmesh.ui.HelpButton(
+                                    "This screen",
+                                    "Tap \"Explore this page\", then tap any highlighted part of the screen to learn what it is and how to use it. The bottom tabs and these top icons are tagged on every screen. Rearrange them all in Settings → Navigation.")
+                            } else {
+                                val d = NavCatalog.byId(id) ?: return@forEach
+                                IconButton(
+                                    onClick = { if (currentRoute != d.id) nav.navigate(d.id) },
+                                    modifier = Modifier.help(d.label, "Opens ${d.label}. Rearrange the top icons in Settings → Navigation."),
+                                ) { Icon(d.icon, contentDescription = d.label) }
+                            }
                         }
                     },
                 )
@@ -356,23 +341,25 @@ private fun MainShell(vm: MainViewModel) {
             }
         },
         bottomBar = {
-            if (isTopLevel) {
+            if (showBottomBar) {
                 NavigationBar(containerColor = NavigationBarDefaults.containerColor.copy(alpha = 0.92f)) {
-                    TABS.forEach { tab ->
+                    navLayout.bottom.forEach { id ->
+                        if (id == NavCatalog.HELP) return@forEach
+                        val d = NavCatalog.byId(id) ?: return@forEach
                         NavigationBarItem(
-                            modifier = Modifier.help(tab.label, com.cak3d.biscuitmesh.ui.tabHelp(tab.route)),
-                            selected = currentRoute == tab.route,
+                            modifier = Modifier.help(d.label, com.cak3d.biscuitmesh.ui.tabHelp(d.id)),
+                            selected = currentRoute == d.id,
                             onClick = {
-                                if (currentRoute != tab.route) {
-                                    nav.navigate(tab.route) {
-                                        popUpTo("fleet") { saveState = true }
+                                if (currentRoute != d.id) {
+                                    nav.navigate(d.id) {
+                                        popUpTo(nav.graph.findStartDestination().id) { saveState = true }
                                         launchSingleTop = true
                                         restoreState = true
                                     }
                                 }
                             },
-                            icon = { Icon(tab.icon, contentDescription = tab.label) },
-                            label = { Text(tab.label) },
+                            icon = { Icon(d.icon, contentDescription = d.label) },
+                            label = { Text(d.label, maxLines = 1, softWrap = false) },
                         )
                     }
                 }
@@ -479,8 +466,10 @@ private fun MainShell(vm: MainViewModel) {
                         onOpenPlaces = { nav.navigate("places") },
                         onOpenStats = { nav.navigate("stats") },
                         onOpenFlock = { nav.navigate("crew") },
-                        onOpenStore = { nav.navigate("store") })
+                        onOpenStore = { nav.navigate("store") },
+                        onOpenNav = { nav.navigate("navlayout") })
                 }
+                composable("navlayout") { NavLayoutScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("wiglestats") { WigleStatsScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("deadzones") { DeadZonesScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("labbench") { LabBenchScreen(onBack = { nav.popBackStack() }) }

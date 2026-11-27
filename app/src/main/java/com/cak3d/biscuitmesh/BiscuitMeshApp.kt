@@ -66,6 +66,11 @@ class BiscuitMeshApp : Application() {
         com.cak3d.biscuitmesh.data.HubLayoutStore(this)
     }
 
+    /** The user's chosen bottom tabs and top-bar icons. */
+    val navLayoutStore: com.cak3d.biscuitmesh.data.NavLayoutStore by lazy {
+        com.cak3d.biscuitmesh.data.NavLayoutStore(this)
+    }
+
     /** Local-only watchlist of MACs/names to flag when seen. */
     val watchlistStore: com.cak3d.biscuitmesh.data.WatchlistStore by lazy {
         com.cak3d.biscuitmesh.data.WatchlistStore(this)
