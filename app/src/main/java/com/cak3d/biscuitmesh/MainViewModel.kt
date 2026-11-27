@@ -1142,6 +1142,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun restoreVisionDefaults() =
         viewModelScope.launch { appRef.visionStore.restoreDefaults() }
 
+    // --- Sensors & Sky hub layout (user reordering / hiding) ----------------
+    val hubLayout: StateFlow<com.cak3d.biscuitmesh.data.HubLayout> =
+        appRef.hubLayoutStore.layout.stateIn(
+            viewModelScope, SharingStarted.WhileSubscribed(5000),
+            com.cak3d.biscuitmesh.data.HubLayout(),
+        )
+    fun setHubSectionOrder(section: String, routes: List<String>) =
+        viewModelScope.launch { appRef.hubLayoutStore.setSectionOrder(section, routes) }
+    fun setHubSections(sections: List<String>) =
+        viewModelScope.launch { appRef.hubLayoutStore.setSections(sections) }
+    fun setHubHidden(route: String, hidden: Boolean) =
+        viewModelScope.launch { appRef.hubLayoutStore.setHidden(route, hidden) }
+    fun resetHubLayout() =
+        viewModelScope.launch { appRef.hubLayoutStore.reset() }
+
     // --- Tracker-following detector ----------------------------------------
     val trackerFollowers: StateFlow<List<com.cak3d.biscuitmesh.sensors.Follower>> = appRef.trackerFollow.followers
     fun recordTrackerSighting(mac: String, name: String, rssi: Int, lat: Double, lon: Double, timeMs: Long) =

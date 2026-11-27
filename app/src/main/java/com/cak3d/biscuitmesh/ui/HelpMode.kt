@@ -112,17 +112,23 @@ fun HelpOverlay(ctrl: HelpController) {
                 }
             },
     ) {
-        // Draw the selected spot last so its ring sits on top where boxes overlap.
-        val ordered = ctrl.spots.sortedBy { it === ctrl.selected }
+        // One ring per distinct thing: where a page repeats the same card (e.g. several boards,
+        // several game tiles), highlight just the topmost as the example rather than ringing all of
+        // them. A tapped spot still rings on top, even if it's one of the repeats.
+        val sel = ctrl.selected
+        val reps = ctrl.spots.asSequence()
+            .filter { it.rect.width > 0f }
+            .sortedBy { it.rect.top }
+            .distinctBy { it.label to it.text }
+            .filter { sel == null || (it.label to it.text) != (sel.label to sel.text) }
+            .toList()
         Canvas(Modifier.fillMaxSize()) {
             drawRect(Color(0xE60A0E13))
-            ordered.forEach { s ->
-                if (s.rect.width <= 0f) return@forEach
-                val selected = s === ctrl.selected
+            fun ring(s: HelpSpot, selected: Boolean) {
                 // Tighter inset (not outset) so adjacent/nested boxes don't bleed into each other.
                 val pad = 2f
                 val r = Rect(s.rect.left + pad, s.rect.top + pad, s.rect.right - pad, s.rect.bottom - pad)
-                if (r.width <= 0f || r.height <= 0f) return@forEach
+                if (r.width <= 0f || r.height <= 0f) return
                 // Faint yellow wash so the element reads like it's under a highlighter.
                 drawRoundRect(accent.copy(alpha = if (selected) 0.20f else 0.10f),
                     topLeft = r.topLeft, size = r.size, cornerRadius = CornerRadius(10f, 10f))
@@ -130,6 +136,9 @@ fun HelpOverlay(ctrl: HelpController) {
                 drawRoundRect(accent.copy(alpha = a), topLeft = r.topLeft, size = r.size,
                     cornerRadius = CornerRadius(10f, 10f), style = Stroke(if (selected) 4.5f else 2.5f))
             }
+            reps.forEach { ring(it, false) }
+            // Selected drawn last so its ring sits on top where boxes overlap.
+            sel?.takeIf { it.rect.width > 0f }?.let { ring(it, true) }
         }
 
         // Everything the user reads/taps lives at the bottom, clear of the top-bar icons and the

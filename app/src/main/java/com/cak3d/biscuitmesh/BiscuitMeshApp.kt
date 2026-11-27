@@ -61,6 +61,11 @@ class BiscuitMeshApp : Application() {
         com.cak3d.biscuitmesh.data.VisionStore(this)
     }
 
+    /** The user's own ordering/hiding of the Sensors & Sky hub cards & sections. */
+    val hubLayoutStore: com.cak3d.biscuitmesh.data.HubLayoutStore by lazy {
+        com.cak3d.biscuitmesh.data.HubLayoutStore(this)
+    }
+
     /** Local-only watchlist of MACs/names to flag when seen. */
     val watchlistStore: com.cak3d.biscuitmesh.data.WatchlistStore by lazy {
         com.cak3d.biscuitmesh.data.WatchlistStore(this)

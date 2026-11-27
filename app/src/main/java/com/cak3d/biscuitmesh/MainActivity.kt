@@ -484,7 +484,7 @@ private fun MainShell(vm: MainViewModel) {
                 composable("wiglestats") { WigleStatsScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("deadzones") { DeadZonesScreen(vm = vm, onBack = { nav.popBackStack() }) }
                 composable("labbench") { LabBenchScreen(onBack = { nav.popBackStack() }) }
-                composable("sensors") { SensorsHubScreen(onBack = { nav.popBackStack() }, onOpen = { nav.navigate(it) }) }
+                composable("sensors") { SensorsHubScreen(vm = vm, onBack = { nav.popBackStack() }, onOpen = { nav.navigate(it) }) }
                 composable("satellites") {
                     SatellitesScreen(vm = vm, onBack = { nav.popBackStack() }, onOpenGlobe = { nav.navigate("globe") })
                 }

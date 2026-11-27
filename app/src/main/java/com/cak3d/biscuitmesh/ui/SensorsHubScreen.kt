@@ -10,9 +10,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Air
 import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material.icons.filled.Cloud
@@ -70,6 +76,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -81,12 +88,16 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.cak3d.biscuitmesh.MainViewModel
+import com.cak3d.biscuitmesh.data.HubLayout
 import kotlinx.coroutines.delay
 
 private data class HubEntry(val title: String, val sub: String, val icon: ImageVector, val route: String, val tint: Color)
@@ -159,8 +170,8 @@ private fun themeFor(route: String): LoaderTheme =
 /** A hub for the live sensing / sky tools, grouped so the long list doesn't crowd the screen. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SensorsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
-    val sections = listOf(
+fun SensorsHubScreen(vm: MainViewModel, onBack: () -> Unit, onOpen: (String) -> Unit) {
+    val shipped = listOf(
         HubSection("Sense & Navigate", Color(0xFF22D3EE), Icons.Default.Explore, LoaderTheme.RADAR, listOf(
             HubEntry("Navigate", "Compass, Radar & Locator — flip between them in one view", Icons.Default.Explore, "radar", Color(0xFF22D3EE)),
             HubEntry("Background Collect", "Phone-only — keep catching Wi-Fi & BT with the screen off", Icons.Default.Sensors, "collect", Color(0xFF5FD36A)),
@@ -220,19 +231,61 @@ fun SensorsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
 
         )),
     )
+    val layout by vm.hubLayout.collectAsStateWithLifecycle()
+    var editing by remember { mutableStateOf(false) }
+
+    // Apply the user's saved arrangement (section order, card order) over the shipped list.
+    val sections = remember(shipped, layout) {
+        val byTitle = shipped.associateBy { it.title }
+        val titles = LinkedHashSet<String>().apply {
+            layout.sections.forEach { if (it in byTitle) add(it) }
+            shipped.forEach { add(it.title) }
+        }
+        titles.mapNotNull { byTitle[it] }.map { sec ->
+            val saved = layout.order[sec.title] ?: return@map sec
+            val byRoute = sec.entries.associateBy { it.route }
+            val used = LinkedHashSet<HubEntry>()
+            saved.forEach { r -> byRoute[r]?.let { used.add(it) } }
+            sec.entries.forEach { used.add(it) }   // anything new keeps its shipped spot at the end
+            sec.copy(entries = used.toList())
+        }
+    }
+
+    fun moveSection(i: Int, dir: Int) {
+        val j = i + dir
+        if (j !in sections.indices) return
+        val t = sections.map { it.title }.toMutableList()
+        t[i] = t[j].also { t[j] = t[i] }
+        vm.setHubSections(t)
+    }
+    fun moveEntry(sec: HubSection, j: Int, dir: Int) {
+        val k = j + dir
+        if (k !in sec.entries.indices) return
+        val r = sec.entries.map { it.route }.toMutableList()
+        r[j] = r[k].also { r[k] = r[j] }
+        vm.setHubSectionOrder(sec.title, r)
+    }
+
     var pending by remember { mutableStateOf<PendingOpen?>(null) }
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Sensors & Sky") },
+                title = { Text(if (editing) "Arrange" else "Sensors & Sky") },
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
                 actions = {
+                    if (editing && !layout.isDefault) TextButton(onClick = { vm.resetHubLayout() }) { Text("Reset") }
+                    IconButton(onClick = { editing = !editing }) {
+                        Icon(if (editing) Icons.Default.Check else Icons.Default.Edit,
+                            contentDescription = if (editing) "Done arranging" else "Rearrange cards")
+                    }
                     HelpButton(
                         "Sensors & Sky",
                         "A hub that gathers the app's extra screens — the sky view, chat, stats, games " +
-                            "and tools — into one place. Tap any card to open that feature.",
+                            "and tools — into one place. Tap any card to open that feature. Tap the pencil " +
+                            "to rearrange: move sections and cards up or down, or hide the ones you don't use. " +
+                            "Reset puts everything back.",
                     )
                 },
             )
@@ -244,36 +297,48 @@ fun SensorsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
             contentPadding = PaddingValues(14.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            sections.forEach { section ->
+            if (editing) item(key = "edit-hint") {
+                Text("Reorder sections and cards with ▲▼, or tap the eye to hide a card. Your layout is saved.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    modifier = Modifier.padding(start = 4.dp, bottom = 2.dp))
+            }
+            sections.forEachIndexed { si, section ->
                 item(key = "sec-${section.title}") {
-                    Text(
-                        section.title.uppercase(),
-                        style = MaterialTheme.typography.labelMedium,
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.5.sp,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(start = 4.dp, top = 8.dp, bottom = 2.dp),
-                    )
-                }
-                items(section.entries, key = { it.route }) { e ->
-                    Card(
-                        onClick = { if (pending == null) pending = PendingOpen(e.route, e.title, e.tint, e.icon, e.route.hashCode(), themeFor(e.route)) },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    ) {
-                        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                            Icon(e.icon, contentDescription = null, tint = e.tint, modifier = Modifier.size(28.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(e.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                                Text(e.sub, style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f))
+                    Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            section.title.uppercase(),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.5.sp,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.weight(1f).padding(start = 4.dp),
+                        )
+                        if (editing) {
+                            IconButton(onClick = { moveSection(si, -1) }, enabled = si > 0) {
+                                Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Move section up")
                             }
-                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
+                            IconButton(onClick = { moveSection(si, 1) }, enabled = si < sections.lastIndex) {
+                                Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Move section down")
+                            }
                         }
                     }
+                }
+                val visible = if (editing) section.entries
+                    else section.entries.filterNot { it.route in layout.hidden }
+                itemsIndexed(visible, key = { _, e -> e.route }) { vi, e ->
+                    HubCard(
+                        e = e, editing = editing, hidden = e.route in layout.hidden,
+                        canUp = vi > 0, canDown = vi < section.entries.lastIndex,
+                        onOpen = {
+                            if (!editing && pending == null)
+                                pending = PendingOpen(e.route, e.title, e.tint, e.icon, e.route.hashCode(), themeFor(e.route))
+                        },
+                        onUp = { moveEntry(section, vi, -1) },
+                        onDown = { moveEntry(section, vi, 1) },
+                        onToggleHide = { vm.setHubHidden(e.route, e.route !in layout.hidden) },
+                    )
                 }
             }
         }
@@ -295,5 +360,54 @@ fun SensorsHubScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
             }
         }
       }
+    }
+}
+
+/** One hub card. In edit mode it shows reorder arrows and a hide toggle instead of opening. */
+@Composable
+private fun HubCard(
+    e: HubEntry,
+    editing: Boolean,
+    hidden: Boolean,
+    canUp: Boolean,
+    canDown: Boolean,
+    onOpen: () -> Unit,
+    onUp: () -> Unit,
+    onDown: () -> Unit,
+    onToggleHide: () -> Unit,
+) {
+    Card(
+        onClick = { if (!editing) onOpen() },
+        modifier = Modifier.fillMaxWidth().alpha(if (hidden && editing) 0.5f else 1f),
+        shape = com.cak3d.biscuitmesh.ui.theme.appCardShape(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Row(Modifier.fillMaxWidth().padding(start = 16.dp, top = 10.dp, bottom = 10.dp, end = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Icon(e.icon, contentDescription = null, tint = e.tint, modifier = Modifier.size(28.dp))
+            Column(Modifier.weight(1f)) {
+                Text(e.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(if (hidden && editing) "Hidden — tap the eye to show" else e.sub,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f))
+            }
+            if (editing) {
+                IconButton(onClick = onToggleHide) {
+                    Icon(if (hidden) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                        contentDescription = if (hidden) "Show" else "Hide",
+                        tint = if (hidden) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f) else e.tint)
+                }
+                IconButton(onClick = onUp, enabled = canUp) {
+                    Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Move up")
+                }
+                IconButton(onClick = onDown, enabled = canDown) {
+                    Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Move down")
+                }
+            } else {
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null,
+                    modifier = Modifier.padding(end = 10.dp))
+            }
+        }
     }
 }
