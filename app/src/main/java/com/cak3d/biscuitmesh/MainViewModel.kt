@@ -279,9 +279,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Buzz + speak the first time a never-before-seen device appears while wardriving. Seeds the
-     * "seen" set from every past drive's capture so only genuinely-new MACs fire; bulk scan dumps
-     * (many new at once) are absorbed silently so it can't spam.
+     * Buzz + speak the first time a never-before-seen *camera* appears while wardriving — a live
+     * WhatTheFlock dongle sighting (Flock / ALPR / speed / traffic cam), never every passing phone
+     * or laptop (that was deafening on a drive). Seeds the "seen" set from every past drive's
+     * capture so only genuinely-new MACs fire; bulk dumps (a saved-capture replay) stay silent.
      */
     private suspend fun watchNewDevices() {
         runCatching { captureSamplesByDrive(60) }.getOrDefault(emptyList())
@@ -294,14 +295,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
             val fresh = map.entries.filter { it.key.isNotBlank() && it.key !in seenDeviceIds }
             fresh.forEach { seenDeviceIds.add(it.key) }
-            if (fresh.isEmpty() || fresh.size > 5) return@collect   // a bulk dump = not a live arrival
-            val s = fresh.first().value
-            val what = s.label.ifBlank { s.id.ifBlank { s.kind.name } }
+            // Only cameras should speak. In the live wardrive stream that means a WhatTheFlock
+            // dongle sighting; everything else is just ambient Wi-Fi/BLE and would spam.
+            val cams = fresh.filter { com.cak3d.biscuitmesh.usb.WTF_SOURCE in it.value.sources }
+            if (cams.isEmpty() || cams.size > 5) return@collect   // a bulk dump = not a live arrival
+            val s = cams.first().value
+            val what = s.label.ifBlank { s.id.ifBlank { "camera" } }
             runCatching {
                 val vib = appRef.getSystemService(android.content.Context.VIBRATOR_SERVICE) as? android.os.Vibrator
                 vib?.vibrate(android.os.VibrationEffect.createOneShot(70, android.os.VibrationEffect.DEFAULT_AMPLITUDE))
             }
-            speak("New device nearby: $what", flush = true)
+            speak("Camera nearby: $what", flush = true)
         }
     }
 
@@ -952,7 +956,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         appRef.settingsStore.setTtsPitch(pitch); appRef.speaker.setPitch(pitch)
     }
     /** Speak a sample line with the current voice/rate (for the "Test" button). */
-    fun testVoice() = appRef.speaker.say("Flocked Up talk-back. New device nearby, bright pass soon.", flush = true)
+    fun testVoice() = appRef.speaker.say("Flocked Up talk-back. Camera nearby, bright pass soon.", flush = true)
 
     // --- Place RF fingerprints --------------------------------------------
     val fingerprints: Flow<List<com.cak3d.biscuitmesh.data.Fingerprint>> = appRef.fingerprintStore.fingerprints

@@ -527,7 +527,7 @@ private fun AlertsScreenSection(vm: MainViewModel) {
         ToggleRow("Vibrate on alert", "Buzz when a camera is close", vibrate) { vm.setVibrateAlerts(it) }
         ToggleRow("Town & county alerts", "Announce when you drive into a new town, county or state",
             crossing) { vm.setCrossingAlerts(it) }
-        ToggleRow("New-device alerts", "Buzz & speak the first time a never-before-seen device shows up while wardriving",
+        ToggleRow("Camera alerts", "Buzz & speak the first time a WhatTheFlock camera (Flock / ALPR / speed / traffic cam) shows up while wardriving",
             newDev) { vm.setNewDeviceAlerts(it) }
         ToggleRow("Bright-pass sky alerts", "Background heads-up when a bright satellite will be visible overhead soon",
             sky) { vm.setSkyAlerts(it) }
