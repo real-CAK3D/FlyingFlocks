@@ -556,7 +556,7 @@ private fun VoiceSection(vm: MainViewModel) {
     val currentLabel = voices.firstOrNull { it.name == currentVoice }?.label ?: "Engine default"
 
     SectionCard(title = "Talk-back voice",
-        subtitle = "The spoken alerts — camera warnings, town crossings, new devices and bright passes. Pick a voice and speed, then test it.") {
+        subtitle = "The spoken alerts — camera warnings, town crossings and bright passes. Pick a voice and speed, then test it.") {
         ToggleRow("Speak alerts", "Say alerts aloud while driving", voiceOn) { vm.setVoiceAlerts(it) }
         Spacer(Modifier.height(8.dp))
         Text("VOICE", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.secondary,
